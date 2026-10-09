@@ -1,0 +1,5 @@
+20 e-mailů ze sady „České firemní e-maily“ (5 kategorií), stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     90.1      20%      80%    63%     260   (záměny: Reklamace→Spam 4×, Podpora→Faktura 2×, Spam→Reklamace 1×, Reklamace→Podpora 1×, Objednávka→Spam 1×)
+                    macro-F1 15.6%, neplatných odpovědí 0

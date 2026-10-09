@@ -1,0 +1,5 @@
+12 situations, 3 lanes, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      73%    58%     155   (errors when a lane was free: 4)
+m2                       11ms     12ms    17ms    5ms    17ms     88.2      50%      79%    43%     155   (errors when a lane was free: 3)

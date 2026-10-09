@@ -1,0 +1,29 @@
+{
+  "name": "Zkušební veřejná sada",
+  "about": "Dvanáct vymyšlených dotazů do banky pro testy PickBench; čtyři štítky, jeden z nich „mimo rozsah“.",
+  "about_en": "Twelve made-up bank queries for the PickBench tests; four labels, one of them \"out of scope\".",
+  "source": "PickBench, tests/public-mini.json",
+  "license": "CC0 1.0 (zkušební data PickBench)",
+  "instructions": "Classify the customer query into exactly one intent. Choose oos when no listed intent fits.",
+  "labels": [
+    {"key": "card_arrival", "description": "card arrival"},
+    {"key": "exchange_rate", "description": "exchange rate"},
+    {"key": "lost_card", "description": "lost or stolen card"},
+    {"key": "oos", "description": "none of the listed intents; the query is out of scope"}
+  ],
+  "oos": "oos",
+  "items": [
+    {"text": "When will my new card arrive?", "label": "card_arrival"},
+    {"text": "I ordered a card two weeks ago and it is still not here.", "label": "card_arrival"},
+    {"text": "Is there a tracking number for the card you sent me?", "label": "card_arrival"},
+    {"text": "How long does card delivery take?", "label": "card_arrival"},
+    {"text": "What exchange rate do you use for euros?", "label": "exchange_rate"},
+    {"text": "Is your rate for dollars better on weekdays?", "label": "exchange_rate"},
+    {"text": "Where can I see today's currency rates?", "label": "exchange_rate"},
+    {"text": "I lost my card on the train this morning.", "label": "lost_card"},
+    {"text": "Somebody stole my wallet with the card in it.", "label": "lost_card"},
+    {"text": "What is the weather like in Prague today?", "label": "oos"},
+    {"text": "Tell me a joke about cats.", "label": "oos"},
+    {"text": "How do I bake sourdough bread?", "label": "oos"}
+  ]
+}

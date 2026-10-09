@@ -1,0 +1,4 @@
+10 rows of numbers, 3 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       12ms     12ms    17ms    6ms    17ms     87.0      40%      81%    43%      75   (narrow 2/4, medium 0/2, clear 2/4)

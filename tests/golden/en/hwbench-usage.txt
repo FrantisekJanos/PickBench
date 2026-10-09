@@ -1,0 +1,35 @@
+Measures how this machine serves a decision model, and its hardware, from the command line (without the game).
+
+Usage:    python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv file]
+                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+Examples: python hwbench.py latency --n 200 tev1
+          python hwbench.py soak --minutes 3 --csv soak.csv tev1
+          python hwbench.py server --p99-ms 1000 tev1
+
+Tests:
+  latency      N requests one after another (default 1000): p50, p90, p95, p99, max, dec./s
+  cold         ollama stop <model>, the first request, then 5 warm ones; 3×: cold start (median) and warm median
+  concurrency  1, 2, 4, 8 concurrent clients, each sends N/clients requests (default N 200): dec./s and p95
+  questions    1, 2, 4, 8, 16 questions in one request, 30 requests per level: ms per request and per question;
+               hwbench.py prints a level that the server refuses (HTTP 400) as "did not fit" and does not try larger ones
+  context      the state padded to about 100, 500, 1000, 2000, 4000 tokens, 20 requests per level;
+               hwbench.py prints a refused level (HTTP 400) as "did not fit" and does not try larger ones
+  soak         requests for M minutes (default 10), with the GPU sampled about once a second: a summary per minute,
+               J per decision, the latency ratio last ÷ first minute; the CSV has a row for every decision
+  server       MLPerf's Server scenario: requests arrive at random (a Poisson process, fixed seed) at the given rate
+               whether or not the previous answer has arrived; the test measures latency from the planned arrival (waiting in the queue counts).
+               The rate levels are 0.25 to 2 times the serial speed of the model (or --rates in requests per second),
+               N requests per level (default 200); the test looks for the highest rate at which p99 stays within --p99-ms
+               (default 1000). A level that misses the limit or does not finish is the last one.
+
+The names follow MLPerf: latency = SingleStream (reports p90), concurrency = Offline (the highest throughput),
+server = Server. This is a measurement in the style of MLPerf, not a result submitted under the MLCommons rules.
+
+The request is always the same small one: obstacles, 3 lanes (the same tasks as bench.py).
+Before every test except cold a warm-up request goes first, and it does not count.
+--lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
+A hosted model (jev:jev-1.13.0, cf:clef-flash, cf:clef — see bench.py) runs at the provider and costs money:
+the cold, concurrency and server tests skip it; soak runs only with the --hosted-soak option and does not sample the GPU;
+below the table are the spend and the network estimate, and the latency includes the network. --max-usd and --max-hosted are the spend cap as in bench.py.
+The game must not run in the browser during the measurement (the requests would compete for the GPU).
+

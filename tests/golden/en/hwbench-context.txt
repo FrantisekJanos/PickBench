@@ -1,0 +1,6 @@
+model                 target tokens  input tokens        ms
+m1                              100           155      11.0
+m1                              500           626      10.5
+m1                             1000          1307      11.0
+m1                             2000          2669      11.0
+m1                             4000          5391      11.5

@@ -1,0 +1,25 @@
+__pycache__/
+.playwright-mcp/
+*.csv
+*.db
+*.db-journal
+
+# veřejné sady stažené přes fetch_datasets.py (cizí data pod vlastními licencemi; do repozitáře nepatří)
+datasets/public/
+
+# git worktrees pro spousteni planu (skill worktree-prep-in-main)
+.worktrees/
+
+# klice hostovanych modelu patri jen do promennych prostredi; soubor s nimi se nesmi dat commitnout
+.env
+.env.*
+
+# pracovní dokumentace, deníky, plány a pokyny pro agenta zůstávají jen na disku; veřejná dokumentace je README.md
+docs/
+CLAUDE.md
+
+# pracovní složky nástrojů a výstupy měření
+.superpowers/
+.claude/
+mereni/
+

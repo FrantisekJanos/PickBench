@@ -1,0 +1,35 @@
+Měření obsluhy rozhodovacího modelu a hardwaru z příkazové řádky (bez hry).
+
+Použití:  python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv soubor]
+                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+Příklad:  python hwbench.py latency --n 200 tev1
+          python hwbench.py soak --minutes 3 --csv soak.csv tev1
+          python hwbench.py server --p99-ms 1000 tev1
+
+Testy:
+  latency      N dotazů po sobě (výchozí 1000): p50, p90, p95, p99, max, rozh./s
+  cold         ollama stop <model>, první dotaz, pak 5 teplých; 3×: studený start (medián) a teplý medián
+  concurrency  1, 2, 4, 8 souběžných klientů, každý N/klientů dotazů (výchozí N 200): rozh./s a p95
+  questions    1, 2, 4, 8, 16 otázek v jednom dotazu, 30 dotazů na stupeň: ms na dotaz a na otázku;
+               stupeň, který server odmítne (HTTP 400), se vypíše jako „nevešlo se“ a větší se nezkouší
+  context      stav vycpaný na přibližně 100, 500, 1000, 2000, 4000 tokenů, 20 dotazů na stupeň;
+               odmítnutý stupeň (HTTP 400) se vypíše jako „nevešlo se“ a větší se nezkouší
+  soak         dotazy po dobu M minut (výchozí 10), GPU se vzorkuje přibližně po 1 s: souhrn po minutách,
+               J na rozhodnutí, poměr latence poslední ÷ první minuta; CSV má řádek na každé rozhodnutí
+  server       scénář Server podle MLPerf: dotazy přicházejí náhodně (Poissonův proces, pevné semínko) zadaným tempem
+               bez ohledu na to, jestli předchozí odpověď dorazila; latence se měří od plánovaného příchodu (fronta se počítá).
+               Stupně tempa jsou 0,25 až 2násobek sériové rychlosti modelu (nebo --rates v dotazech za sekundu),
+               N dotazů na stupeň (výchozí 200); hledá se nejvyšší tempo, při kterém p99 zůstane do --p99-ms
+               (výchozí 1000). Stupeň, který limit nesplní nebo nedoběhne, je poslední.
+
+Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
+server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.
+
+Dotaz je vždy stejný a malý: překážky, 3 pruhy (stejné úlohy jako bench.py).
+Před každým testem kromě cold jde zahřívací dotaz, který se nepočítá.
+--lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
+Hostovaný model (jev:jev-1.13.0, cf:clef-flash, cf:clef — viz bench.py) běží u poskytovatele a stojí peníze:
+testy cold, concurrency a server ho přeskočí; soak běží jen s přepínačem --hosted-soak a nevzorkuje GPU;
+pod tabulkou je útrata a odhad sítě a latence zahrnuje síť. --max-usd a --max-hosted jsou strop útraty jako v bench.py.
+Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu).
+

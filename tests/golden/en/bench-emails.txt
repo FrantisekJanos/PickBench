@@ -1,0 +1,5 @@
+20 e-mails from the dataset "České firemní e-maily" (5 categories), the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     90.1      20%      80%    63%     260   (confusions: Complaint→Spam 4×, Support→Invoice 2×, Spam→Complaint 1×, Complaint→Support 1×, Order→Spam 1×)
+                    macro-F1 15.6%, invalid answers 0

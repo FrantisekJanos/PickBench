@@ -1,0 +1,6 @@
+12 situací, 4 pruhů, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      25%      78%    54%       50%       8%     170   (chyb při volném pruhu: 8)
+                    přesnost variant: původní 25%, obrácené pořadí 25%, jiná formulace 33%
+                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 0%, jiná chyba 67%; přesnost bez pokynu 22%

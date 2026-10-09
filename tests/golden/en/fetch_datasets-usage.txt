@@ -1,0 +1,29 @@
+Downloads public datasets for PickBench (Python stdlib only, no Parquet).
+
+Usage:    python fetch_datasets.py [--n N] [--seed S] [--full] dataset [dataset ...]
+Examples: python fetch_datasets.py banking77 clinc150 massive
+          python fetch_datasets.py --full banking77
+          python fetch_datasets.py all
+
+Datasets:
+  banking77   a bank customer's query → 77 intents (PolyAI, CC-BY-4.0), the test split
+  clinc150    a sentence → 150 intents or "out of scope" (CLINC, CC-BY-3.0), the test split
+  massive     a sentence for a voice assistant → 18 scenarios (Amazon MASSIVE 1.1, en-US, CC BY 4.0), the test split;
+              fetch_datasets.py reads it as a stream from a 40 MB archive (it downloads less than half of it and does not save the archive to disk)
+  horizon-cs  a Czech text → one of 2–10 offered labels (Horizon-Labs, ODC-BY 1.0; a model wrote the texts and no human verified them)
+  cfpb        a complaint → a financial product, 6 classes (CFPB, CC0); always a sample of --per-class K from every class (default 50),
+              fetch_datasets.py saves it as an e-mail dataset to datasets/cfpb-complaints-<count>.json; --n and --full do not apply to it;
+              the texts come from a copy of the database on Hugging Face (BEE-spoke-data/consumer-finance-complaints, February 2024)
+  all         all the datasets above
+
+fetch_datasets.py reads horizon-cs and cfpb a hundred rows at a time from the datasets-server.huggingface.co service, which limits the number of requests
+(after HTTP 429 fetch_datasets.py waits several minutes). If the service cannot filter by language at the moment, horizon-cs reads random pages
+of the whole dataset, at most 400 — that takes up to an hour and then gives only about a hundred tasks.
+
+fetch_datasets.py saves a label without a description of its own as a key only (without description), so that it goes into the model prompt once.
+The default is a stratified sample of N tasks (default 500) with a fixed seed (default 1); --full saves the whole test split
+to a file whose name ends in -full. The files go to datasets/public/ (the folder is not in git) in the public dataset format
+(see bench.validate_public); measure them with  python bench.py --public datasets/public/<file>.json model.
+--lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
+After a network error or a changed source format, fetch_datasets.py ends with one sentence and a non-zero exit code; it leaves no unfinished file behind.
+

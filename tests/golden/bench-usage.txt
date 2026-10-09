@@ -1,0 +1,37 @@
+Srovnání rozhodovacích modelů na stejné sadě úloh (bez hry).
+
+Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
+Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
+          python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
+          python bench.py 60 --numbers --lanes 4 --mirror tev1
+
+Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
+--numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
+--emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
+--mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
+            přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
+--inject:   trojský kůň: čtvrtina úloh má ve stavu schovaný pokyn mířící na konkrétní špatnou odpověď;
+            přibude řádek odolal / podlehl / jiná chyba a přesnost na úlohách bez pokynu.
+--public:   veřejná sada (stahuje fetch_datasets.py), N úloh (výchozí celý soubor); pod tabulkou macro-F1,
+            mimo rozsah, nejhorší třídy a nejčastější záměny. S --mirror a --inject se nekombinuje.
+            Když server už zahřívací dotaz odmítne (HTTP 400), řádek řekne „nevešlo se“ a důvod doslova od serveru;
+            Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
+--deadline-ms L:  přibude sloupec goodput = podíl rozhodnutí správných a zároveň do L ms.
+--lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
+U --emails se pod řádkem modelu vypíše macro-F1 (průměr F1 přes kategorie) a počet neplatných odpovědí.
+
+Hostované modely (běží u poskytovatele, ne lokálně; stojí peníze a texty úloh odcházejí mimo tento počítač):
+  jev:jev-1.13.0             Jev u TypeSafe AI; proměnná prostředí TYPESAFE_API_KEY
+  cf:clef-flash, cf:clef     Clef u Cloudflare Workers AI; proměnné CLOUDFLARE_ACCOUNT_ID a CLOUDFLARE_API_TOKEN
+Pod řádkem hostovaného modelu je útrata (dotazy, tokeny, dolary, $ / 1000 rozh., opakování) a odhad sítě; latence zahrnuje síť.
+--max-usd X, --max-hosted N:  strop útraty tohoto spuštění (výchozí 1 $ a 5000 dotazů, nebo PICKBENCH_MAX_USD a PICKBENCH_MAX_HOSTED);
+            po jeho dosažení se další dotaz nepošle a program skončí větou.
+Hostovanému modelu jde kterákoli sada (--emails, --public), i vlastní: její texty odcházejí k poskytovateli a stojí peníze.
+            Příkaz se předem na nic neptá; strop útraty platí.
+
+Stejný stav i otázka jako v demonstrátoru (index.html).
+Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu).
+

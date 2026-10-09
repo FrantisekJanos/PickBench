@@ -1,0 +1,5 @@
+12 situací, 3 pruhů, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      73%    58%     155   (chyb při volném pruhu: 4)
+m2                       11ms     12ms    17ms    5ms    17ms     88.2      50%      79%    43%     155   (chyb při volném pruhu: 3)

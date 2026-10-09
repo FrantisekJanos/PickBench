@@ -1,0 +1,37 @@
+Compares decision models on the same set of tasks (without the game).
+
+Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
+Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
+          python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
+          python bench.py 60 --numbers --lanes 4 --mirror tev1
+
+No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
+--numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
+--emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
+--mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
+            adds stability = the share of tasks with the same answer in all three variants.
+--inject:   Trojan horse: a quarter of the tasks carry a hidden instruction in the state, aimed at one specific wrong answer;
+            adds a line with resisted / fooled / different error and the accuracy on the tasks without the instruction.
+--public:   public dataset (fetch_datasets.py downloads it), N tasks (default the whole file); below the table macro-F1,
+            out of scope, the worst classes and the most frequent confusions. It cannot be combined with --mirror or --inject.
+            When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
+            Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
+--deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
+With --emails, the line below the model row gives macro-F1 (the mean of F1 over the categories) and the number of invalid answers.
+
+Hosted models (they run at the provider, not locally; they cost money and the task texts leave this computer):
+  jev:jev-1.13.0             Jev at TypeSafe AI; environment variable TYPESAFE_API_KEY
+  cf:clef-flash, cf:clef     Clef at Cloudflare Workers AI; variables CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN
+Below the row of a hosted model are the spend (requests, tokens, dollars, $ / 1000 decisions, retries) and the network estimate; the latency includes the network.
+--max-usd X, --max-hosted N:  spend cap of this run (default $1 and 5000 requests, or PICKBENCH_MAX_USD and PICKBENCH_MAX_HOSTED);
+            once the run reaches the cap, bench.py sends no further requests and ends with a message.
+A hosted model takes any dataset (--emails, --public), including your own: its texts go to the provider and cost money.
+            bench.py does not ask for confirmation first; the spend cap applies.
+
+bench.py sends the same state and question as the page (index.html).
+The game must not run in the browser during the measurement (the requests would compete for the GPU).
+

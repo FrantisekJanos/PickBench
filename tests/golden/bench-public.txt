@@ -1,0 +1,9 @@
+12 úloh ze sady „Zkušební veřejná sada“ (4 štítků, mimo rozsah: oos), stejných pro všechny modely
+zdroj: PickBench, tests/public-mini.json · licence: CC0 1.0 (zkušební data PickBench)
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      50%      78%    36%     107   
+                    macro-F1 41.7%, neplatných odpovědí 0
+                    mimo rozsah: poznal 67% z 3, běžných úloh hozených do oos 11%, přesnost bez oos 44%
+                    nejhorší třídy: exchange_rate F1 0% (úloh 3), lost_card F1 33% (úloh 2), card_arrival F1 67% (úloh 4), oos F1 67% (úloh 3)
+                    nejčastější záměny: card_arrival→lost_card 1×, exchange_rate→card_arrival 1×, exchange_rate→lost_card 1×, exchange_rate→oos 1×, lost_card→card_arrival 1×

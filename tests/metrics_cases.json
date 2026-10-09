@@ -1,0 +1,13 @@
+[
+  {"name": "prázdno", "pairs": [], "oos": null, "results": [], "deadline": 100},
+  {"name": "vše správně", "pairs": [["a", "a"], ["b", "b"], ["a", "a"]], "oos": null, "results": [[true, 10], [true, 20], [true, 30]], "deadline": 20},
+  {"name": "tři třídy, neplatná odpověď", "pairs": [["a", "a"], ["a", "a"], ["a", "b"], ["b", "b"], ["b", null], ["c", "a"]], "oos": null,
+   "results": [[true, 5], [true, 500], [false, 5], [true, 100], [false, 1], [false, 1]], "deadline": 100},
+  {"name": "odpověď štítkem, který nemá žádnou úlohu", "pairs": [["a", "d"], ["a", "a"], ["b", "d"]], "oos": null, "results": [[false, 1]], "deadline": null},
+  {"name": "mimo rozsah", "pairs": [["x", "x"], ["x", "oos"], ["y", "y"], ["y", "x"], ["oos", "oos"], ["oos", "oos"], ["oos", "y"], ["oos", null]], "oos": "oos",
+   "results": [[true, 0], [false, 0]], "deadline": 0},
+  {"name": "oos zadané, ale ve vzorku není", "pairs": [["x", "x"], ["y", "oos"]], "oos": "oos", "results": [], "deadline": 50},
+  {"name": "jen oos", "pairs": [["oos", "oos"], ["oos", "x"]], "oos": "oos", "results": [[true, 49.9], [true, 50], [true, 50.1]], "deadline": 50},
+  {"name": "česká písmena a řazení při shodě", "pairs": [["žádost", "účet"], ["účet", "žádost"], ["Zebra", "zebra"], ["zebra", "Zebra"], ["čaj", null]], "oos": null,
+   "results": [[true, 1]], "deadline": 1}
+]

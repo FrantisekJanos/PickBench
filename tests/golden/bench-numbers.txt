@@ -1,0 +1,4 @@
+10 řad čísel, 3 bran, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       12ms     12ms    17ms    6ms    17ms     87.0      40%      81%    43%      75   (těsné 2/4, střední 0/2, jasné 2/4)

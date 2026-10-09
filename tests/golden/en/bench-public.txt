@@ -1,0 +1,9 @@
+12 tasks from the dataset "Zkušební veřejná sada" (4 labels, out of scope: oos), the same for all models
+source: PickBench, tests/public-mini.json · license: CC0 1.0 (zkušební data PickBench)
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      50%      78%    36%     107   
+                    macro-F1 41.7%, invalid answers 0
+                    out of scope: recognized 67% of 3, ordinary tasks put into oos 11%, accuracy without oos 44%
+                    worst classes: exchange_rate F1 0% (3 tasks), lost_card F1 33% (2 tasks), card_arrival F1 67% (4 tasks), oos F1 67% (3 tasks)
+                    most frequent confusions: card_arrival→lost_card 1×, exchange_rate→card_arrival 1×, exchange_rate→lost_card 1×, exchange_rate→oos 1×, lost_card→card_arrival 1×

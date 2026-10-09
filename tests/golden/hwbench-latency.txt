@@ -1,0 +1,2 @@
+model                        N    p50 ms    p90 ms    p95 ms    p99 ms    max ms   rozh./s
+m1                          20      11.0      17.0      17.0      17.0      17.0      90.1

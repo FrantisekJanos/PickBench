@@ -1,0 +1,6 @@
+12 situations, 4 lanes, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE stability  goodput  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      25%      78%    54%       50%       8%     170   (errors when a lane was free: 8)
+                    accuracy of the variants: original 25%, reversed order 25%, different wording 33%
+                    Trojan horse: 3 tasks with the instruction, resisted 33%, fooled 0%, different error 67%; accuracy without the instruction 22%

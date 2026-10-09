@@ -1,0 +1,29 @@
+Stažení veřejných sad pro PickBench (jen Python stdlib, bez Parquetu).
+
+Použití:  python fetch_datasets.py [--n N] [--seed S] [--full] sada [sada ...]
+Příklad:  python fetch_datasets.py banking77 clinc150 massive
+          python fetch_datasets.py --full banking77
+          python fetch_datasets.py all
+
+Sady:
+  banking77   dotaz klienta banky → 77 záměrů (PolyAI, CC-BY-4.0), testovací část
+  clinc150    věta → 150 záměrů nebo „mimo rozsah“ (CLINC, CC-BY-3.0), testovací část
+  massive     věta pro hlasového asistenta → 18 scénářů (Amazon MASSIVE 1.1, en-US, CC BY 4.0), testovací část;
+              čte se proudem z archivu 40 MB (stáhne se z něj necelá polovina, na disk se archiv neukládá)
+  horizon-cs  český text → jeden z 2–10 nabídnutých štítků (Horizon-Labs, ODC-BY 1.0; texty psal model, člověk je neověřil)
+  cfpb        stížnost → finanční produkt, 6 tříd (CFPB, CC0); vždy vzorek --per-class K z každé třídy (výchozí 50),
+              ukládá se jako sada e-mailů do datasets/cfpb-complaints-<počet>.json; --n a --full se ho netýkají;
+              texty jsou z kopie databáze na Hugging Face (BEE-spoke-data/consumer-finance-complaints, únor 2024)
+  all         všechny sady výše
+
+horizon-cs a cfpb se čtou po stovkách řádků ze služby datasets-server.huggingface.co, která počet dotazů omezuje
+(po HTTP 429 se čeká minuty). Když služba zrovna neumí filtrovat podle jazyka, čte horizon-cs náhodné stránky
+celé sady, nejvýš 400 — trvá to až hodinu a úloh je pak jen kolem stovky.
+
+Štítek bez vlastního popisu se ukládá jen jako klíč (bez description), aby šel do promptu modelu jednou.
+Výchozí je vrstvený vzorek N úloh (výchozí 500) s pevným semínkem (výchozí 1); --full uloží celou testovací část
+do souboru se jménem končícím -full. Soubory jdou do datasets/public/ (složka není v gitu) ve formátu veřejné sady
+(viz bench.validate_public); měří je  python bench.py --public datasets/public/<soubor>.json model.
+--lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
+Chyba sítě nebo změněný tvar zdroje skončí jednou větou a nenulovým kódem; rozpracovaný soubor nezůstane.
+

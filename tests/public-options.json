@@ -1,0 +1,22 @@
+{
+  "name": "Zkušební sada s vlastními štítky",
+  "about": "Šest vymyšlených českých zpráv pro testy PickBench; každá úloha má vlastní nabídku štítků.",
+  "about_en": "Six made-up Czech messages for the PickBench tests; every task has its own list of labels.",
+  "source": "PickBench, tests/public-options.json",
+  "license": "CC0 1.0 (zkušební data PickBench)",
+  "instructions": "Classify the text into exactly one of the offered labels.",
+  "items": [
+    {"text": "Server spadl a zákazníci nemohou platit, řešte to hned!", "label": "critical",
+     "options": [{"key": "low"}, {"key": "medium"}, {"key": "high"}, {"key": "critical"}]},
+    {"text": "Až budete mít chvíli, podívejte se prosím na překlep v patičce.", "label": "low",
+     "options": [{"key": "low"}, {"key": "medium"}, {"key": "high"}, {"key": "critical"}]},
+    {"text": "Aplikace mi spadne pokaždé, když chci nahrát fotku.", "label": "app_crash",
+     "options": [{"key": "billing_error", "description": "Billing Error"}, {"key": "login_issues", "description": "Login Issues"}, {"key": "app_crash", "description": "App Crash"}]},
+    {"text": "Strhli jste mi platbu dvakrát.", "label": "billing_error",
+     "options": [{"key": "billing_error", "description": "Billing Error"}, {"key": "login_issues", "description": "Login Issues"}, {"key": "app_crash", "description": "App Crash"}]},
+    {"text": "Kolik mám na účtu?", "label": "balance_inquiry",
+     "options": [{"key": "balance_inquiry"}, {"key": "card_block"}]},
+    {"text": "Zablokujte mi prosím kartu, ztratil jsem ji.", "label": "card_block",
+     "options": [{"key": "balance_inquiry"}, {"key": "card_block"}]}
+  ]
+}

@@ -1,0 +1,157 @@
+"""Shoda výpočtů, které žijí dvakrát: v Pythonu a v index.html.
+
+Blok mezi značkami „sdíleno s Pythonem“ se z index.html vytáhne a pustí v node nad stejnými daty jako Python.
+Před něj jde blok textů (značky „texty“): věty chyb validátoru bere sdílený blok z něj funkcí t(), v jazyce stránky.
+Bez programu node se testy přeskočí."""
+import json
+import math
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
+import i18n
+import metrics
+
+BLOCK = re.compile(r"// ==== sdíleno s Pythonem: začátek ====\n(.*?)// ==== sdíleno s Pythonem: konec ====", re.S)
+TEXT_BLOCK = re.compile(r"// ==== texty: začátek ====\n(.*?)// ==== texty: konec ====", re.S)      # stejný výraz jako v tests/test_i18n.py
+CZECH = re.compile(r"[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“]")
+
+
+def shared_js():
+    """Blok textů a za ním sdílený blok, jak stojí v index.html."""
+    text = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+    parts = []
+    for name, block in (("texty", TEXT_BLOCK), ("sdíleno s Pythonem", BLOCK)):
+        found = block.findall(text)
+        if len(found) != 1:
+            raise AssertionError(f"blok „{name}“ má být v index.html právě jednou, je tam {len(found)}×")
+        parts.append(found[0])
+    return "\n".join(parts)
+
+
+def run_js(expression, argument, lang="cs"):
+    """Spustí blok textů a sdílený blok v node a vrátí hodnotu výrazu; ve výrazu je argument dostupný jako proměnná arg, jazyk stránky je lang."""
+    with tempfile.TemporaryDirectory() as tmp:
+        script, data = Path(tmp) / "shared.cjs", Path(tmp) / "arg.json"
+        script.write_text(shared_js() + f"\nLANG = {json.dumps(lang)};\n"
+                          "const arg = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8'));\n"
+                          f"process.stdout.write(JSON.stringify({expression}));\n", encoding="utf-8")
+        data.write_text(json.dumps(argument), encoding="utf-8")
+        r = subprocess.run(["node", str(script), str(data)], capture_output=True, text=True, encoding="utf-8", timeout=60)
+    if r.returncode:
+        raise AssertionError("node: " + r.stderr[-800:])
+    return json.loads(r.stdout)
+
+
+def same(test, a, b, where=""):
+    """Rekurzivní porovnání; čísla s tolerancí."""
+    if isinstance(a, float) or isinstance(b, float):
+        test.assertTrue(isinstance(a, (int, float)) and isinstance(b, (int, float)) and math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12), f"{where}: {a!r} != {b!r}")
+    elif isinstance(a, dict):
+        test.assertEqual(sorted(a), sorted(b) if isinstance(b, dict) else b, where)
+        for k in a:
+            same(test, a[k], b[k], f"{where}.{k}")
+    elif isinstance(a, (list, tuple)):
+        test.assertEqual(len(a), len(b) if isinstance(b, (list, tuple)) else -1, where)
+        for i, (x, y) in enumerate(zip(a, b)):
+            same(test, x, y, f"{where}[{i}]")
+    else:
+        test.assertEqual(a, b, where)
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Metrics(unittest.TestCase):
+    def test_python_and_js_agree_on_every_case(self):
+        cases = json.loads((ROOT / "tests" / "metrics_cases.json").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(cases), 8)
+        got = run_js("arg.map(c => ({ m: classMetrics(c.pairs, c.oos), g: goodput(c.results, c.deadline) }))", cases)
+        for case, js in zip(cases, got):
+            py = {"m": metrics.classification([tuple(p) for p in case["pairs"]], case["oos"]),
+                  "g": metrics.goodput([tuple(r) for r in case["results"]], case["deadline"])}
+            same(self, py, js, case["name"])
+
+    def test_cases_cover_what_matters(self):
+        cases = json.loads((ROOT / "tests" / "metrics_cases.json").read_text(encoding="utf-8"))
+        self.assertTrue(any(not c["pairs"] for c in cases))                                   # prázdný běh
+        self.assertTrue(any(c["oos"] for c in cases))                                         # mimo rozsah
+        self.assertTrue(any(p[1] is None for c in cases for p in c["pairs"]))                 # neplatná odpověď
+        self.assertTrue(any(c["deadline"] is None for c in cases))                            # bez limitu
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class PublicValidator(unittest.TestCase):
+    def test_python_and_js_agree_on_every_case(self):
+        import bench
+        cases = json.loads((ROOT / "tests" / "public_cases.json").read_text(encoding="utf-8"))
+        for lang, intro in (("cs", "Neplatná veřejná sada: "), ("en", "Invalid public dataset: ")):
+            got = run_js("arg.map(c => { try { return { ok: validatePublic(c.doc) }; } catch (e) { return { error: e.message }; } })",
+                         [{"doc": c["doc"]} for c in cases], lang=lang)
+            for case, js in zip(cases, got):
+                where = f"{lang}: {case['name']}"
+                with i18n.process(lang):
+                    try:
+                        py = {"ok": bench.validate_public(case["doc"])}
+                    except ValueError as e:
+                        py = {"error": str(e)}
+                self.assertEqual("error" in py, case["error"] is not None, where)
+                same(self, py, js, where)
+                for key in case.get("absent", ()):                                                  # pole, které výsledek nést nesmí: samotná shoda by prošla, i kdyby ho nesly obě strany
+                    self.assertNotIn(key, py["ok"], where)
+                    self.assertNotIn(key, js["ok"], where)
+                if case["error"] is None:
+                    continue
+                # samotná shoda Pythonu s JS by prošla i bez překladu (obě strany by vracely česky): věta musí být v jazyce, o který šlo
+                self.assertTrue(py["error"].startswith(intro), f"{where}: {py['error']}")
+                if lang == "cs":
+                    self.assertEqual(py["error"], intro + case["error"], where)                     # česky doslova jako před překladem
+                else:
+                    self.assertEqual(CZECH.findall(py["error"]), [], f"{where}: {py['error']}")     # klíče štítků v případech diakritiku nemají
+
+    def test_shipped_test_sets_pass_in_js_too(self):
+        import bench
+        for name in ("public-mini.json", "public-options.json"):
+            doc = json.loads((ROOT / "tests" / name).read_text(encoding="utf-8"))
+            same(self, bench.validate_public(doc), run_js("validatePublic(arg)", doc), name)
+
+    def test_english_description_is_carried_the_same_by_python_and_js(self):   # about_en: volitelný text; výsledek ho nese, jen když ho sada má
+        import bench
+        base = {"name": "A", "source": "s", "license": "l", "labels": [{"key": "a"}, {"key": "b"}], "items": [{"text": "t", "label": "a"}]}      # se jménem: výchozí název je v jazyce běhu
+        docs = [{**base, "about": "česky", "about_en": "in English"}, {**base, "about_en": "in English"}, {**base, "about": "česky", "about_en": ""},
+                {**base, "about": "česky", "about_en": None}, {**base, "about": "česky"}, base,
+                {**base, "about": "česky", "about_en": "  in English "},       # popis s textem se neořezává
+                {**base, "about": "česky", "about_en": "   "}, {**base, "about": "česky", "about_en": "\t\r\n\xa0"}]      # jen bílé znaky = prázdný
+        carried = ["in English", "in English", None, None, None, None, "  in English ", None, None]
+        for doc, want, js in zip(docs, carried, run_js("arg.map(d => validatePublic(d))", docs)):
+            py = bench.validate_public(doc)
+            same(self, py, js, repr(doc.get("about_en")))
+            self.assertEqual(py.get("about_en"), want)
+            self.assertEqual("about_en" in js, want is not None)
+            self.assertEqual("about_en" in py, want is not None)
+            self.assertEqual(js["about"], doc.get("about") or "")              # český popis se anglickým nepřepisuje
+        for doc in (json.loads((ROOT / "tests" / name).read_text(encoding="utf-8")) for name in ("public-mini.json", "public-options.json")):
+            self.assertEqual(run_js("validatePublic(arg).about_en", doc), doc["about_en"])      # přibalené zkušební sady anglický popis nesou
+
+    def test_blank_description_means_the_same_characters_in_python_and_js(self):
+        # „Jen bílé znaky“ jsou znaky, které ořízne String.prototype.trim. str.strip() bez argumentu bere jinou množinu
+        # (navíc U+001C až U+001F a U+0085, bez U+FEFF): sada by pak prošla validátorem ve stránce jinak než v bench.py.
+        import bench
+        base = {"name": "A", "source": "s", "license": "l", "labels": [{"key": "a"}, {"key": "b"}], "items": [{"text": "t", "label": "a"}]}
+        codes = [*range(0x00, 0x21), 0x7F, 0x85, 0xA0, 0x1680, 0x180E, *range(0x2000, 0x2010), 0x2028, 0x2029, 0x202F, 0x205F, 0x2060, 0x3000, 0xFEFF]
+        docs = [{**base, "about_en": chr(code)} for code in codes]
+        js = run_js("arg.map(d => 'about_en' in validatePublic(d))", docs)
+        py = ["about_en" in bench.validate_public(doc) for doc in docs]
+        self.assertEqual([f"U+{code:04X}" for code, a, b in zip(codes, py, js) if a != b], [])
+        blank = [code for code, kept in zip(codes, js) if not kept]
+        self.assertEqual(blank, [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF])
+        self.assertEqual(sorted(map(ord, bench.JS_SPACE)), blank)              # seznam v bench.py je právě tahle množina
+        self.assertNotIn("about_en", bench.validate_public({**base, "about_en": bench.JS_SPACE}))
+
+
+if __name__ == "__main__":
+    unittest.main()
