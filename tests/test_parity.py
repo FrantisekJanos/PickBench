@@ -153,5 +153,86 @@ class PublicValidator(unittest.TestCase):
         self.assertNotIn("about_en", bench.validate_public({**base, "about_en": bench.JS_SPACE}))
 
 
+def py_sign(sign):
+    """Značka z JSON (seznamy) jako v bench.py (n-tice)."""
+    cls, param = sign
+    return cls, tuple(param) if isinstance(param, list) else param
+
+
+def all_signs():
+    """Všechny značky, které šablony umí: 4 třídy × 5 typů a 2 třídy × 12 mezí."""
+    import bench
+    return ([(cls, kind) for cls in ("only", "except_only", "no", "all_except") for kind in bench.VEHICLES]
+            + [(cls, (dim, x)) for cls in ("limit_no", "limit_up_to") for dim in bench.LIMITS for x in bench.LIMITS[dim]])
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Signs(unittest.TestCase):
+    def test_constants_are_the_same_as_in_bench(self):
+        import bench
+        js = run_js("({ vehicles: SIGN_VEHICLES, limits: SIGN_LIMITS, classes: SIGN_CLASSES, partner: SIGN_PARTNER, texts: SIGN_TEXTS })", None)
+        same(self, {k: [v[0], list(v[1]), list(v[2])] for k, v in bench.VEHICLES.items()}, js["vehicles"], "vehicles")
+        self.assertEqual(list(js["vehicles"]), list(bench.VEHICLES))                          # pořadí typů rozhoduje o losování
+        same(self, {k: list(v) for k, v in bench.LIMITS.items()}, js["limits"], "limits")
+        self.assertEqual(js["classes"], list(bench.SIGN_CLASSES))
+        self.assertEqual(js["partner"], bench.SIGN_PARTNER)
+        py_texts = json.loads(json.dumps(bench.SIGN_TEXTS).replace("{x:g}", "{x}"))         # Python {x:g}, stránka {x}
+        self.assertEqual(js["texts"], py_texts)
+
+    def test_sign_texts_and_rule_match_bench(self):
+        import bench
+        signs = all_signs()
+        self.assertEqual(run_js("arg.map(signText)", signs), [bench.sign_text(s) for s in signs])
+        vehicles = [v for v, _, _, _ in bench.sign_cases(150, 8)] + [
+            {"type": "car", "weight_t": 1.5, "height_m": 1.6}, {"type": "tractor", "weight_t": 3.4, "height_m": 2.5},
+            {"type": "tractor", "weight_t": 3.6, "height_m": 2.9}, {"type": "truck", "weight_t": 7.5, "height_m": 3.2}]
+        got = run_js("arg.vehicles.map(v => arg.signs.map(s => signAllowed(v, s)))", {"vehicles": vehicles, "signs": signs})
+        self.assertEqual(got, [[bench.allowed(v, s) for s in signs] for v in vehicles])
+
+    def test_hand_checked_table(self):                                 # tabulka z tests/test_signs.py (Allowed), ověřená ručně
+        car = {"type": "car", "weight_t": 1.5, "height_m": 1.6}
+        light = {"type": "tractor", "weight_t": 3.4, "height_m": 2.5}
+        heavy = {"type": "tractor", "weight_t": 3.6, "height_m": 2.9}
+        truck = {"type": "truck", "weight_t": 7.5, "height_m": 3.2}
+        table = [
+            (truck, ["only", "truck"], True), (truck, ["only", "bus"], False),
+            (car, ["except_only", "car"], True), (car, ["except_only", "motorcycle"], False),
+            (truck, ["no", "bus"], True), (truck, ["no", "truck"], False),
+            (car, ["all_except", "truck"], True), (car, ["all_except", "car"], False),
+            (light, ["limit_no", ["weight_t", 3.5]], True), (heavy, ["limit_no", ["weight_t", 3.5]], False),
+            (light, ["limit_up_to", ["weight_t", 3.5]], True), (heavy, ["limit_up_to", ["weight_t", 3.5]], False),
+            (truck, ["limit_no", ["height_m", 3.5]], True), (truck, ["limit_no", ["height_m", 3]], False),
+            (heavy, ["limit_up_to", ["height_m", 3]], True), (truck, ["limit_up_to", ["height_m", 2.8]], False),
+            (truck, ["limit_no", ["weight_t", 3.5]], False),
+        ]
+        self.assertEqual(run_js("arg.map(([v, s]) => signAllowed(v, s))", [[v, s] for v, s, _ in table]), [want for _, _, want in table])
+
+    def test_state_and_question_match_bench(self):
+        import bench
+        vehicle = {"type": "truck", "weight_t": 7.5, "height_m": 3.2}
+        signs = [("only", "bus"), ("all_except", "truck"), ("limit_no", ("weight_t", 3.5)), ("limit_no", ("height_m", 3.5))]
+        js = run_js("signState(arg.vehicle, arg.signs)", {"vehicle": vehicle, "signs": signs})
+        py = bench.sign_state(vehicle, signs)
+        self.assertEqual(json.dumps(js), json.dumps(py))                                    # bajtově stejně, i pořadí klíčů
+        for lanes in range(2, 9):
+            js = run_js("signQuestion(arg)", lanes)
+            self.assertEqual(json.dumps(js), json.dumps(bench.sign_question(lanes)), lanes)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  allowed: '([^'\\]*)',$", alt, re.M), [bench.ALT["allowed"]])
+
+    def test_warm_task_has_exactly_one_open_lane(self):
+        import bench
+        warm = run_js("SIGN_WARM", None)
+        vehicle, signs = warm["vehicle"], [py_sign(s) for s in warm["signs"]]
+        self.assertEqual(len(signs), 8)
+        self.assertEqual(len(set(signs)), 8)
+        for lanes in range(2, 9):
+            self.assertEqual([i for i, s in enumerate(signs[:lanes]) if bench.allowed(vehicle, s)], [0], lanes)
+
+
 if __name__ == "__main__":
     unittest.main()

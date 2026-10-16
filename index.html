@@ -870,6 +870,7 @@ const ALT = {                                              // jinak formulované
   target: 'A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as "clear" beats any lane with an obstacle distance. When the car\'s current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.',
   category: 'Decide which single category this e-mail belongs to, based on what the sender wants.',
   largest: 'Every gate carries a number. Pick the gate whose number is the greatest.',
+  allowed: 'Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.',
 };
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
   const key = Object.keys(q)[0];
@@ -1475,6 +1476,51 @@ function validatePublic(d) {
            ...(d.about_en?.trim() ? { about_en: d.about_en } : {}),      // anglická podoba popisu, jen když ji sada má a není jen z bílých znaků
            instructions: d.instructions || 'Classify the text into exactly one of the labels.', labels, oos, items };
 }
+
+// Zákazy a výjimky: vozidla, značky a pravidlo povolení, stejné jako v bench.py (VEHICLES, LIMITS, SIGN_*, allowed, sign_text).
+// Značka = [třída, parametr]; parametr je typ vozidla, u mezí dvojice [rozměr, mez]. Co jde do modelu (šablony, otázka), je anglicky.
+const SIGN_VEHICLES = {                                    // typ → [množné číslo do značky, hmotnost od–do v t, výška od–do v m]
+  motorcycle: ['motorcycles', [0.2, 0.4], [1.1, 1.4]],
+  car: ['cars', [1.1, 2.4], [1.4, 1.9]],
+  tractor: ['tractors', [2.5, 8.0], [2.4, 3.2]],
+  truck: ['trucks', [3.6, 26.0], [2.6, 4.0]],
+  bus: ['buses', [11.0, 19.0], [2.9, 3.7]],
+};
+const SIGN_LIMITS = { weight_t: [2, 3.5, 5, 7.5, 12, 18], height_m: [2.2, 2.8, 3, 3.5, 3.8, 4] };      // meze na značkách, jen reálné hodnoty
+const SIGN_CLASSES = ['only', 'except_only', 'no', 'all_except', 'limit_no', 'limit_up_to'];
+const SIGN_PARTNER = { only: 'except_only', except_only: 'only', no: 'all_except', all_except: 'no', limit_no: 'limit_up_to', limit_up_to: 'limit_no' };   // stejná podmínka, jiná formulace (dvojice jsou jen v bench.py)
+const SIGN_TEXTS = {                                       // šablony značek; {x} je mez zapsaná jako v Pythonu {x:g} (String dává pro hodnoty z SIGN_LIMITS totéž)
+  only: '{plural} only',
+  except_only: 'no entry except {plural}',
+  no: 'no {plural}',
+  all_except: 'all vehicles except {plural}',
+  limit_no: { weight_t: 'no vehicles over {x} t', height_m: 'no vehicles higher than {x} m' },
+  limit_up_to: { weight_t: 'vehicles up to {x} t only', height_m: 'vehicles up to {x} m high only' },
+};
+const isLimit = cls => cls === 'limit_no' || cls === 'limit_up_to';
+function signText([cls, param]) {
+  if (isLimit(cls)) return SIGN_TEXTS[cls][param[0]].replace('{x}', String(param[1]));
+  return SIGN_TEXTS[cls].replace('{plural}', SIGN_VEHICLES[param][0]);
+}
+function signAllowed(vehicle, [cls, param]) {              // smí vozidlo do pruhu se značkou? rozhoduje třída a parametr, ne text
+  if (cls === 'only' || cls === 'except_only') return vehicle.type === param;
+  if (cls === 'no' || cls === 'all_except') return vehicle.type !== param;
+  return vehicle[param[0]] < param[1];
+}
+function signState(vehicle, signs) {                       // stav pro model ve stejném tvaru a pořadí klíčů jako sign_state v bench.py
+  const state = { vehicle: { type: vehicle.type, weight_t: vehicle.weight_t, height_m: vehicle.height_m } };
+  signs.forEach((s, i) => state[`lane_${i + 1}`] = signText(s));
+  return state;
+}
+function signQuestion(lanes) {                             // popisky pruhů jako edgeName (ta stojí mimo blok)
+  const criteria = {};
+  for (let i = 0; i < lanes; i++) criteria[`lane_${i + 1}`] = `Lane ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : '');
+  return { allowed: { type: 'choice', instructions: 'Each lane has a traffic sign. Exactly one lane is open to this vehicle. Choose that lane.', criteria } };
+}
+// Zahřívací úloha: pevná, bez losování. Auto 1.5 t, 1.5 m smí jen do prvního pruhu; prvních K značek dá pro K = 2–8 právě jeden povolený pruh.
+const SIGN_WARM = { vehicle: { type: 'car', weight_t: 1.5, height_m: 1.5 },
+                    signs: [['only', 'car'], ['no', 'car'], ['only', 'truck'], ['all_except', 'car'], ['except_only', 'bus'], ['only', 'bus'],
+                            ['except_only', 'tractor'], ['only', 'motorcycle']] };
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
