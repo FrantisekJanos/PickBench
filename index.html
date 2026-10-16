@@ -1521,6 +1521,47 @@ function signQuestion(lanes) {                             // popisky pruhů jak
 const SIGN_WARM = { vehicle: { type: 'car', weight_t: 1.5, height_m: 1.5 },
                     signs: [['only', 'car'], ['no', 'car'], ['only', 'truck'], ['all_except', 'car'], ['except_only', 'bus'], ['only', 'bus'],
                             ['except_only', 'tractor'], ['only', 'motorcycle']] };
+
+// Generátor řady se značkami: stejné kroky jako sign_case v bench.py, náhoda z předané funkce rand (stránka dává rnd, test vlastní).
+// Stejné semínko dá stejné řady; jiné úlohy než bench.py, protože Python má jiný generátor náhody.
+const pickOf = (rand, list) => list[Math.floor(rand() * list.length)];
+function signVehicle(rand) {                               // hodnota na jedno desetinné místo, nikdy rovná některé mezi
+  const type = pickOf(rand, Object.keys(SIGN_VEHICLES)), [, weight, height] = SIGN_VEHICLES[type], out = { type };
+  for (const [dim, [lo, hi]] of [['weight_t', weight], ['height_m', height]]) {
+    let value;
+    do value = Math.round((lo + rand() * (hi - lo)) * 10) / 10; while (SIGN_LIMITS[dim].includes(value));
+    out[dim] = value;
+  }
+  return out;
+}
+function signMake(rand, cls, vehicle, opens) {             // značka třídy cls, která vozidlo pouští (opens) nebo nepouští; null, když taková není
+  if (!isLimit(cls)) {
+    const same = (cls === 'only' || cls === 'except_only') === opens;      // „jen T“ pouští jen typ T, „zákaz T“ všechny kromě T
+    return [cls, same ? vehicle.type : pickOf(rand, Object.keys(SIGN_VEHICLES).filter(k => k !== vehicle.type))];
+  }
+  const options = Object.entries(SIGN_LIMITS).flatMap(([dim, xs]) => xs.filter(x => (vehicle[dim] < x) === opens).map(x => [dim, x]));
+  return options.length ? [cls, pickOf(rand, options)] : null;
+}
+const signStopped = vehicle => Object.entries(SIGN_LIMITS).some(([dim, xs]) => xs.some(x => x < vehicle[dim]));      // zastaví vozidlo aspoň jedna mez?
+const sameSign = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function signRow(lanes, rand) {                            // { vehicle, signs, truth: index jediného povoleného pruhu, cls: třída jeho značky }
+  const cls = pickOf(rand, SIGN_CLASSES), limit = isLimit(cls);
+  let vehicle, right;
+  do {                                                     // vozidlo, které třída umí pustit; u mezí jen takové, které nějaká mez zastaví
+    vehicle = signVehicle(rand);
+    right = limit && !signStopped(vehicle) ? null : signMake(rand, cls, vehicle, true);
+  } while (!right);
+  const signs = [right];
+  if (limit) signs.push(signMake(rand, pickOf(rand, ['limit_no', 'limit_up_to']), vehicle, false));      // aspoň jedna zakazující mez
+  while (signs.length < lanes) {
+    const sign = signMake(rand, pickOf(rand, SIGN_CLASSES), vehicle, false);
+    if (sign && !signs.some(s => sameSign(s, sign))) signs.push(sign);   // žádná značka dvakrát
+  }
+  for (let i = signs.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [signs[i], signs[j]] = [signs[j], signs[i]]; }
+  const open = signs.flatMap((s, i) => signAllowed(vehicle, s) ? [i] : []);
+  if (open.length !== 1) throw new Error(`signRow: ${open.length} lanes open instead of 1: ${JSON.stringify(signs)}`);      // zaručuje to konstrukce; nic se neopravuje potichu
+  return { vehicle, signs, truth: open[0], cls };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------

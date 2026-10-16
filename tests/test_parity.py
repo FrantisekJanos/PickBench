@@ -166,6 +166,12 @@ def all_signs():
             + [(cls, (dim, x)) for cls in ("limit_no", "limit_up_to") for dim in bench.LIMITS for x in bench.LIMITS[dim]])
 
 
+# Generátor stránky s vlastní náhodou (mulberry32 se semínkem): seed, lanes, n → řady signRow.
+ROWS_JS = ("(() => { let a = arg.seed >>> 0; const rand = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);"
+           " t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };"
+           " return [...Array(arg.n)].map(() => signRow(arg.lanes, rand)); })()")
+
+
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class Signs(unittest.TestCase):
     def test_constants_are_the_same_as_in_bench(self):
@@ -232,6 +238,41 @@ class Signs(unittest.TestCase):
         self.assertEqual(len(set(signs)), 8)
         for lanes in range(2, 9):
             self.assertEqual([i for i, s in enumerate(signs[:lanes]) if bench.allowed(vehicle, s)], [0], lanes)
+
+    def test_generated_rows_keep_the_rules_of_bench(self):
+        import bench
+        counts = {c: 0 for c in bench.SIGN_CLASSES}
+        for lanes in range(2, 9):
+            rows = run_js(ROWS_JS, {"seed": lanes, "lanes": lanes, "n": 500})
+            for row in rows:
+                vehicle, signs = row["vehicle"], [py_sign(s) for s in row["signs"]]
+                where = (lanes, vehicle, signs)
+                self.assertEqual(list(vehicle), ["type", "weight_t", "height_m"])
+                self.assertEqual(len(signs), lanes)
+                self.assertEqual(len(set(signs)), lanes, where)                              # žádná značka dvakrát
+                self.assertEqual([i for i, s in enumerate(signs) if bench.allowed(vehicle, s)], [row["truth"]], where)      # pravidlem z bench.py
+                self.assertEqual(signs[row["truth"]][0], row["cls"])
+                _, weight, height = bench.VEHICLES[vehicle["type"]]
+                for dim, (lo, hi) in (("weight_t", weight), ("height_m", height)):
+                    self.assertTrue(lo <= vehicle[dim] <= hi, where)
+                    self.assertEqual(vehicle[dim], round(vehicle[dim], 1), where)
+                    self.assertNotIn(vehicle[dim], bench.LIMITS[dim], where)
+                if row["cls"].startswith("limit_"):
+                    closing = [s for i, s in enumerate(signs) if i != row["truth"] and s[0].startswith("limit_")]
+                    self.assertTrue(closing, where)
+                    self.assertTrue(bench.stopped_by_a_limit(vehicle), where)
+                counts[row["cls"]] += 1
+        for cls, n in counts.items():                                                        # 3500 řad, čekáno 583 na třídu
+            self.assertTrue(480 <= n <= 690, (cls, n))
+
+    def test_same_seed_same_rows(self):
+        first = run_js(ROWS_JS, {"seed": 7, "lanes": 4, "n": 50})
+        self.assertEqual(run_js(ROWS_JS, {"seed": 7, "lanes": 4, "n": 50}), first)
+        self.assertNotEqual(run_js(ROWS_JS, {"seed": 8, "lanes": 4, "n": 50}), first)
+
+    def test_broken_guarantee_raises_instead_of_fixing(self):
+        got = run_js("(() => { signAllowed = () => true; try { signRow(3, Math.random); return null; } catch (e) { return e.message; } })()", None)
+        self.assertTrue(got.startswith("signRow: 3 lanes open instead of 1: "), got)
 
 
 if __name__ == "__main__":
