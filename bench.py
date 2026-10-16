@@ -767,9 +767,8 @@ def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, 
         r["by_class"][cls][1] += 1
     r["pairs"] = None
     if pairs:                                        # dvojčata zvlášť, po původních úlohách; hlavní řádek zůstává z původních
-        twins = [sign_twin(case) for case in cases]
-        _, twin_choices = measure(model, [(sign_state(vehicle, signs), {keys[top]}, "") for vehicle, signs, top, _ in twins],
-                                  question, deadline=deadline)
+        twins = [sign_twin(case) for case in cases]  # bez limitu: shoda dvojic počítá jen správnost, ne latenci
+        _, twin_choices = measure(model, [(sign_state(vehicle, signs), {keys[top]}, "") for vehicle, signs, top, _ in twins], question)
         r["pairs"] = pair_summary(cases, choices, twin_choices, keys)
     return r
 

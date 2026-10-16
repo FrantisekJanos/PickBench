@@ -274,6 +274,13 @@ class Pairs(unittest.TestCase):
             r = bench.run_signs("m", cases, 3, deadline=50, pairs=True)
         self.assertEqual((r["goodput"], r["max"]), (1, 5.0))
 
+    def test_twins_run_without_the_deadline(self):                    # shoda dvojic latenci nepočítá, limit by jen předstíral účinek
+        cases = bench.sign_cases(4, 3)
+        with mock.patch.object(bench, "post", fake_post(oracle(cases, 3))), \
+                mock.patch.object(bench, "measure", wraps=bench.measure) as spy:
+            bench.run_signs("m", cases, 3, deadline=50, pairs=True)
+        self.assertEqual([c.args[5] if len(c.args) > 5 else c.kwargs.get("deadline") for c in spy.call_args_list], [50, None])
+
 
 class Lines(unittest.TestCase):
     def printed(self, lang, call, *args):
