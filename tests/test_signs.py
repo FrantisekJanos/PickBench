@@ -308,5 +308,80 @@ class Lines(unittest.TestCase):
         self.assertEqual(self.printed("cs", bench.print_pairs, self.result(pairs=False)), [])
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--signs", "--pairs", "--lanes", "5", "m1"])
+        self.assertEqual((a.n, a.signs, a.pairs, a.lanes, a.models), (40, True, True, 5, ["m1"]))
+        a = bench.parse_args(["m1"])
+        self.assertEqual((a.signs, a.pairs), (False, False))
+
+    def test_first_line_and_rows(self):
+        for argv, cs, en in ((["1", "--signs", "m1"], "1 úloh se značkami, 3 pruhů", "1 task with traffic signs, 3 lanes"),
+                             (["7", "--signs", "--lanes", "5", "m1"], "7 úloh se značkami, 5 pruhů", "7 tasks with traffic signs, 5 lanes")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        lines = self.cli("--signs", "m1")[0].splitlines()
+        self.assertEqual(lines[0], "100 úloh se značkami, 3 pruhů, stejných pro všechny modely")      # výchozí N a počet pruhů
+        en = self.cli("6", "--signs", "--pairs", "m1", "--lang", "en")[0].splitlines()
+        self.assertRegex(en[3], r"^m1 .*   \(only \d+/\d+, except-only \d+/\d+, no \d+/\d+, all-except \d+/\d+, limit-no \d+/\d+, limit-up-to \d+/\d+\)$")
+        self.assertTrue(en[4].startswith(" " * 20 + "pairs: both correct "), en[4])
+        self.assertTrue(en[5].startswith(" " * 20 + "pairs by class "), en[5])
+
+    def test_option_errors_in_both_languages(self):
+        errors = [(["6", "--pairs", "m1"], "Volba --pairs jde jen s --signs.", "The --pairs option works only with --signs."),
+                  (["6", "--numbers", "--pairs", "m1"], "Volba --pairs jde jen s --signs.", "The --pairs option works only with --signs."),
+                  (["6", "--signs", "--pairs", "--mirror", "m1"], "Volby --mirror a --inject se s --pairs nekombinují.",
+                   "The --mirror and --inject options cannot be combined with --pairs."),
+                  (["6", "--signs", "--pairs", "--inject", "m1"], "Volby --mirror a --inject se s --pairs nekombinují.",
+                   "The --mirror and --inject options cannot be combined with --pairs.")]
+        for argv, cs, en in errors:
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--signs", "--numbers", "m1"], ["--signs", "--emails", "x.json", "m1"], ["--signs", "--public", "x.json", "m1"],
+                     ["--signs", "--lanes", "9", "m1"], ["--signs", "--lanes", "1", "m1"], ["--signs"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_mirror_and_inject_work_with_signs(self):
+        out, code = self.cli("8", "--signs", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+
+    def test_usage_names_both_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("\n--signs:    ", text)
+            self.assertIn("\n--pairs:    ", text)
+
+
 if __name__ == "__main__":
     unittest.main()

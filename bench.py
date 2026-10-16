@@ -2,14 +2,20 @@
 
 Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
+          python bench.py 100 --signs --pairs tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
+--signs:    zákazy a výjimky, každý z K pruhů (výchozí 3) má dopravní značku a model volí jediný pruh, kam vozidlo smí,
+            N úloh (výchozí 100); za řádkem modelu přesnost podle třídy značky.
+--pairs:    jen s --signs: ke každé úloze dvojče se stejnou odpovědí, jinak formulovaná je jen značka správného pruhu;
+            přibude řádek shody dvojic a řádek podle dvojic tříd. S --mirror a --inject se nekombinuje.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -39,14 +45,20 @@ USAGE_EN = """Compares decision models on the same set of tasks (without the gam
 
 Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
+          python bench.py 100 --signs --pairs tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
+--signs:    bans and exceptions, each of K lanes (default 3) has a traffic sign and the model picks the one lane the vehicle may enter,
+            N tasks (default 100); after the model row, the accuracy by sign class.
+--pairs:    only with --signs: every task gets a twin with the same answer, only the sign of the correct lane is worded differently;
+            adds a line with the pair agreement and a line by class pair. It cannot be combined with --mirror or --inject.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -798,6 +810,8 @@ def parse_args(argv):
     p.add_argument("--lanes", type=int, default=3)
     p.add_argument("--emails")
     p.add_argument("--numbers", action="store_true")
+    p.add_argument("--signs", action="store_true")
+    p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
     p.add_argument("--inject", action="store_true")
@@ -898,10 +912,14 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public))) > 1:
+    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public, args.signs))) > 1:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
+    if args.pairs and not args.signs:
+        sys.exit(i18n.t("bench.err.pairsSigns"))
+    if args.pairs and (args.mirror or args.inject):
+        sys.exit(i18n.t("bench.err.pairsCombo"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
         sys.exit(i18n.t("bench.err.deadline"))
     if args.max_usd is not None or args.max_hosted is not None:
@@ -949,6 +967,15 @@ def main(argv):
             with hosted_model(m):
                 r = run_numbers(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
                 print_row(r, "(" + ", ".join(f"{names[g]} {ok}/{n}" for g, (ok, n) in r["by_gap"].items()) + ")")
+    elif args.signs:
+        cases = sign_cases(args.n or 100, args.lanes)
+        print(i18n.t("bench.intro.signs", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_signs(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.pairs)
+                print_row(r, sign_note(r))
+                print_pairs(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

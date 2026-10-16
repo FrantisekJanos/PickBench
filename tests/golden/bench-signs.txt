@@ -1,0 +1,6 @@
+12 úloh se značkami, 4 pruhů, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      25%      67%    47%       17%     123   (jen 0/2, jen výjimkou 1/2, zákaz 0/2, vše kromě 2/3, mez zákazem 0/2, mez do 0/1)
+                    přesnost variant: původní 25%, obrácené pořadí 25%, jiná formulace 0%
+                    trojský kůň: 3 úloh s pokynem, odolal 67%, podlehl 0%, jiná chyba 33%; přesnost bez pokynu 11%

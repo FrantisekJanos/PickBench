@@ -2,14 +2,20 @@ Compares decision models on the same set of tasks (without the game).
 
 Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
+          python bench.py 100 --signs --pairs tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
+--signs:    bans and exceptions, each of K lanes (default 3) has a traffic sign and the model picks the one lane the vehicle may enter,
+            N tasks (default 100); after the model row, the accuracy by sign class.
+--pairs:    only with --signs: every task gets a twin with the same answer, only the sign of the correct lane is worded differently;
+            adds a line with the pair agreement and a line by class pair. It cannot be combined with --mirror or --inject.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

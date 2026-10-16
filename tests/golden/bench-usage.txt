@@ -2,14 +2,20 @@ Srovnání rozhodovacích modelů na stejné sadě úloh (bez hry).
 
 Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
+          python bench.py 100 --signs --pairs tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
+--signs:    zákazy a výjimky, každý z K pruhů (výchozí 3) má dopravní značku a model volí jediný pruh, kam vozidlo smí,
+            N úloh (výchozí 100); za řádkem modelu přesnost podle třídy značky.
+--pairs:    jen s --signs: ke každé úloze dvojče se stejnou odpovědí, jinak formulovaná je jen značka správného pruhu;
+            přibude řádek shody dvojic a řádek podle dvojic tříd. S --mirror a --inject se nekombinuje.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
