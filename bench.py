@@ -338,6 +338,49 @@ def number_question(lanes):
     }}
 
 
+# ---------- scénář: zákazy a výjimky ----------
+VEHICLES = {                                         # typ → (množné číslo do značky, hmotnost od–do v t, výška od–do v m)
+    "motorcycle": ("motorcycles", (0.2, 0.4), (1.1, 1.4)),
+    "car": ("cars", (1.1, 2.4), (1.4, 1.9)),
+    "tractor": ("tractors", (2.5, 8.0), (2.4, 3.2)),
+    "truck": ("trucks", (3.6, 26.0), (2.6, 4.0)),
+    "bus": ("buses", (11.0, 19.0), (2.9, 3.7)),
+}
+LIMITS = {"weight_t": (2, 3.5, 5, 7.5, 12, 18), "height_m": (2.2, 2.8, 3, 3.5, 3.8, 4)}      # meze na značkách, jen reálné hodnoty
+SIGN_CLASSES = ("only", "except_only", "no", "all_except", "limit_no", "limit_up_to")
+SIGN_PARTNER = {"only": "except_only", "except_only": "only", "no": "all_except", "all_except": "no",
+                "limit_no": "limit_up_to", "limit_up_to": "limit_no"}      # stejná podmínka, jiná formulace
+SIGN_PAIRS = (("only", "except_only"), ("no", "all_except"), ("limit_no", "limit_up_to"))
+SIGN_TEXTS = {                                       # šablony značek; jdou do modelu, proto anglicky a mimo i18n
+    "only": "{plural} only",
+    "except_only": "no entry except {plural}",
+    "no": "no {plural}",
+    "all_except": "all vehicles except {plural}",
+    "limit_no": {"weight_t": "no vehicles over {x:g} t", "height_m": "no vehicles higher than {x:g} m"},
+    "limit_up_to": {"weight_t": "vehicles up to {x:g} t only", "height_m": "vehicles up to {x:g} m high only"},
+}
+
+
+def sign_text(sign):
+    """Text značky (třída, parametr). Parametr je typ vozidla, u mezí dvojice (rozměr, mez)."""
+    cls, param = sign
+    if cls in ("limit_no", "limit_up_to"):
+        dim, x = param
+        return SIGN_TEXTS[cls][dim].format(x=x)
+    return SIGN_TEXTS[cls].format(plural=VEHICLES[param][0])
+
+
+def allowed(vehicle, sign):
+    """Smí vozidlo do pruhu se značkou? Rozhoduje třída a parametr, ne text značky."""
+    cls, param = sign
+    if cls in ("only", "except_only"):
+        return vehicle["type"] == param
+    if cls in ("no", "all_except"):
+        return vehicle["type"] != param
+    dim, x = param
+    return vehicle[dim] < x
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
