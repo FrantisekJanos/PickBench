@@ -729,6 +729,19 @@ def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None
     return r
 
 
+def pair_summary(cases, choices, twin_choices, keys):
+    """Shoda dvojic: podíly obě správně / jen původní / jen dvojče / žádná a po dvojicích tříd [obě správně, celkem]."""
+    counts, groups = Counter(), {pair: [0, 0] for pair in SIGN_PAIRS}
+    for (_, _, top, cls), a, b in zip(cases, choices, twin_choices):
+        first, second = a == keys[top], b == keys[top]
+        counts["both" if first and second else "original" if first else "twin" if second else "none"] += 1
+        group = groups[next(pair for pair in SIGN_PAIRS if cls in pair)]
+        group[0] += first and second
+        group[1] += 1
+    n = len(cases)
+    return {"n": n, **{k: counts[k] / n for k in ("both", "original", "twin", "none")}, "groups": groups}
+
+
 def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, pairs=False):
     keys, question = lane_keys(lanes), sign_question(lanes)
     ask(model, sign_state(*cases[0][:2]), question)              # zahřátí, nepočítá se
@@ -741,6 +754,11 @@ def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, 
         r["by_class"][cls][0] += choice == keys[top]
         r["by_class"][cls][1] += 1
     r["pairs"] = None
+    if pairs:                                        # dvojčata zvlášť, po původních úlohách; hlavní řádek zůstává z původních
+        twins = [sign_twin(case) for case in cases]
+        _, twin_choices = measure(model, [(sign_state(vehicle, signs), {keys[top]}, "") for vehicle, signs, top, _ in twins],
+                                  question, deadline=deadline)
+        r["pairs"] = pair_summary(cases, choices, twin_choices, keys)
     return r
 
 
