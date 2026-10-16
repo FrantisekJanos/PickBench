@@ -110,12 +110,17 @@ def lane_keys(lanes):
     return [f"lane_{i + 1}" for i in range(lanes)]
 
 
+def position_criteria(keys, word):
+    """Nabídka možností zleva doprava: „Lane 1 (leftmost)“ … „Lane K (rightmost)“; společná pro pruhy, brány i značky."""
+    return {k: f"{word} {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == len(keys) - 1 else "")
+            for i, k in enumerate(keys)}
+
+
 def lane_question(lanes):
     return {"target": {
         "type": "choice",
         "instructions": 'You are driving a car on a road. Choose the lane the car should aim for: the lane with the longest free distance ahead. "clear" is longer than any obstacle distance. If the lane the car is in is tied for the longest, choose that lane. If other lanes are tied, choose the one closest to the car.',
-        "criteria": {k: f"Lane {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == lanes - 1 else "")
-                     for i, k in enumerate(lane_keys(lanes))},
+        "criteria": position_criteria(lane_keys(lanes), "Lane"),
     }}
 
 
@@ -345,8 +350,7 @@ def number_question(lanes):
     return {"largest": {
         "type": "choice",
         "instructions": "Each gate shows a number. Choose the gate with the largest number.",
-        "criteria": {k: f"Gate {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == lanes - 1 else "")
-                     for i, k in enumerate(gate_keys(lanes))},
+        "criteria": position_criteria(gate_keys(lanes), "Gate"),
     }}
 
 
@@ -467,8 +471,7 @@ def sign_question(lanes):
     return {"allowed": {
         "type": "choice",
         "instructions": "Each lane has a traffic sign. Exactly one lane is open to this vehicle. Choose that lane.",
-        "criteria": {k: f"Lane {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == lanes - 1 else "")
-                     for i, k in enumerate(lane_keys(lanes))},
+        "criteria": position_criteria(lane_keys(lanes), "Lane"),
     }}
 
 
@@ -734,11 +737,17 @@ def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None
     notes = targets or [None] * len(cases)
     items = [(with_note(state(values), note), {keys[top]}, "") for (values, top, _), note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
-    r["by_gap"] = {g: [0, 0] for g in GAPS}                      # třída rozdílu → [správně, celkem]
-    for (values, top, gap), choice in zip(cases, choices):
-        r["by_gap"][gap][0] += choice == keys[top]
-        r["by_gap"][gap][1] += 1
+    r["by_gap"] = class_tally(GAPS, [(top, gap) for _, top, gap in cases], choices, keys)      # třída rozdílu → [správně, celkem]
     return r
+
+
+def class_tally(order, tops, choices, keys):
+    """Přesnost po třídách: {třída: [správně, celkem]} v pořadí order; tops = [(index správné možnosti, třída), …]."""
+    counts = {c: [0, 0] for c in order}
+    for (top, cls), choice in zip(tops, choices):
+        counts[cls][0] += choice == keys[top]
+        counts[cls][1] += 1
+    return counts
 
 
 def pair_summary(cases, choices, twin_choices, keys):
@@ -761,10 +770,7 @@ def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, 
     notes = targets or [None] * len(cases)
     items = [(with_note(sign_state(vehicle, signs), note), {keys[top]}, "") for (vehicle, signs, top, _), note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
-    r["by_class"] = {c: [0, 0] for c in SIGN_CLASSES}            # třída značky povoleného pruhu → [správně, celkem]
-    for (_, _, top, cls), choice in zip(cases, choices):
-        r["by_class"][cls][0] += choice == keys[top]
-        r["by_class"][cls][1] += 1
+    r["by_class"] = class_tally(SIGN_CLASSES, [(top, cls) for _, _, top, cls in cases], choices, keys)      # třída značky povoleného pruhu
     r["pairs"] = None
     if pairs:                                        # dvojčata zvlášť, po původních úlohách; hlavní řádek zůstává z původních
         twins = [sign_twin(case) for case in cases]  # bez limitu: shoda dvojic počítá jen správnost, ne latenci
@@ -871,10 +877,14 @@ def sign_names():
             "all_except": i18n.t("bench.sign.allExcept"), "limit_no": i18n.t("bench.sign.limitNo"), "limit_up_to": i18n.t("bench.sign.limitUpTo")}
 
 
+def class_note(counts, names):
+    """Poznámka za řádkem modelu: „(jméno správně/celkem, …)“ v pořadí counts."""
+    return "(" + ", ".join(f"{names[c]} {ok}/{n}" for c, (ok, n) in counts.items()) + ")"
+
+
 def sign_note(r):
     """Poznámka za řádkem modelu: přesnost podle třídy značky povoleného pruhu."""
-    names = sign_names()
-    return "(" + ", ".join(f"{names[c]} {ok}/{n}" for c, (ok, n) in r["by_class"].items()) + ")"
+    return class_note(r["by_class"], sign_names())
 
 
 def print_pairs(r):
@@ -965,7 +975,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_numbers(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, "(" + ", ".join(f"{names[g]} {ok}/{n}" for g, (ok, n) in r["by_gap"].items()) + ")")
+                print_row(r, class_note(r["by_gap"], names))
     elif args.signs:
         cases = sign_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.signs", n=len(cases), lanes=args.lanes) + "\n")

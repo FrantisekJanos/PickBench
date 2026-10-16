@@ -163,6 +163,17 @@ class Generator(unittest.TestCase):
         self.assertEqual(list(bench.variant(q, 1)["allowed"]["criteria"]), ["lane_4", "lane_3", "lane_2", "lane_1"])
 
 
+class SharedHelpers(unittest.TestCase):                                  # společné se scénářem --numbers
+    def test_position_criteria(self):
+        self.assertEqual(bench.position_criteria(["a", "b", "c"], "Gate"), {"a": "Gate 1 (leftmost)", "b": "Gate 2", "c": "Gate 3 (rightmost)"})
+        self.assertEqual(bench.sign_question(3)["allowed"]["criteria"], bench.lane_question(3)["target"]["criteria"])
+
+    def test_class_tally_and_note(self):
+        counts = bench.class_tally(("x", "y", "z"), [(0, "x"), (1, "x"), (0, "y")], ["k0", "k0", "k0"], ["k0", "k1"])
+        self.assertEqual(counts, {"x": [1, 2], "y": [1, 1], "z": [0, 0]})
+        self.assertEqual(bench.class_note(counts, {"x": "X", "y": "Y", "z": "Z"}), "(X 1/2, Y 1/1, Z 0/0)")
+
+
 class Twin(unittest.TestCase):
     def test_twin_rewords_only_the_open_lane(self):
         for lanes in (2, 3, 8):
