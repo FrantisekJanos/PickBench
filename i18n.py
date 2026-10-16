@@ -95,6 +95,8 @@ TEXTS = {
                           "en": "{n} {n|situation|situations}, {lanes} lanes, the same for all models"},
     "bench.intro.numbers": {"cs": "{n} řad čísel, {lanes} bran, stejných pro všechny modely",
                             "en": "{n} {n|row|rows} of numbers, {lanes} gates, the same for all models"},
+    "bench.intro.signs": {"cs": "{n} úloh se značkami, {lanes} pruhů, stejných pro všechny modely",
+                          "en": "{n} {n|task|tasks} with traffic signs, {lanes} lanes, the same for all models"},
     "bench.intro.emails": {"cs": "{n} e-mailů ze sady „{name}“ ({categories} kategorií), stejných pro všechny modely",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} úloh ze sady „{name}“ ({labels} štítků), stejných pro všechny modely",
@@ -113,6 +115,11 @@ TEXTS = {
     "bench.trojan": {"cs": "trojský kůň: {n} úloh s pokynem, odolal {resisted}, podlehl {fooled}, jiná chyba {other}; přesnost bez pokynu {clean}",
                      "en": "Trojan horse: {n} {n|task|tasks} with the instruction, resisted {resisted}, fooled {fooled}, different error {other}; "
                            "accuracy without the instruction {clean}"},
+    # Zákazy a výjimky (--signs --pairs): shoda dvojic úloha / dvojče. bench.pairs: podíly {both}, {original}, {twin}, {none}
+    # a počet dvojic {n}; bench.pairs.groups: {list} = „jen/jen výjimkou 3/4, …“ (obě správně / celkem).
+    "bench.pairs": {"cs": "dvojice: obě správně {both}, jen původní {original}, jen dvojče {twin}, žádná {none} ({n} dvojic)",
+                    "en": "pairs: both correct {both}, original only {original}, twin only {twin}, neither {none} ({n} {n|pair|pairs})"},
+    "bench.pairs.groups": {"cs": "dvojice podle tříd (obě správně / celkem): {list}", "en": "pairs by class (both correct / total): {list}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -132,8 +139,18 @@ TEXTS = {
     "bench.gap.tight": {"cs": "těsné", "en": "narrow"},
     "bench.gap.medium": {"cs": "střední", "en": "medium"},
     "bench.gap.clear": {"cs": "jasné", "en": "clear"},
+    # Třídy značky povoleného pruhu (--signs), v poznámce za řádkem modelu a v řádku dvojic.
+    "bench.sign.only": {"cs": "jen", "en": "only"},
+    "bench.sign.exceptOnly": {"cs": "jen výjimkou", "en": "except-only"},
+    "bench.sign.no": {"cs": "zákaz", "en": "no"},
+    "bench.sign.allExcept": {"cs": "vše kromě", "en": "all-except"},
+    "bench.sign.limitNo": {"cs": "mez zákazem", "en": "limit-no"},
+    "bench.sign.limitUpTo": {"cs": "mez do", "en": "limit-up-to"},
     "bench.err.publicCombo": {"cs": "Volby --mirror a --inject se s --public nekombinují.",
                               "en": "The --mirror and --inject options cannot be combined with --public."},
+    "bench.err.pairsSigns": {"cs": "Volba --pairs jde jen s --signs.", "en": "The --pairs option works only with --signs."},
+    "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
+                             "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",
                            "en": "--deadline-ms must be a positive number (the deadline in milliseconds)."},
     "bench.err.limits": {"cs": "--max-usd a --max-hosted musí být nezáporná čísla.", "en": "--max-usd and --max-hosted must be non-negative numbers."},

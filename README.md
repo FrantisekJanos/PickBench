@@ -75,11 +75,13 @@ Every tile, column header and control has a tooltip explaining what the number m
 
 ## Command line
 
-- `bench.py` — compares models on the same set of tasks: `python bench.py 100 model-a model-b`. Options: `--lanes K`, `--numbers`, `--emails datasets/cz-firemni-emaily.json`, `--mirror`, `--inject`.
+- `bench.py` — compares models on the same set of tasks: `python bench.py 100 model-a model-b`. Options: `--lanes K`, `--numbers`, `--signs`, `--pairs`, `--emails datasets/cz-firemni-emaily.json`, `--mirror`, `--inject`.
 - `hwbench.py` — measures how this machine serves one model: `python hwbench.py latency --n 200 model-a`. Tests: `latency`, `cold`, `concurrency`, `questions`, `context`, `soak`, `server`.
 - `fetch_datasets.py` — downloads the public datasets: `python fetch_datasets.py banking77 clinc150 massive`.
 
 All three print Czech by default and English with `--lang en`; see "Languages" above.
+
+`bench.py --signs` gives every lane a traffic sign, such as `buses only`, `no vehicles over 3.5 t` or `all vehicles except trucks`, and asks the model for the one lane the vehicle may enter; the note after the model row splits the accuracy by sign class. `--pairs` adds a twin of every task in which only the sign of the open lane is worded the other way (`no trucks` becomes `all vehicles except trucks`), so the answer stays the same, and reports how often the model got both tasks of a pair right.
 
 `bench.py --public datasets/public/massive-en-us.json model-a` measures a public dataset and prints accuracy, macro-F1 (the mean of F1 over the classes), the worst classes and the most frequent confusions; for a dataset with an out-of-scope label also how many out-of-scope tasks the model recognized. `--deadline-ms L` adds **goodput**: the share of decisions that were both correct and in time.
 

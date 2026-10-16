@@ -34,6 +34,8 @@ BENCH = {                                            # jméno zlatého souboru �
     "bench-numbers": ["10", "--numbers", "m1"],
     "bench-emails": ["20", "--emails", str(ROOT / "datasets" / "cz-firemni-emaily.json"), "m1"],
     "bench-public": ["--public", str(ROOT / "tests" / "public-mini.json"), "m1"],
+    "bench-signs": ["12", "--signs", "--lanes", "4", "--mirror", "--inject", "m1"],
+    "bench-signs-pairs": ["12", "--signs", "--pairs", "--deadline-ms", "9", "m1", "m2"],
 }
 HWBENCH = {                                          # jméno zlatého souboru → argumenty hwbench.py
     "hwbench-latency": ["latency", "--n", "20", "m1"],
@@ -226,7 +228,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "hwbench-latency", "hwbench-questions", "hwbench-context"):
+        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "hwbench-latency", "hwbench-questions", "hwbench-context"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)

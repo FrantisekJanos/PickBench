@@ -2,14 +2,20 @@
 
 Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
+          python bench.py 100 --signs --pairs tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
+--signs:    zákazy a výjimky, každý z K pruhů (výchozí 3) má dopravní značku a model volí jediný pruh, kam vozidlo smí,
+            N úloh (výchozí 100); za řádkem modelu přesnost podle třídy značky.
+--pairs:    jen s --signs: ke každé úloze dvojče se stejnou odpovědí, jinak formulovaná je jen značka správného pruhu;
+            přibude řádek shody dvojic a řádek podle dvojic tříd. S --mirror a --inject se nekombinuje.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -39,14 +45,20 @@ USAGE_EN = """Compares decision models on the same set of tasks (without the gam
 
 Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
+          python bench.py 100 --signs --pairs tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
+--signs:    bans and exceptions, each of K lanes (default 3) has a traffic sign and the model picks the one lane the vehicle may enter,
+            N tasks (default 100); after the model row, the accuracy by sign class.
+--pairs:    only with --signs: every task gets a twin with the same answer, only the sign of the correct lane is worded differently;
+            adds a line with the pair agreement and a line by class pair. It cannot be combined with --mirror or --inject.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -98,12 +110,17 @@ def lane_keys(lanes):
     return [f"lane_{i + 1}" for i in range(lanes)]
 
 
+def position_criteria(keys, word):
+    """Nabídka možností zleva doprava: „Lane 1 (leftmost)“ … „Lane K (rightmost)“; společná pro pruhy, brány i značky."""
+    return {k: f"{word} {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == len(keys) - 1 else "")
+            for i, k in enumerate(keys)}
+
+
 def lane_question(lanes):
     return {"target": {
         "type": "choice",
         "instructions": 'You are driving a car on a road. Choose the lane the car should aim for: the lane with the longest free distance ahead. "clear" is longer than any obstacle distance. If the lane the car is in is tied for the longest, choose that lane. If other lanes are tied, choose the one closest to the car.',
-        "criteria": {k: f"Lane {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == lanes - 1 else "")
-                     for i, k in enumerate(lane_keys(lanes))},
+        "criteria": position_criteria(lane_keys(lanes), "Lane"),
     }}
 
 
@@ -333,16 +350,137 @@ def number_question(lanes):
     return {"largest": {
         "type": "choice",
         "instructions": "Each gate shows a number. Choose the gate with the largest number.",
-        "criteria": {k: f"Gate {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == lanes - 1 else "")
-                     for i, k in enumerate(gate_keys(lanes))},
+        "criteria": position_criteria(gate_keys(lanes), "Gate"),
     }}
 
 
-# ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
+# ---------- scénář: zákazy a výjimky ----------
+VEHICLES = {                                         # typ → (množné číslo do značky, hmotnost od–do v t, výška od–do v m)
+    "motorcycle": ("motorcycles", (0.2, 0.4), (1.1, 1.4)),
+    "car": ("cars", (1.1, 2.4), (1.4, 1.9)),
+    "tractor": ("tractors", (2.5, 8.0), (2.4, 3.2)),
+    "truck": ("trucks", (3.6, 26.0), (2.6, 4.0)),
+    "bus": ("buses", (11.0, 19.0), (2.9, 3.7)),
+}
+LIMITS = {"weight_t": (2, 3.5, 5, 7.5, 12, 18), "height_m": (2.2, 2.8, 3, 3.5, 3.8, 4)}      # meze na značkách, jen reálné hodnoty
+SIGN_CLASSES = ("only", "except_only", "no", "all_except", "limit_no", "limit_up_to")
+SIGN_PARTNER = {"only": "except_only", "except_only": "only", "no": "all_except", "all_except": "no",
+                "limit_no": "limit_up_to", "limit_up_to": "limit_no"}      # stejná podmínka, jiná formulace
+SIGN_PAIRS = (("only", "except_only"), ("no", "all_except"), ("limit_no", "limit_up_to"))
+SIGN_TEXTS = {                                       # šablony značek; jdou do modelu, proto anglicky a mimo i18n
+    "only": "{plural} only",
+    "except_only": "no entry except {plural}",
+    "no": "no {plural}",
+    "all_except": "all vehicles except {plural}",
+    "limit_no": {"weight_t": "no vehicles over {x:g} t", "height_m": "no vehicles higher than {x:g} m"},
+    "limit_up_to": {"weight_t": "vehicles up to {x:g} t only", "height_m": "vehicles up to {x:g} m high only"},
+}
+
+
+def sign_text(sign):
+    """Text značky (třída, parametr). Parametr je typ vozidla, u mezí dvojice (rozměr, mez)."""
+    cls, param = sign
+    if cls in ("limit_no", "limit_up_to"):
+        dim, x = param
+        return SIGN_TEXTS[cls][dim].format(x=x)
+    return SIGN_TEXTS[cls].format(plural=VEHICLES[param][0])
+
+
+def allowed(vehicle, sign):
+    """Smí vozidlo do pruhu se značkou? Rozhoduje třída a parametr, ne text značky."""
+    cls, param = sign
+    if cls in ("only", "except_only"):
+        return vehicle["type"] == param
+    if cls in ("no", "all_except"):
+        return vehicle["type"] != param
+    dim, x = param
+    return vehicle[dim] < x
+
+
+def vehicle_of(rng):
+    """Náhodné vozidlo podle VEHICLES; hodnota na jedno desetinné místo a nikdy rovná některé mezi z LIMITS."""
+    kind = rng.choice(list(VEHICLES))
+    _, weight, height = VEHICLES[kind]
+    out = {"type": kind}
+    for dim, (lo, hi) in (("weight_t", weight), ("height_m", height)):
+        value = round(rng.uniform(lo, hi), 1)
+        while value in LIMITS[dim]:
+            value = round(rng.uniform(lo, hi), 1)
+        out[dim] = value
+    return out
+
+
+def make_sign(rng, cls, vehicle, opens):
+    """Značka třídy cls, která vozidlo pouští (opens=True), nebo nepouští. None, když taková značka neexistuje."""
+    if cls in ("only", "except_only", "no", "all_except"):
+        same = (cls in ("only", "except_only")) == opens          # „jen T“ pouští jen typ T, „zákaz T“ všechny kromě T
+        kinds = [vehicle["type"]] if same else [k for k in VEHICLES if k != vehicle["type"]]
+        return cls, rng.choice(kinds)
+    options = [(dim, x) for dim in LIMITS for x in LIMITS[dim] if (vehicle[dim] < x) == opens]
+    return (cls, rng.choice(options)) if options else None
+
+
+def stopped_by_a_limit(vehicle):
+    """Zastaví vozidlo aspoň jedna mez z LIMITS (v některém rozměru mez pod hodnotou)?"""
+    return any(x < vehicle[dim] for dim in LIMITS for x in LIMITS[dim])
+
+
+def sign_case(rng, lanes):
+    """Úloha se značkami. Vrací (vozidlo, značky po pruzích, index jediného povoleného pruhu, třída jeho značky)."""
+    cls = rng.choice(SIGN_CLASSES)
+    limit = cls in ("limit_no", "limit_up_to")
+    while True:                                      # vozidlo, které třída umí pustit (kamion 26 t pod žádnou mez nevjede)
+        vehicle = vehicle_of(rng)
+        if limit and not stopped_by_a_limit(vehicle):  # u mezí i zakazující mez, jinak by správná byla jediná značka s číslem
+            continue
+        right = make_sign(rng, cls, vehicle, True)
+        if right is not None:
+            break
+    signs = [right]
+    if limit:                                        # aspoň jeden zakazující pruh nese mez (lanes >= 2, takže místo je)
+        signs.append(make_sign(rng, rng.choice(("limit_no", "limit_up_to")), vehicle, False))
+    while len(signs) < lanes:
+        sign = make_sign(rng, rng.choice(SIGN_CLASSES), vehicle, False)
+        if sign is not None and sign not in signs:   # šablona zakazující značku vyrobit neumí, nebo už v úloze je: losuje se jiná
+            signs.append(sign)                       # aspoň 10 různých zakazujících značek pro každé vozidlo, 8 pruhů tedy vždy stačí
+    rng.shuffle(signs)
+    open_lanes = [i for i, s in enumerate(signs) if allowed(vehicle, s)]
+    if len(open_lanes) != 1:                         # zaručuje to konstrukce; nic se neopravuje potichu
+        raise RuntimeError(f"sign_case: {len(open_lanes)} lanes open instead of 1: {signs}")
+    return vehicle, signs, open_lanes[0], cls
+
+
+def sign_cases(n, lanes=3, seed=1):
+    rng = random.Random(seed)
+    return [sign_case(rng, lanes) for _ in range(n)]
+
+
+def sign_twin(case):
+    """Dvojče úlohy: značka povoleného pruhu přepsaná šablonou partnera se stejným parametrem. Bez losování, odpověď stejná."""
+    vehicle, signs, top, cls = case
+    partner = SIGN_PARTNER[cls]
+    return vehicle, [(partner, s[1]) if i == top else s for i, s in enumerate(signs)], top, partner
+
+
+def sign_state(vehicle, signs):
+    """Stav pro model: vozidlo a text značky v každém pruhu."""
+    return {"vehicle": dict(vehicle), **{k: sign_text(s) for k, s in zip(lane_keys(len(signs)), signs)}}
+
+
+def sign_question(lanes):
+    return {"allowed": {
+        "type": "choice",
+        "instructions": "Each lane has a traffic sign. Exactly one lane is open to this vehicle. Choose that lane.",
+        "criteria": position_criteria(lane_keys(lanes), "Lane"),
+    }}
+
+
+# ---------- zrcadla a kalibrace (stejné jako v index.html, kromě klíče "allowed": scénář --signs stránka nemá) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
     "category": "Decide which single category this e-mail belongs to, based on what the sender wants.",
     "largest": "Every gate carries a number. Pick the gate whose number is the greatest.",
+    "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",      # jen bench.py, stránka scénář nemá
 }
 
 
@@ -599,10 +737,45 @@ def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None
     notes = targets or [None] * len(cases)
     items = [(with_note(state(values), note), {keys[top]}, "") for (values, top, _), note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
-    r["by_gap"] = {g: [0, 0] for g in GAPS}                      # třída rozdílu → [správně, celkem]
-    for (values, top, gap), choice in zip(cases, choices):
-        r["by_gap"][gap][0] += choice == keys[top]
-        r["by_gap"][gap][1] += 1
+    r["by_gap"] = class_tally(GAPS, [(top, gap) for _, top, gap in cases], choices, keys)      # třída rozdílu → [správně, celkem]
+    return r
+
+
+def class_tally(order, tops, choices, keys):
+    """Přesnost po třídách: {třída: [správně, celkem]} v pořadí order; tops = [(index správné možnosti, třída), …]."""
+    counts = {c: [0, 0] for c in order}
+    for (top, cls), choice in zip(tops, choices):
+        counts[cls][0] += choice == keys[top]
+        counts[cls][1] += 1
+    return counts
+
+
+def pair_summary(cases, choices, twin_choices, keys):
+    """Shoda dvojic: podíly obě správně / jen původní / jen dvojče / žádná a po dvojicích tříd [obě správně, celkem]."""
+    counts, groups = Counter(), {pair: [0, 0] for pair in SIGN_PAIRS}
+    for (_, _, top, cls), a, b in zip(cases, choices, twin_choices):
+        first, second = a == keys[top], b == keys[top]
+        counts["both" if first and second else "original" if first else "twin" if second else "none"] += 1
+        group = groups[next(pair for pair in SIGN_PAIRS if cls in pair)]
+        group[0] += first and second
+        group[1] += 1
+    n = len(cases)
+    return {"n": n, **{k: counts[k] / n for k in ("both", "original", "twin", "none")}, "groups": groups}
+
+
+def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, pairs=False):
+    keys, question = lane_keys(lanes), sign_question(lanes)
+    ask(model, sign_state(*cases[0][:2]), question)              # zahřátí, nepočítá se
+    targets = inject_plan([{keys[top]} for _, _, top, _ in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(sign_state(vehicle, signs), note), {keys[top]}, "") for (vehicle, signs, top, _), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_class"] = class_tally(SIGN_CLASSES, [(top, cls) for _, _, top, cls in cases], choices, keys)      # třída značky povoleného pruhu
+    r["pairs"] = None
+    if pairs:                                        # dvojčata zvlášť, po původních úlohách; hlavní řádek zůstává z původních
+        twins = [sign_twin(case) for case in cases]  # bez limitu: shoda dvojic počítá jen správnost, ne latenci
+        _, twin_choices = measure(model, [(sign_state(vehicle, signs), {keys[top]}, "") for vehicle, signs, top, _ in twins], question)
+        r["pairs"] = pair_summary(cases, choices, twin_choices, keys)
     return r
 
 
@@ -642,6 +815,8 @@ def parse_args(argv):
     p.add_argument("--lanes", type=int, default=3)
     p.add_argument("--emails")
     p.add_argument("--numbers", action="store_true")
+    p.add_argument("--signs", action="store_true")
+    p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
     p.add_argument("--inject", action="store_true")
@@ -696,6 +871,34 @@ def print_row(r, note):
                            clean=pct(j["clean_acc"])), flush=True)
 
 
+def sign_names():
+    """Jména tříd značek v jazyce běhu."""
+    return {"only": i18n.t("bench.sign.only"), "except_only": i18n.t("bench.sign.exceptOnly"), "no": i18n.t("bench.sign.no"),
+            "all_except": i18n.t("bench.sign.allExcept"), "limit_no": i18n.t("bench.sign.limitNo"), "limit_up_to": i18n.t("bench.sign.limitUpTo")}
+
+
+def class_note(counts, names):
+    """Poznámka za řádkem modelu: „(jméno správně/celkem, …)“ v pořadí counts."""
+    return "(" + ", ".join(f"{names[c]} {ok}/{n}" for c, (ok, n) in counts.items()) + ")"
+
+
+def sign_note(r):
+    """Poznámka za řádkem modelu: přesnost podle třídy značky povoleného pruhu."""
+    return class_note(r["by_class"], sign_names())
+
+
+def print_pairs(r):
+    """Dva řádky shody dvojic pod řádkem modelu; bez --pairs nic."""
+    p = r.get("pairs")
+    if p is None:
+        return
+    names, pad = sign_names(), " " * 20
+    print(pad + i18n.t("bench.pairs", both=pct(p["both"]), original=pct(p["original"]), twin=pct(p["twin"]), none=pct(p["none"]), n=p["n"]),
+          flush=True)
+    groups = ", ".join(f"{names[a]}/{names[b]} {ok}/{n}" for (a, b), (ok, n) in p["groups"].items())
+    print(pad + i18n.t("bench.pairs.groups", list=groups), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
@@ -718,10 +921,14 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public))) > 1:
+    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public, args.signs))) > 1:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
+    if args.pairs and not args.signs:
+        sys.exit(i18n.t("bench.err.pairsSigns"))
+    if args.pairs and (args.mirror or args.inject):
+        sys.exit(i18n.t("bench.err.pairsCombo"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
         sys.exit(i18n.t("bench.err.deadline"))
     if args.max_usd is not None or args.max_hosted is not None:
@@ -768,7 +975,16 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_numbers(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, "(" + ", ".join(f"{names[g]} {ok}/{n}" for g, (ok, n) in r["by_gap"].items()) + ")")
+                print_row(r, class_note(r["by_gap"], names))
+    elif args.signs:
+        cases = sign_cases(args.n or 100, args.lanes)
+        print(i18n.t("bench.intro.signs", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_signs(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.pairs)
+                print_row(r, sign_note(r))
+                print_pairs(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

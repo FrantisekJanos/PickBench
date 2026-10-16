@@ -1,0 +1,6 @@
+12 tasks with traffic signs, 4 lanes, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE stability  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      17%      71%    54%       33%     124   (only 0/1, except-only 0/2, no 1/2, all-except 1/4, limit-no 0/2, limit-up-to 0/1)
+                    accuracy of the variants: original 17%, reversed order 17%, different wording 33%
+                    Trojan horse: 3 tasks with the instruction, resisted 33%, fooled 33%, different error 33%; accuracy without the instruction 11%
