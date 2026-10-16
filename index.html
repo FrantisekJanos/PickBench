@@ -1346,7 +1346,7 @@ const numbers = {
 // Vozidlo, v každém pruhu dopravní značka, model volí jediný pruh, kam vozidlo smí. Konstanty, pravidlo a generátor jsou ve sdíleném bloku
 // (signRow, signState, signQuestion). Na silnici je značka jen symbol pro diváka; model dostává její text.
 const SIGN_GLYPH = { motorcycle: '🏍', car: '🚗', tractor: '🚜', truck: '🚚', bus: '🚌' };
-const vehicleGlyph = type => SIGN_GLYPH[type] ?? '?';     // kdyby prohlížeč emoji nekreslil: písmena M, C, T, K, B jen tady
+const vehicleGlyph = type => SIGN_GLYPH[type] ?? '?';     // emoji potřebují barevné písmo (Segoe UI Emoji, Noto Color Emoji); záloha bez něj není, písmena by šla jen sem
 const vehicleText = v => `${vehicleGlyph(v.type)} ${v.weight_t} t · ${v.height_m} m`;
 
 function drawSign([cls, param], x, y, rad) {               // kulatý symbol podle třídy; pod výjimkou štítek s typem vozidla
@@ -2204,7 +2204,7 @@ function stepEstimate(kind, s) {                           // horní odhad dotaz
   let tasks;
   if (kind === 'bench') tasks = s.benchn;
   else if (s.mode === 'ladder') tasks = SC === obstacles ? Math.ceil(LADDER.reduce((t, v) => t + LEVEL / v, 0) * 1000 / HOSTED_MIN_MS) : rows(LADDER.length * LEVEL);
-  else if (SC !== obstacles) tasks = rows(s.runlen);       // e-maily, číselné duely: jedna úloha na řadu
+  else if (SC !== obstacles) tasks = rows(s.runlen);       // e-maily, číselné duely, zákazy a výjimky: jedna úloha na řadu
   else tasks = s.mode === 'turn' ? s.runlen + 1 : Math.ceil(s.runlen / s.speed * 1000 / HOSTED_MIN_MS);
   const mirror = s.mirror && (kind === 'bench' || s.mode === 'turn') && !SC.benchOnly;
   const requests = tasks * (mirror ? 3 : 1) + 1;           // + zahřívací dotaz
