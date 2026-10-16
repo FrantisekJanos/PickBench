@@ -157,5 +157,25 @@ class Generator(unittest.TestCase):
         self.assertEqual(list(bench.variant(q, 1)["allowed"]["criteria"]), ["lane_4", "lane_3", "lane_2", "lane_1"])
 
 
+class Twin(unittest.TestCase):
+    def test_twin_rewords_only_the_open_lane(self):
+        for lanes in (2, 3, 8):
+            for case in bench.sign_cases(200, lanes):
+                vehicle, signs, top, cls = case
+                t_vehicle, t_signs, t_top, t_cls = bench.sign_twin(case)
+                self.assertEqual((t_vehicle, t_top), (vehicle, top))
+                self.assertEqual(t_cls, bench.SIGN_PARTNER[cls])
+                self.assertEqual(t_signs[top], (bench.SIGN_PARTNER[cls], signs[top][1]))
+                self.assertEqual([i for i, s in enumerate(t_signs) if bench.allowed(vehicle, s)], [top])
+                a, b = bench.sign_state(vehicle, signs), bench.sign_state(t_vehicle, t_signs)
+                self.assertEqual([k for k in a if a[k] != b[k]], [f"lane_{top + 1}"])
+
+    def test_twin_draws_nothing_and_leaves_the_task_alone(self):
+        case = bench.sign_cases(1)[0]
+        before = json.dumps(case)
+        self.assertEqual(bench.sign_twin(case), bench.sign_twin(case))
+        self.assertEqual(json.dumps(case), before)
+
+
 if __name__ == "__main__":
     unittest.main()

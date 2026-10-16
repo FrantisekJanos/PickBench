@@ -439,6 +439,13 @@ def sign_cases(n, lanes=3, seed=1):
     return [sign_case(rng, lanes) for _ in range(n)]
 
 
+def sign_twin(case):
+    """Dvojče úlohy: značka povoleného pruhu přepsaná šablonou partnera se stejným parametrem. Bez losování, odpověď stejná."""
+    vehicle, signs, top, cls = case
+    partner = SIGN_PARTNER[cls]
+    return vehicle, [(partner, s[1]) if i == top else s for i, s in enumerate(signs)], top, partner
+
+
 def sign_state(vehicle, signs):
     """Stav pro model: vozidlo a text značky v každém pruhu."""
     return {"vehicle": dict(vehicle), **{k: sign_text(s) for k, s in zip(lane_keys(len(signs)), signs)}}
