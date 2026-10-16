@@ -729,6 +729,21 @@ def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None
     return r
 
 
+def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, pairs=False):
+    keys, question = lane_keys(lanes), sign_question(lanes)
+    ask(model, sign_state(*cases[0][:2]), question)              # zahřátí, nepočítá se
+    targets = inject_plan([{keys[top]} for _, _, top, _ in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(sign_state(vehicle, signs), note), {keys[top]}, "") for (vehicle, signs, top, _), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_class"] = {c: [0, 0] for c in SIGN_CLASSES}            # třída značky povoleného pruhu → [správně, celkem]
+    for (_, _, top, cls), choice in zip(cases, choices):
+        r["by_class"][cls][0] += choice == keys[top]
+        r["by_class"][cls][1] += 1
+    r["pairs"] = None
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
