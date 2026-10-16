@@ -852,6 +852,30 @@ def print_row(r, note):
                            clean=pct(j["clean_acc"])), flush=True)
 
 
+def sign_names():
+    """Jména tříd značek v jazyce běhu."""
+    return {"only": i18n.t("bench.sign.only"), "except_only": i18n.t("bench.sign.exceptOnly"), "no": i18n.t("bench.sign.no"),
+            "all_except": i18n.t("bench.sign.allExcept"), "limit_no": i18n.t("bench.sign.limitNo"), "limit_up_to": i18n.t("bench.sign.limitUpTo")}
+
+
+def sign_note(r):
+    """Poznámka za řádkem modelu: přesnost podle třídy značky povoleného pruhu."""
+    names = sign_names()
+    return "(" + ", ".join(f"{names[c]} {ok}/{n}" for c, (ok, n) in r["by_class"].items()) + ")"
+
+
+def print_pairs(r):
+    """Dva řádky shody dvojic pod řádkem modelu; bez --pairs nic."""
+    p = r.get("pairs")
+    if p is None:
+        return
+    names, pad = sign_names(), " " * 20
+    print(pad + i18n.t("bench.pairs", both=pct(p["both"]), original=pct(p["original"]), twin=pct(p["twin"]), none=pct(p["none"]), n=p["n"]),
+          flush=True)
+    groups = ", ".join(f"{names[a]}/{names[b]} {ok}/{n}" for (a, b), (ok, n) in p["groups"].items())
+    print(pad + i18n.t("bench.pairs.groups", list=groups), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

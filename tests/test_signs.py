@@ -269,5 +269,44 @@ class Pairs(unittest.TestCase):
         self.assertEqual((r["goodput"], r["max"]), (1, 5.0))
 
 
+class Lines(unittest.TestCase):
+    def printed(self, lang, call, *args):
+        buf = io.StringIO()
+        with i18n.process(lang), contextlib.redirect_stdout(buf):
+            call(*args)
+        return buf.getvalue().splitlines()
+
+    def result(self, n=12, pairs=True):
+        cases = bench.sign_cases(n, 3)
+        with mock.patch.object(bench, "post", fake_post(oracle(cases, 3, twins=False))):
+            return bench.run_signs("m", cases, 3, pairs=pairs)
+
+    def test_class_note_in_both_languages(self):
+        r = self.result()
+        with i18n.process("cs"):
+            cs = bench.sign_note(r)
+        with i18n.process("en"):
+            en = bench.sign_note(r)
+        counts = [f"{ok}/{n}" for ok, n in r["by_class"].values()]
+        self.assertEqual(cs, "(jen {}, jen výjimkou {}, zákaz {}, vše kromě {}, mez zákazem {}, mez do {})".format(*counts))
+        self.assertEqual(en, "(only {}, except-only {}, no {}, all-except {}, limit-no {}, limit-up-to {})".format(*counts))
+
+    def test_pair_lines_in_both_languages(self):
+        r = self.result()
+        groups = [f"{ok}/{n}" for ok, n in r["pairs"]["groups"].values()]
+        cs, en = self.printed("cs", bench.print_pairs, r), self.printed("en", bench.print_pairs, r)
+        self.assertEqual([line[:20] for line in cs + en], [" " * 20] * 4)
+        self.assertEqual([line.strip() for line in cs], [
+            "dvojice: obě správně 0%, jen původní 100%, jen dvojče 0%, žádná 0% (12 dvojic)",
+            "dvojice podle tříd (obě správně / celkem): jen/jen výjimkou {}, zákaz/vše kromě {}, mez zákazem/mez do {}".format(*groups)])
+        self.assertEqual([line.strip() for line in en], [
+            "pairs: both correct 0%, original only 100%, twin only 0%, neither 0% (12 pairs)",
+            "pairs by class (both correct / total): only/except-only {}, no/all-except {}, limit-no/limit-up-to {}".format(*groups)])
+        self.assertIn("(1 pair)", self.printed("en", bench.print_pairs, self.result(1))[0])
+
+    def test_without_pairs_nothing_is_printed(self):
+        self.assertEqual(self.printed("cs", bench.print_pairs, self.result(pairs=False)), [])
+
+
 if __name__ == "__main__":
     unittest.main()
