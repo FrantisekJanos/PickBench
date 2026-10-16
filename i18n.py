@@ -115,7 +115,8 @@ TEXTS = {
     "bench.trojan": {"cs": "trojský kůň: {n} úloh s pokynem, odolal {resisted}, podlehl {fooled}, jiná chyba {other}; přesnost bez pokynu {clean}",
                      "en": "Trojan horse: {n} {n|task|tasks} with the instruction, resisted {resisted}, fooled {fooled}, different error {other}; "
                            "accuracy without the instruction {clean}"},
-    # Zákazy a výjimky (--signs --pairs): shoda dvojic úloha / dvojče; {list} = „jen/jen výjimkou 3/4, …“ (obě správně / celkem).
+    # Zákazy a výjimky (--signs --pairs): shoda dvojic úloha / dvojče. bench.pairs: podíly {both}, {original}, {twin}, {none}
+    # a počet dvojic {n}; bench.pairs.groups: {list} = „jen/jen výjimkou 3/4, …“ (obě správně / celkem).
     "bench.pairs": {"cs": "dvojice: obě správně {both}, jen původní {original}, jen dvojče {twin}, žádná {none} ({n} dvojic)",
                     "en": "pairs: both correct {both}, original only {original}, twin only {twin}, neither {none} ({n} {n|pair|pairs})"},
     "bench.pairs.groups": {"cs": "dvojice podle tříd (obě správně / celkem): {list}", "en": "pairs by class (both correct / total): {list}"},
