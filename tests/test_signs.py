@@ -407,5 +407,18 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--pairs:    ", text)
 
 
+class Page(unittest.TestCase):                                         # scénář ve stránce; pravidla a generátor hlídá tests/test_parity.py (Signs)
+    def test_scenario_is_offered_selected_and_draws_its_vehicle(self):
+        page = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(page.count('<option value="signs" data-i18n="opt.scenario.signs"></option>'), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs }[v];"), 1)
+        self.assertEqual(page.count("SC.drawVehicle?.(g, x, w);"), 1)
+        self.assertEqual(page.count("drawVehicle(g, x, w) {"), 1)                    # háček má jen tento scénář
+        body = page.replace("\r\n", "\n").split("\nconst signs = {", 1)[1].split("\n  warmTask() {", 1)[1].split("\n  },", 1)[0].split("\n", 1)[1]
+        self.assertIn("SIGN_WARM", body)                                              # zahřívací úloha je pevná: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertNotIn("rnd", body)
+        self.assertNotIn("signRow", body)
+
+
 if __name__ == "__main__":
     unittest.main()
