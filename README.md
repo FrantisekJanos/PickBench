@@ -49,6 +49,7 @@ Numbers are the same in both languages, with a decimal point. On the page two fo
 
 - **Obstacles** — every row blocks some lanes; the model gets the distance to the nearest obstacle in each lane and picks the lane with the longest free road. Two to eight lanes.
 - **Number duels** — every lane has a gate with a number; the model picks the largest. Results are split by how close the two largest numbers are.
+- **Bans and exceptions** — every row has its own vehicle and every lane a traffic sign, such as `buses only`, `no trucks` or `vehicles up to 3.5 t only`; the model picks the one lane the vehicle may enter. The road shows each sign as a symbol and the vehicle of the nearest row under the car; the full texts are in the last decision panel. Results are split by the class of the sign of the open lane. Pairs of tasks (`--pairs`) are only in `bench.py`.
 - **E-mails** — the model sorts e-mails from a dataset into categories; the road has one lane per category. A confusion table shows which categories get mixed up.
 - **Public datasets** — classification datasets with more labels than the road has lanes, or with a separate list of labels for every task. They run only as a benchmark without the game, because the road has at most eight lanes. The endpoint limits how many options one question may have; see "Public datasets" below.
 
