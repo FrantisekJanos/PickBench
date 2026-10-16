@@ -437,8 +437,8 @@ def sign_case(rng, lanes):
         signs.append(make_sign(rng, rng.choice(("limit_no", "limit_up_to")), vehicle, False))
     while len(signs) < lanes:
         sign = make_sign(rng, rng.choice(SIGN_CLASSES), vehicle, False)
-        if sign is not None:                         # šablona zakazující značku vyrobit neumí: losuje se jiná
-            signs.append(sign)
+        if sign is not None and sign not in signs:   # šablona zakazující značku vyrobit neumí, nebo už v úloze je: losuje se jiná
+            signs.append(sign)                       # aspoň 10 různých zakazujících značek pro každé vozidlo, 8 pruhů tedy vždy stačí
     rng.shuffle(signs)
     open_lanes = [i for i, s in enumerate(signs) if allowed(vehicle, s)]
     if len(open_lanes) != 1:                         # zaručuje to konstrukce; nic se neopravuje potichu

@@ -132,6 +132,12 @@ class Generator(unittest.TestCase):
         self.assertFalse(bench.stopped_by_a_limit({"type": "motorcycle", "weight_t": 0.3, "height_m": 1.2}))
         self.assertTrue(bench.stopped_by_a_limit({"type": "car", "weight_t": 2.1, "height_m": 1.5}))
 
+    def test_no_two_lanes_share_a_sign(self):                        # dvojí stejná značka by se vyřadila bez čtení textu
+        for lanes in range(2, 9):
+            for vehicle, signs, _, _ in bench.sign_cases(300, lanes):
+                texts = [bench.sign_text(s) for s in signs]
+                self.assertEqual(len(set(texts)), lanes, texts)
+
     def test_same_seed_same_tasks(self):
         self.assertEqual(bench.sign_cases(50, 4), bench.sign_cases(50, 4))
         self.assertEqual(bench.sign_cases(50, 4), bench.sign_cases(50, 4, seed=1))

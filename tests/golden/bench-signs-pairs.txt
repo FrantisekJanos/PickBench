@@ -1,9 +1,9 @@
 12 úloh se značkami, 3 pruhů, stejných pro všechny modely
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  goodput  tokenů
-m1                       11ms     12ms    17ms    5ms    17ms     88.2      42%      85%    52%      25%     103   (jen 1/2, jen výjimkou 0/1, zákaz 2/2, vše kromě 0/2, mez zákazem 1/4, mez do 1/1)
-                    dvojice: obě správně 33%, jen původní 8%, jen dvojče 17%, žádná 42% (12 dvojic)
-                    dvojice podle tříd (obě správně / celkem): jen/jen výjimkou 1/3, zákaz/vše kromě 1/4, mez zákazem/mez do 2/5
-m2                       12ms     12ms    17ms    6ms    17ms     87.0      50%      72%    34%      17%     103   (jen 2/2, jen výjimkou 0/1, zákaz 2/2, vše kromě 1/2, mez zákazem 1/4, mez do 0/1)
-                    dvojice: obě správně 33%, jen původní 17%, jen dvojče 17%, žádná 33% (12 dvojic)
-                    dvojice podle tříd (obě správně / celkem): jen/jen výjimkou 1/3, zákaz/vše kromě 2/4, mez zákazem/mez do 1/5
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      58%      80%    29%      17%     108   (jen 2/3, jen výjimkou 0/1, zákaz 1/2, vše kromě 2/3, mez zákazem 1/2, mez do 1/1)
+                    dvojice: obě správně 33%, jen původní 25%, jen dvojče 17%, žádná 25% (12 dvojic)
+                    dvojice podle tříd (obě správně / celkem): jen/jen výjimkou 2/4, zákaz/vše kromě 0/5, mez zákazem/mez do 2/3
+m2                       12ms     12ms    17ms    6ms    17ms     87.0      58%      74%    34%      17%     108   (jen 2/3, jen výjimkou 0/1, zákaz 2/2, vše kromě 2/3, mez zákazem 1/2, mez do 0/1)
+                    dvojice: obě správně 33%, jen původní 25%, jen dvojče 0%, žádná 42% (12 dvojic)
+                    dvojice podle tříd (obě správně / celkem): jen/jen výjimkou 1/4, zákaz/vše kromě 2/5, mez zákazem/mez do 1/3
