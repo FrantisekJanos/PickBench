@@ -345,6 +345,8 @@ SAME = {"mode.bench", "ui.start", "ui.stop", "ui.model", "ui.hardware", "ui.csv"
         "metric.precision", "metric.recall", "metric.f1", "last.lane", "card.model", "scenario.emails.task", "last.ms", "run.benchProgress"}
 # Předpony klíčů, které se skládají za běhu: t('state.' + st.state).
 DYNAMIC = ("tip.", "col.", "result.", "gap.", "state.")
+# Celé klíče, které se skládají za běhu a doslova ve skriptu nestojí: klíč → kde. Starší scénáře drží doslova seznam v legacyCells.
+COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -352,7 +354,8 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "úložiště: dotazy na server, poslední nastavení", "plánovač: fronta kroků", "plánovač: běh fronty",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
-        "jádro: hra", "jádro: rozhodování", "jádro: kreslení"]      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
+        "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
+        "scénář: zákazy a výjimky"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -530,7 +533,7 @@ class PageTexts(unittest.TestCase):
         rest = TEXT_BLOCK.sub("", page())
         used = set(re.findall(r"\bt\('([\w.]+)'[,)]", rest)) | set(re.findall(r'data-i18n(?:-placeholder|-empty)?="([\w.]+)"', rest))
         self.assertEqual(used - set(self.texts), set())
-        idle = {key for key in self.texts if key not in used and f"'{key}'" not in rest and not key.startswith(DYNAMIC)
+        idle = {key for key in self.texts if key not in used and f"'{key}'" not in rest and not key.startswith(DYNAMIC) and key not in COMPOSED
                 and f"'{key}'" not in re.sub(r"(?m)^  '[\w.]+': \{.*$", "", text_block())}      # klíč smí použít i funkce uvnitř bloku
         self.assertEqual(idle, set())
 
@@ -557,7 +560,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 3)                                      # e-maily, číselné duely, veřejná sada
+        self.assertEqual(len(blocks), 4)                                      # e-maily, číselné duely, veřejná sada, zákazy a výjimky
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -574,6 +577,21 @@ class PageTexts(unittest.TestCase):
                 for where in ("scenario.numbers.about", "scenario.numbers.extraTip"):
                     self.assertIn(f"{name} {limits}", self.texts[where][code], (key, where, code))
         self.assertEqual([self.texts["gap." + k]["en"].split()[0] for k in ("tight", "medium", "clear")], ["narrow", "medium", "clear"])
+
+    def test_sign_classes_carry_one_name_everywhere(self):                    # jméno třídy značky: tabulka stránky, popisek tabulky a bench.py stejně
+        names = dict(re.findall(r"(\w+): '(sign\.\w+)'", piece(r"^const SIGN_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["only", "except_only", "no", "all_except", "limit_no", "limit_up_to"])      # pořadí SIGN_CLASSES
+        for cls, key in names.items():
+            for code in ("cs", "en"):
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench." + key][code], (key, code))
+                self.assertIn(self.texts[key][code] + " (", self.texts["scenario.signs.extraTip"][code], (key, code))
+        for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
+            self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
+        self.assertEqual(COMPOSED, {"scenario.signs": COMPOSED["scenario.signs"]})
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("výjim", self.texts[key]["cs"], key)
+            self.assertIn("bans and exceptions", self.texts[key]["en"], key)
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
@@ -1030,6 +1048,12 @@ class Results(unittest.TestCase):
         self.assertEqual([c[2] for c in en[7:10]], ["number duels", "Firemní e-maily", "MASSIVE"])      # název sady se nepřekládá
         self.assertEqual((cs[9][3], en[9][3]), ("různě", "varies"))
         self.assertEqual((cs[10][1], en[10][1]), ("neznámý", "neznámý"))                                # neznámý klíč stránku neshodí
+
+    def test_signs_row_reads_in_both_languages(self):                         # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.signs
+        rows = [{"vals": {**VALS, "scenario": "signs", "lanes": 5}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["zákazy a výjimky", 5]])
+        self.assertEqual(node(pick, rows, lang="en"), [["bans and exceptions", 5]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
@@ -1745,7 +1769,7 @@ class PageStatic(unittest.TestCase):
         live = ("$('speed')", "$('mode')", "isRealtime(")
         for word in live:
             self.assertEqual(body("drawStats").count(word), 0, word)
-        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: veřejná sada (jen benchmark bez hry)"):
+        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: zákazy a výjimky", "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:
                 self.assertEqual(text.count(word), 0, (part, word))

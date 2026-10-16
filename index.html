@@ -105,7 +105,7 @@
       <p id="about"></p>
       <div class="controls">
         <label><span data-i18n="ui.scenario"></span>
-          <select id="scenario"><option value="obstacles" data-i18n="opt.scenario.obstacles"></option><option value="numbers" data-i18n="opt.scenario.numbers"></option></select>
+          <select id="scenario"><option value="obstacles" data-i18n="opt.scenario.obstacles"></option><option value="numbers" data-i18n="opt.scenario.numbers"></option><option value="signs" data-i18n="opt.scenario.signs"></option></select>
         </label>
         <label><span data-i18n="ui.lanes"></span> <select id="lanes"></select></label>
         <label><span data-i18n="ui.driver"></span>
@@ -296,6 +296,7 @@ const TEXTS = {
   // dvě poslední jsou vypnuté volby, které jen říkají, proč sady e-mailů chybí
   'opt.scenario.obstacles': { cs: 'Překážky', en: 'Obstacles' },
   'opt.scenario.numbers': { cs: 'Číselné duely', en: 'Number duels' },
+  'opt.scenario.signs': { cs: 'Zákazy a výjimky', en: 'Bans and exceptions' },
   'opt.scenario.emails': { cs: 'E-maily: {name}', en: 'E-mails: {name}' },
   'opt.scenario.public': { cs: 'Veřejná sada: {name}', en: 'Public dataset: {name}' },
   'opt.scenario.noEmails': { cs: 'E-maily (žádná sada ve složce datasets/)', en: 'E-mails (no dataset in the datasets/ folder)' },
@@ -319,6 +320,7 @@ const TEXTS = {
   'cell.varies': { cs: 'různě', en: 'varies' },
   'scenario.obstacles': { cs: 'překážky', en: 'obstacles' },
   'scenario.numbers': { cs: 'číselné duely', en: 'number duels' },
+  'scenario.signs': { cs: 'zákazy a výjimky', en: 'bans and exceptions' },
   'mode.bench': { cs: 'benchmark', en: 'benchmark' },
   'mode.benchAborted': { cs: 'benchmark (přerušen)', en: 'benchmark (interrupted)' },
   'mode.ladder': { cs: 'žebřík, max {best} polí/s', en: 'ladder, max {best} cells/s' },
@@ -351,11 +353,11 @@ const TEXTS = {
   'tip.mUsd': { cs: 'Jen u hostovaného modelu: průměrná cena jednoho dotazu × 1000, v dolarech. Cena dotazu = vstupní tokeny, které poskytovatel napočítal, × jeho cena za milion tokenů (výstup se neúčtuje). Se zrcadly stojí každá úloha třikrát tolik, do průměru jde jen původní zadání. U lokálních modelů je „—“ — ty mají energii na rozhodnutí.', en: 'Hosted model only: the mean price of one request × 1000, in dollars. Price of a request = the input tokens the provider counted × the provider\'s price per million tokens (the provider does not bill output). With mirrors every task costs three times as much, but only the original prompt goes into the mean. For local models it is "—" — those have energy per decision.' },
   'tip.mNet': { cs: 'Jen u hostovaného modelu: doba jednoho spojení (TCP a TLS) ze serveru hry k serveru poskytovatele, změřená před během. Je to hrubý odhad ceny sítě — dotazy pak jdou po už otevřeném spojení, takže v každé latenci zbývá zhruba jedna cesta tam a zpět. První měření zahrnuje i dotaz na DNS.', en: 'Hosted model only: the time of one connection (TCP and TLS) from the game server to the provider\'s server, measured before the run. It is a rough estimate of how much of the latency is the network — the requests then travel over a connection that is already open, so roughly one round trip remains in the latency of every request. The first measurement also includes the DNS lookup.' },
   'tip.mSpend': { cs: 'Kolik dolarů stály hostované dotazy od spuštění serveru hry a jaký je strop. Po dosažení stropu (dolary nebo počet dotazů) server další hostovaný dotaz nepošle a běh skončí chybou. Strop se nastavuje jen proměnnými PICKBENCH_MAX_USD a PICKBENCH_MAX_HOSTED při startu serveru; ze stránky ho změnit nejde. Restart serveru počítadlo nuluje — skutečným stropem je zůstatek u poskytovatele. Údaj „(+N bez ceny)“ za částkou říká, kolik odpovědí poskytovatel poslal bez počtu tokenů: jejich cena v útratě není, částka je proto spodní odhad, a strop serveru za ně drží odhad.', en: 'How many dollars the hosted requests have cost since the game server started, and what the spend cap is. Once the server reaches the cap (dollars or number of requests), it sends no further hosted requests and the run ends with an error. You set the cap only with the variables PICKBENCH_MAX_USD and PICKBENCH_MAX_HOSTED when the server starts; you cannot change it from the page. Restarting the server resets the counter — the real cap is the balance with the provider. The "(+N unpriced)" figure after the amount says how many answers the provider sent without a token count: their price is not in the spend, so the amount is a lower bound, and the server\'s spend cap counts an estimate for them.' },
-  'tip.mN': { cs: 'Kolik rozhodnutí je v měření. U překážek připadá na jednu řadu několik rozhodnutí, u e-mailů a číselných duelů jedno. Z malého počtu jsou percentily, ECE i přesnost jen orientační.', en: 'How many decisions are in the measurement. For obstacles there are several decisions per row, for e-mails and number duels one. With a small number of decisions, the percentiles, ECE and accuracy are only rough estimates.' },
+  'tip.mN': { cs: 'Kolik rozhodnutí je v měření. U překážek připadá na jednu řadu několik rozhodnutí, u e-mailů a číselných duelů jedno. Z malého počtu jsou percentily, ECE i přesnost jen orientační. Zákazy a výjimky mají na řadu jedno rozhodnutí jako e-maily.', en: 'How many decisions are in the measurement. For obstacles there are several decisions per row; for e-mails, number duels and bans and exceptions, one. With a small number of decisions, the percentiles, ECE and accuracy are only rough estimates.' },
   'tip.chartCap': { cs: 'Sloupec za každé z posledních 150 rozhodnutí, výška = doba rozhodnutí; měřítko určuje nejpomalejší z nich. Ukáže zadrhnutí a postupné zpomalování, které se v průměru ztratí.', en: 'One bar for each of the last 150 decisions, height = decision time; the slowest of them sets the scale. It reveals stalls and a gradual slowdown, which get lost in the mean.' },
   'tip.calTitle': { cs: 'Odpovědi rozdělené do pásem po 5 % podle jistoty, kterou model k odpovědi uvedl: nad osou kolikrát byl v pásmu správně, pod osou kolikrát špatně (výška je odmocninová, přesný počet je u sloupce). Dobře kalibrovaný model chybuje hlavně při nízké jistotě. ECE shrnuje rozdíl mezi jistotou a skutečnou úspěšností a počítá se z 10 pásem.', en: 'Answers split into 5% bins by the confidence the model reported with the answer: the bar above the axis shows how many answers in the bin were correct, the bar below the axis how many were wrong (the height is on a square-root scale and the exact count is next to the bar). A well-calibrated model makes its errors mostly at low confidence. ECE sums up the difference between the confidence and the actual success rate, and the page computes it from 10 bins.' },
-  'tip.scenario': { cs: 'Co model řeší. Překážky: volí pruh s nejdelší volnou cestou. Číselné duely: volí bránu s největším číslem. E-maily: třídí e-maily ze zvolené sady do kategorií; pruhů je tolik, kolik má sada kategorií. Veřejná sada: vybírá štítek z desítek možností nebo z vlastní nabídky úlohy; běží jen jako benchmark bez hry (sady stahuje fetch_datasets.py).', en: 'What the model solves. Obstacles: it picks the lane with the longest free road. Number duels: it picks the gate with the largest number. E-mails: it sorts the e-mails of the selected dataset into categories; there are as many lanes as the dataset has categories. Public dataset: it picks a label from dozens of options or from the list that the task itself carries; this scenario runs only as a benchmark without the game (fetch_datasets.py downloads the datasets).' },
-  'tip.lanes': { cs: 'Počet pruhů, tedy možností, ze kterých model vybírá (2–8). U překážek a číselných duelů se volí tady, u e-mailů ho určuje sada. Víc pruhů znamená delší zadání a těžší úlohu, takže výsledky s různým počtem pruhů nejsou srovnatelné.', en: 'The number of lanes, that is, the number of options the model picks from (2–8). For obstacles and number duels you select it here, while for e-mails the dataset sets it. More lanes mean a longer prompt and a harder task, so results with different numbers of lanes are not comparable.' },
+  'tip.scenario': { cs: 'Co model řeší. Překážky: volí pruh s nejdelší volnou cestou. Číselné duely: volí bránu s největším číslem. E-maily: třídí e-maily ze zvolené sady do kategorií; pruhů je tolik, kolik má sada kategorií. Veřejná sada: vybírá štítek z desítek možností nebo z vlastní nabídky úlohy; běží jen jako benchmark bez hry (sady stahuje fetch_datasets.py). Zákazy a výjimky: v každém pruhu je dopravní značka a model volí jediný pruh, kam vozidlo smí.', en: 'What the model solves. Obstacles: it picks the lane with the longest free road. Number duels: it picks the gate with the largest number. E-mails: it sorts the e-mails of the selected dataset into categories; there are as many lanes as the dataset has categories. Public dataset: it picks a label from dozens of options or from the list that the task itself carries; this scenario runs only as a benchmark without the game (fetch_datasets.py downloads the datasets). Bans and exceptions: every lane has a traffic sign and the model picks the one lane the vehicle may enter.' },
+  'tip.lanes': { cs: 'Počet pruhů, tedy možností, ze kterých model vybírá (2–8). U překážek a číselných duelů se volí tady, u e-mailů ho určuje sada. Víc pruhů znamená delší zadání a těžší úlohu, takže výsledky s různým počtem pruhů nejsou srovnatelné. U zákazů a výjimek se volí také tady.', en: 'The number of lanes, that is, the number of options the model picks from (2–8). For obstacles, number duels and bans and exceptions you select it here, while for e-mails the dataset sets it. More lanes mean a longer prompt and a harder task, so results with different numbers of lanes are not comparable.' },
   'tip.driver': { cs: 'Kdo rozhoduje. Model: každé rozhodnutí je dotaz na vybraný model přes Ollamu. Pravidla: ideální řidič, který zná správnou odpověď — měřítko „správně“ a kontrola hry bez modelu. Náhodně: náhodná volba, ukazuje výsledek bez jakéhokoli úsudku.', en: 'Who decides. Model: every decision is a request to the selected model through Ollama. Rules: the ideal driver, which knows the correct answer — the yardstick for "correct" and a check of the game without a model. Random: a random choice, which shows what a driver with no judgment scores.' },
   'tip.model': { cs: 'Rozhodovací model, který se použije u řidiče Model. Lokální modely jsou z Ollamy; nabídka se načítá při otevření stránky a když Ollama neběží, je prázdná. První dotaz po výběru jiného modelu trvá déle (načtení do paměti) a do měření se nepočítá. Skupina „Hostované“ se ukáže, jen když má server klíč poskytovatele: model pak běží u něj, texty úloh odcházejí mimo tento počítač, každý dotaz stojí peníze a latence obsahuje síť. Při latenci stovek milisekund až sekundy model ve hře v reálném čase většinu řad nestihne — to je měřený výsledek, ne chyba.', en: 'The decision model that the Model driver uses. Local models come from Ollama; the page loads the list when it opens, and the list is empty when Ollama is not running. The first request after selecting a different model takes longer (loading into memory) and does not count in the measurement. The "Hosted" group appears only when the server has a provider key: the model then runs at the provider, the task texts leave this computer, every request costs money and the latency includes the network. With a latency of hundreds of milliseconds up to a second, the model misses most rows in the game in Real time and Ladder modes — that is a measured result, not an error.' },
   'tip.mode': { cs: 'Reálný čas: auto jede zvolenou rychlostí a pomalé rozhodnutí znamená náraz nebo „nestihl“. Po tazích: hra na každé rozhodnutí počká, měří se kvalita bez vlivu rychlosti. Žebřík: reálný čas, rychlost stoupá po úrovních dlouhých 60 polí, dokud model udrží nejvýš 1 chybu na úroveň; výsledek je nejvyšší zvládnutá rychlost.', en: 'Real time: the car moves at the selected speed and a slow decision means a crash or "missed". Turn-based: the game waits for every decision and measures quality without the effect of speed. Ladder: real time, with the speed rising level by level (each level is 60 cells long) as long as the model makes at most 1 error per level; the result is the highest speed it managed.' },
@@ -431,9 +433,9 @@ const TEXTS = {
   'col.stab': { cs: 'stabilita', en: 'stability' },
   'col.stab.tip': { cs: 'Jen se zrcadly: podíl úloh se stejnou odpovědí ve všech třech variantách zadání. Bez zrcadel je „—“.', en: 'With mirrors only: the share of tasks with the same answer in all three prompt variants. Without mirrors it is "—".' },
   'col.errors': { cs: 'chyby', en: 'errors' },
-  'col.errors.tip': { cs: 'U překážek počet nárazů, u e-mailů a číselných duelů počet řad projetých špatně (odpověď přišla včas, ale byla chybná). V benchmarku bez hry je „—“.', en: 'For obstacles the number of crashes, for e-mails and number duels the number of rows passed with a wrong answer (the answer arrived in time but was wrong). In the benchmark without the game it is "—".' },
+  'col.errors.tip': { cs: 'U překážek počet nárazů, u e-mailů a číselných duelů počet řad projetých špatně (odpověď přišla včas, ale byla chybná). V benchmarku bez hry je „—“. U zákazů a výjimek jako u číselných duelů: řady projeté špatně.', en: 'For obstacles the number of crashes; for e-mails, number duels and bans and exceptions, the number of rows passed with a wrong answer (the answer arrived in time but was wrong). In the benchmark without the game it is "—".' },
   'col.late': { cs: 'nestihl', en: 'missed' },
-  'col.late.tip': { cs: 'Počet řad, ke kterým model nestihl odpovědět dřív, než minuly auto (e-maily a číselné duely ve hře). U překážek a v benchmarku je „—“.', en: 'The number of rows the model did not manage to answer before they passed the car (e-mails and number duels in the game). For obstacles and in the benchmark it is "—".' },
+  'col.late.tip': { cs: 'Počet řad, ke kterým model nestihl odpovědět dřív, než minuly auto (e-maily a číselné duely ve hře). U překážek a v benchmarku je „—“. Platí to i pro zákazy a výjimky ve hře.', en: 'The number of rows the model did not manage to answer before they passed the car (e-mails, number duels and bans and exceptions in the game). For obstacles and in the benchmark it is "—".' },
   'col.dist': { cs: 'ujeto', en: 'driven' },
   'col.dist.tip': { cs: 'Ujetá vzdálenost v polích; v benchmarku bez hry „—“. S délkou průjezdu se rovná limitu, pokud běh nikdo nezastavil dřív.', en: 'The distance driven in cells; in the benchmark without the game "—". When a run length is set, it equals that length, unless someone stopped the run early.' },
   'col.joule': { cs: 'J/rozh.', en: 'J/decision' },
@@ -453,7 +455,7 @@ const TEXTS = {
   'col.f1': { cs: 'macro-F1', en: 'macro-F1' },
   'col.f1.tip': { cs: 'Jen u sad e-mailů a veřejných sad: průměr F1 přes třídy, každá třída stejnou vahou bez ohledu na počet úloh; třída bez jediné úlohy v běhu se nepočítá. Na rozdíl od sloupce „správně“ ho nevytáhne nahoru jedna velká třída. U vzorku s pár úlohami na třídu je hrubý.', en: 'E-mail datasets and public datasets only: the mean of F1 over the classes, each class with the same weight regardless of its number of tasks; a class without a single task in the run does not count. Unlike the value in the "correct" column, it is not pulled up by one large class. For a sample with a few tasks per class it is rough.' },
   'col.goodput': { cs: 'goodput', en: 'goodput' },
-  'col.goodput.tip': { cs: 'Podíl rozhodnutí správných a zároveň včas. V benchmarku bez hry je „včas“ do limitu z pole „limit na rozhodnutí“ (bez limitu „—“). Ve hře v reálném čase a v žebříku je limitem příjezd řady k autu: řady projeté správně ÷ všechny projeté řady (e-maily, číselné duely); u překážek a po tazích „—“. Spojuje kvalitu a rychlost do jednoho čísla.', en: 'The share of decisions that were correct and also in time. In the benchmark without the game, "in time" means within the deadline from the "decision deadline" field (with no deadline "—"). In the game in Real time and Ladder modes, the deadline is the arrival of the row at the car: rows passed correctly ÷ all rows passed (e-mails, number duels); for obstacles and in Turn-based mode "—". It combines quality and speed into one number.' },
+  'col.goodput.tip': { cs: 'Podíl rozhodnutí správných a zároveň včas. V benchmarku bez hry je „včas“ do limitu z pole „limit na rozhodnutí“ (bez limitu „—“). Ve hře v reálném čase a v žebříku je limitem příjezd řady k autu: řady projeté správně ÷ všechny projeté řady (e-maily, číselné duely); u překážek a po tazích „—“. Spojuje kvalitu a rychlost do jednoho čísla. Zákazy a výjimky se ve hře počítají stejně jako číselné duely.', en: 'The share of decisions that were correct and also in time. In the benchmark without the game, "in time" means within the deadline from the "decision deadline" field (with no deadline "—"). In the game in Real time and Ladder modes, the deadline is the arrival of the row at the car: rows passed correctly ÷ all rows passed (e-mails, number duels, bans and exceptions); for obstacles and in Turn-based mode "—". It combines quality and speed into one number.' },
   'col.usd': { cs: '$ / 1000 rozh.', en: '$ / 1000 decisions' },
   'col.usd.tip': { cs: 'Jen u hostovaného modelu: průměrná cena jednoho dotazu × 1000 v dolarech (vstupní tokeny × cena poskytovatele). U lokálních modelů „—“; jejich cenou je energie ve sloupci J/rozh. Ceník je v providers.py s datem.', en: 'Hosted model only: the mean price of one request × 1000 in dollars (input tokens × the provider\'s price). For local models "—"; their price is the energy in the J/decision column. The price list is in providers.py with its date.' },
   'col.net': { cs: 'síť ms', en: 'network ms' },
@@ -483,6 +485,7 @@ const TEXTS = {
   'last.gate': { cs: 'brána {n} ({value})', en: 'gate {n} ({value})' },
   'last.numbers': { cs: 'čísla:   {values}\nzvoleno: {pick}  (správně: {truth})\nrozdíl:  {gap}', en: 'numbers:    {values}\nchosen:     {pick}  (correct: {truth})\ndifference: {gap}' },
   'last.public': { cs: 'text:    {text}\nzvoleno: {pick}  (správně: {truth})\nnabídka: {n} štítků', en: 'text:    {text}\nchosen:  {pick}  (correct: {truth})\nlist:    {n} {n|label|labels}' },
+  'last.signs': { cs: 'vozidlo: {vehicle}\nzvoleno: {pick}  (správně: {truth})', en: 'vehicle: {vehicle}\nchosen:  {pick}  (correct: {truth})' },
   // „Poslední rozhodnutí“, řádky společné všem scénářům: doba rozhodnutí (u hostovaného modelu za ní počet tokenů) a výsledek úlohy se schovaným pokynem
   'last.ms': { cs: '{ms} ms', en: '{ms} ms' },
   'last.tokens': { cs: ', vstupních tokenů: {n}', en: ', input tokens: {n}' },
@@ -500,7 +503,7 @@ const TEXTS = {
   'scenario.obstacles.tile.blind': { cs: 'polí ujetých během 1 rozhodnutí', en: 'cells driven during 1 decision' },
   'scenario.obstacles.tip.blind': { cs: 'Rychlost auta × průměrná doba rozhodnutí: o kolik polí auto popojede, než odpověď dorazí. Čím je číslo větší, tím starší je stav, podle kterého model rozhodl; řady jsou od sebe 4 pole. Jen v reálném čase a v žebříku.', en: 'Car speed × mean decision time: how many cells the car moves forward before the answer arrives. The larger the number, the older the state the model based its decision on; the rows are 4 cells apart. In Real time and Ladder modes only.' },
   // scénáře s řadami (e-maily, číselné duely): společné dlaždice Kvality; názvy „špatně“ a „nestihl“ jsou result.bad a result.late
-  'row.tip.bad': { cs: 'Řady, u kterých odpověď přišla včas, ale byla špatná — auto projelo jiným bodem nebo jinou branou. Ve výsledcích sloupec „chyby“. V benchmarku bez hry je „—“.', en: 'Rows where the answer arrived in time but was wrong — the car passed through a different dot or a different gate. In the results it is the "errors" column. In the benchmark without the game it is "—".' },
+  'row.tip.bad': { cs: 'Řady, u kterých odpověď přišla včas, ale byla špatná — auto projelo jiným bodem nebo jinou branou. Ve výsledcích sloupec „chyby“. V benchmarku bez hry je „—“. U zákazů a výjimek auto projelo pruhem, kam vozidlo nesmí.', en: 'Rows where the answer arrived in time but was wrong — the car passed through a different dot, a different gate or, in bans and exceptions, a lane the vehicle may not enter. In the results it is the "errors" column. In the benchmark without the game it is "—".' },
   'row.tip.late': { cs: 'Řady, které minuly auto dřív, než k nim model stihl odpovědět. V reálném čase se model ptá na nejbližší řadu, kterou ještě může stihnout, a ostatní přeskočí; u modelu pomalejšího než rozestup řad je podíl zhruba 1 − interval ÷ latence. V režimu Po tazích nenastává.', en: 'Rows that passed the car before the model managed to answer them. In Real time and Ladder modes the page asks the model about the nearest row it can still answer in time and skips the others; for a model slower than the interval between rows, the share is roughly 1 − interval ÷ latency. This does not happen in Turn-based mode.' },
   'row.tile.acc': { cs: 'přesnost modelu', en: 'model accuracy' },
   'row.tip.acc': { cs: 'Podíl správných odpovědí ze všech odpovědí modelu, včetně těch, které přišly pozdě a auto už neřídily. Na rozdíl od první dlaždice nezávisí na rychlosti. Ve výsledcích sloupec „správně“.', en: 'The share of correct answers among all of the model\'s answers, including those that arrived late and no longer steered the car. Unlike the first tile, it does not depend on speed. In the results it is the "correct" column.' },
@@ -526,6 +529,22 @@ const TEXTS = {
   'scenario.numbers.tile.match': { cs: 'správná brána', en: 'correct gate' },
   'scenario.numbers.tip.match': { cs: 'Kolika řadami auto projelo branou s největším číslem, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows where the car passed through the gate with the largest number, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
   'scenario.numbers.tile.rate': { cs: 'řad za sekundu: požadováno / rozhodnuto', en: 'rows per second: required / decided' },
+  // scénář zákazy a výjimky: popis, tabulka přesnosti podle třídy značky (jména tříd sign.<třída> jako bench.sign.* v i18n.py; seznam je SIGN_NAME), štítek „kromě“ na silnici, dlaždice
+  'scenario.signs.about': { cs: 'Zákazy a výjimky: v každé řadě je v každém pruhu dopravní značka a každá řada má vlastní vozidlo (štítek pod autem ukazuje typ, hmotnost a výšku vozidla nejbližší řady). Model dostane vozidlo a texty značek, například „buses only“, „no trucks“, „all vehicles except tractors“ nebo „no vehicles over 3.5 t“, a vybere jediný pruh, kam vozidlo smí; auto do něj zajede. Na silnici je značka jen symbol, celé texty ukazuje Poslední rozhodnutí. Správně = auto projelo povoleným pruhem (po průjezdu pruh zezelená a dostane zelený kroužek), špatně = projelo jiným pruhem, nestihl = odpověď nepřišla včas. Tabulka „Přesnost podle třídy značky“ dělí výsledek podle třídy značky povoleného pruhu.', en: 'Bans and exceptions: in every row there is a traffic sign in every lane, and every row has its own vehicle (the label under the car shows the type, weight and height of the vehicle of the nearest row). The model gets the vehicle and the texts of the signs, such as "buses only", "no trucks", "all vehicles except tractors" or "no vehicles over 3.5 t", and picks the one lane the vehicle may enter; the car moves into it. On the road a sign is only a symbol; the Last decision panel shows the full texts. Correct = the car passed through the open lane (after the car passes, the lane turns green and gets a green ring), wrong = it passed through a different lane, missed = the answer did not arrive in time. The "Accuracy by sign class" table splits the result by the class of the sign of the open lane.' },
+  'scenario.signs.extraTitle': { cs: 'Přesnost podle třídy značky', en: 'Accuracy by sign class' },
+  'scenario.signs.extraTip': { cs: 'Přesnost modelu zvlášť podle třídy značky povoleného pruhu: jen (buses only), jen výjimkou (no entry except buses), zákaz (no trucks), vše kromě (all vehicles except trucks), mez zákazem (no vehicles over 3.5 t) a mez do (vehicles up to 3.5 t only). Dvojice tříd mají stejnou podmínku a jinou formulaci; rozdíl mezi nimi ukáže, kterou formulaci model čte hůř. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy separately by the class of the sign of the open lane: only (buses only), except-only (no entry except buses), no (no trucks), all-except (all vehicles except trucks), limit-no (no vehicles over 3.5 t) and limit-up-to (vehicles up to 3.5 t only). Pairs of classes share the condition and differ in wording; the difference between them shows which wording the model reads worse. All answers count, including the late ones.' },
+  'scenario.signs.col.class': { cs: 'třída značky povoleného pruhu', en: 'class of the sign of the open lane' },
+  'scenario.signs.col.ratio': { cs: 'správně / celkem', en: 'correct / total' },
+  'scenario.signs.tile.match': { cs: 'správný pruh', en: 'correct lane' },
+  'scenario.signs.tip.match': { cs: 'Kolika řadami auto projelo povoleným pruhem, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows where the car passed through the open lane, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
+  'scenario.signs.tile.rate': { cs: 'řad za sekundu: požadováno / rozhodnuto', en: 'rows per second: required / decided' },
+  'sign.only': { cs: 'jen', en: 'only' },
+  'sign.exceptOnly': { cs: 'jen výjimkou', en: 'except-only' },
+  'sign.no': { cs: 'zákaz', en: 'no' },
+  'sign.allExcept': { cs: 'vše kromě', en: 'all-except' },
+  'sign.limitNo': { cs: 'mez zákazem', en: 'limit-no' },
+  'sign.limitUpTo': { cs: 'mez do', en: 'limit-up-to' },
+  'sign.except': { cs: 'kromě', en: 'except' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -870,6 +889,7 @@ const ALT = {                                              // jinak formulované
   target: 'A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as "clear" beats any lane with an obstacle distance. When the car\'s current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.',
   category: 'Decide which single category this e-mail belongs to, based on what the sender wants.',
   largest: 'Every gate carries a number. Pick the gate whose number is the greatest.',
+  allowed: 'Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.',
 };
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
   const key = Object.keys(q)[0];
@@ -1322,6 +1342,116 @@ const numbers = {
   },
 };
 
+// ---------- scénář: zákazy a výjimky ----------
+// Vozidlo, v každém pruhu dopravní značka, model volí jediný pruh, kam vozidlo smí. Konstanty, pravidlo a generátor jsou ve sdíleném bloku
+// (signRow, signState, signQuestion). Na silnici je značka jen symbol pro diváka; model dostává její text.
+const SIGN_GLYPH = { motorcycle: '🏍', car: '🚗', tractor: '🚜', truck: '🚚', bus: '🚌' };
+const vehicleGlyph = type => SIGN_GLYPH[type] ?? '?';     // emoji potřebují barevné písmo (Segoe UI Emoji, Noto Color Emoji); záloha bez něj není, písmena by šla jen sem
+const vehicleText = v => `${vehicleGlyph(v.type)} ${v.weight_t} t · ${v.height_m} m`;
+
+function drawSign([cls, param], x, y, rad) {               // kulatý symbol podle třídy; pod výjimkou štítek s typem vozidla
+  const circle = (fill, ring) => {
+    ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill();
+    if (ring) { ctx.strokeStyle = '#d1242f'; ctx.lineWidth = Math.max(2, rad * 0.2); ctx.beginPath(); ctx.arc(x, y, rad * 0.9, 0, 7); ctx.stroke(); }
+  };
+  const glyph = (text, gy, size) => { ctx.font = `${Math.round(size)}px "Segoe UI Emoji", sans-serif`; ctx.fillStyle = '#0b1016'; ctx.fillText(text, x, gy); };
+  const label = text => {                                  // štítek pod kruhem
+    ctx.font = `600 ${Math.round(rad * 0.6)}px "Segoe UI Emoji", "Segoe UI", sans-serif`;
+    const w = ctx.measureText(text).width + 6;
+    ctx.fillStyle = '#e6edf3'; ctx.beginPath(); ctx.roundRect(x - w / 2, y + rad + 2, w, rad * 0.9, 3); ctx.fill();
+    ctx.fillStyle = '#0b1016'; ctx.fillText(text, x, y + rad + 2 + rad * 0.47);
+  };
+  const number = text => { ctx.font = `700 ${Math.round(rad * 0.62)}px "Segoe UI", sans-serif`; ctx.fillText(text, x, y + 1); };
+  if (cls === 'only') { circle('#1f6feb'); glyph(vehicleGlyph(param), y + 1, rad * 1.1); }
+  else if (cls === 'except_only') {
+    circle('#d1242f'); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - rad * 0.65, y - rad * 0.16, rad * 1.3, rad * 0.32);
+    label(vehicleGlyph(param));
+  } else if (cls === 'no') {
+    circle('#ffffff', true); glyph(vehicleGlyph(param), y + 1, rad * 1.0);
+    ctx.strokeStyle = '#d1242f'; ctx.lineWidth = Math.max(2, rad * 0.16);
+    ctx.beginPath(); ctx.moveTo(x - rad * 0.62, y - rad * 0.62); ctx.lineTo(x + rad * 0.62, y + rad * 0.62); ctx.stroke();
+  } else if (cls === 'all_except') { circle('#ffffff', true); label(t('sign.except') + ' ' + vehicleGlyph(param)); }
+  else {
+    const text = `${param[1]}${param[0] === 'weight_t' ? 't' : 'm'}`;
+    if (cls === 'limit_no') { circle('#ffffff', true); ctx.fillStyle = '#0b1016'; number(text); }
+    else {
+      ctx.fillStyle = '#1f6feb'; ctx.beginPath(); ctx.roundRect(x - rad * 1.1, y - rad * 0.8, rad * 2.2, rad * 1.6, 4); ctx.fill();
+      ctx.fillStyle = '#ffffff'; number('≤' + text);
+    }
+  }
+}
+
+const SIGN_NAME = { only: 'sign.only', except_only: 'sign.exceptOnly', no: 'sign.no', all_except: 'sign.allExcept',      // jméno třídy v TEXTS
+                    limit_no: 'sign.limitNo', limit_up_to: 'sign.limitUpTo' };
+const signs = {
+  __proto__: rowBase,
+  id: 'signs', lanesFree: true,
+  get about() { return t('scenario.signs.about'); },
+  panels: ['confPanel'], get extraTitle() { return t('scenario.signs.extraTitle'); },
+  get extraTip() { return t('scenario.signs.extraTip'); },
+  get matchTip() { return t('scenario.signs.tip.match'); },
+  lanes: () => +$('lanes').value,
+  newGame() { return { ...this.baseGame(), byClass: Object.fromEntries(SIGN_CLASSES.map(c => [c, { n: 0, ok: 0 }])) }; },
+  task(d, row = null, inject = row ? row.inject : rollInject([d.truth])) {
+    const state = signState(d.vehicle, d.signs);
+    if (inject !== null) state.note = injectText(INJECT_NOTE, KEYS[inject]);      // úloha bez pokynu pole note nemá
+    return { row, vehicle: d.vehicle, signs: d.signs, truth: d.truth, cls: d.cls, inject, state };
+  },
+  rowTask(r) { return this.task(r, r); },
+  laneOf: (r, move) => move,
+  spawnRow(g, y) { g.rows.push(this.newRow(g, y, signRow(LANES, rnd))); },
+  randomTask() { return this.task(signRow(LANES, rnd)); },
+  warmTask() {                                             // zahřívací dotaz je vždy bez pokynu a pevný: nesmí brát čísla z rnd
+    return this.task({ vehicle: SIGN_WARM.vehicle, signs: SIGN_WARM.signs.slice(0, LANES), truth: 0, cls: 'only' }, null, null);
+  },
+  questions: (v = 0) => variantOf(signQuestion(LANES), v),
+  parse: a => ({ move: KEYS.indexOf(a.allowed?.choice), conf: a.allowed?.confidence, probs: a.allowed?.probabilities }),
+  randomMove: () => Math.floor(Math.random() * LANES),
+  tally(g, task, move) { super.tally(g, task, move); const b = g.byClass[task.cls]; b.n++; if (move === task.truth) b.ok++; },
+  drawItems(g) {
+    const rad = Math.min(LW * 0.28, 16);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      r.signs.forEach((s, lane) => {
+        const x = (lane + 0.5) * LW;
+        if (r.result && lane === r.truth) { ctx.fillStyle = '#1f4d2b'; ctx.beginPath(); ctx.roundRect(x - LW * 0.42, y - rad - 6, LW * 0.84, rad * 2 + 22, 6); ctx.fill(); }      // po průjezdu se ukáže povolený pruh
+        drawSign(s, x, y, rad);
+      });
+      ctx.globalAlpha = 1;
+      this.drawRing(r, y, rad);
+    }
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  drawVehicle(g, x, w) {                                   // štítek pod autem: vozidlo nejbližší neprojeté řady (každá řada má vlastní)
+    const r = g.rows.find(r => r.result === null);
+    if (!r) return;
+    const text = vehicleText(r.vehicle);
+    ctx.font = '600 12px "Segoe UI Emoji", "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const half = ctx.measureText(text).width / 2 + 4, cx = Math.min(W - half, Math.max(half, x + w / 2));
+    ctx.fillStyle = 'rgba(11,16,22,.8)'; ctx.fillRect(cx - half, CAR_Y + 26, 2 * half, 18);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(text, cx, CAR_Y + 35);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  describeLast(task, res) {                                // vozidlo, volba, pak řádek na pruh s textem značky, jak ho dostal model
+    const name = i => i >= 0 ? laneName(i) : t('answer.invalid');
+    const lines = [t('last.signs', { vehicle: vehicleText(task.vehicle), pick: name(res.move), truth: name(task.truth) })];
+    KEYS.forEach((k, i) => lines.push(t('last.lane', { lane: laneName(i), state: task.state[k] })));
+    if (res.probs) lines.push(t('last.probs', { list: KEYS.map((k, i) => `${laneName(i)} ${pctOf(res.probs[k] ?? 0, 1)}`).join(', ') }));
+    return lines.join('\n');
+  },
+  quality(g, s, inGame) { return this.matchTiles(g, s, inGame, t('scenario.signs.tile.match'), t('scenario.signs.tile.rate')); },
+  renderExtra(g) {                                         // přesnost podle třídy značky povoleného pruhu, ve stejném pořadí jako bench.py
+    const head = el('tr'); head.append(el('th', '', t('scenario.signs.col.class')), el('th', '', t('scenario.signs.col.ratio')), el('th', '', t('metric.accuracy')));
+    $('conf').replaceChildren(head, ...SIGN_CLASSES.map(c => {
+      const b = g.byClass[c], tr = el('tr');
+      tr.append(el('th', '', t(SIGN_NAME[c])), el('td', '', `${b.ok} / ${b.n}`), el('td', '', pctText(b.n ? b.ok / b.n : NaN)));
+      return tr;
+    }));
+  },
+};
+
 // ---------- scénář: veřejná sada (jen benchmark bez hry) ----------
 // Sady s desítkami tříd nebo s vlastními štítky u každé úlohy: pruhů je nejvýš 8 a auto by nemělo kudy jet,
 // proto tu není hra, jen benchmark. Rozhodnutí = index zvoleného štítku v nabídce úlohy (task.keys), −1 neplatná odpověď.
@@ -1474,6 +1604,92 @@ function validatePublic(d) {
   return { name: d.name || t('vp.name'), about: d.about || '', source: d.source, license: d.license,     // about: popis pro diváka, česky; model ho nedostává
            ...(d.about_en?.trim() ? { about_en: d.about_en } : {}),      // anglická podoba popisu, jen když ji sada má a není jen z bílých znaků
            instructions: d.instructions || 'Classify the text into exactly one of the labels.', labels, oos, items };
+}
+
+// Zákazy a výjimky: vozidla, značky a pravidlo povolení, stejné jako v bench.py (VEHICLES, LIMITS, SIGN_*, allowed, sign_text).
+// Značka = [třída, parametr]; parametr je typ vozidla, u mezí dvojice [rozměr, mez]. Co jde do modelu (šablony, otázka), je anglicky.
+const SIGN_VEHICLES = {                                    // typ → [množné číslo do značky, hmotnost od–do v t, výška od–do v m]
+  motorcycle: ['motorcycles', [0.2, 0.4], [1.1, 1.4]],
+  car: ['cars', [1.1, 2.4], [1.4, 1.9]],
+  tractor: ['tractors', [2.5, 8.0], [2.4, 3.2]],
+  truck: ['trucks', [3.6, 26.0], [2.6, 4.0]],
+  bus: ['buses', [11.0, 19.0], [2.9, 3.7]],
+};
+const SIGN_LIMITS = { weight_t: [2, 3.5, 5, 7.5, 12, 18], height_m: [2.2, 2.8, 3, 3.5, 3.8, 4] };      // meze na značkách, jen reálné hodnoty
+const SIGN_CLASSES = ['only', 'except_only', 'no', 'all_except', 'limit_no', 'limit_up_to'];
+const SIGN_PARTNER = { only: 'except_only', except_only: 'only', no: 'all_except', all_except: 'no', limit_no: 'limit_up_to', limit_up_to: 'limit_no' };   // stejná podmínka, jiná formulace (dvojice jsou jen v bench.py)
+const SIGN_TEXTS = {                                       // šablony značek; {x} je mez zapsaná jako v Pythonu {x:g} (String dává pro hodnoty z SIGN_LIMITS totéž)
+  only: '{plural} only',
+  except_only: 'no entry except {plural}',
+  no: 'no {plural}',
+  all_except: 'all vehicles except {plural}',
+  limit_no: { weight_t: 'no vehicles over {x} t', height_m: 'no vehicles higher than {x} m' },
+  limit_up_to: { weight_t: 'vehicles up to {x} t only', height_m: 'vehicles up to {x} m high only' },
+};
+const isLimit = cls => cls === 'limit_no' || cls === 'limit_up_to';
+function signText([cls, param]) {
+  if (isLimit(cls)) return SIGN_TEXTS[cls][param[0]].replace('{x}', String(param[1]));
+  return SIGN_TEXTS[cls].replace('{plural}', SIGN_VEHICLES[param][0]);
+}
+function signAllowed(vehicle, [cls, param]) {              // smí vozidlo do pruhu se značkou? rozhoduje třída a parametr, ne text
+  if (cls === 'only' || cls === 'except_only') return vehicle.type === param;
+  if (cls === 'no' || cls === 'all_except') return vehicle.type !== param;
+  return vehicle[param[0]] < param[1];
+}
+function signState(vehicle, signs) {                       // stav pro model ve stejném tvaru a pořadí klíčů jako sign_state v bench.py
+  const state = { vehicle: { type: vehicle.type, weight_t: vehicle.weight_t, height_m: vehicle.height_m } };
+  signs.forEach((s, i) => state[`lane_${i + 1}`] = signText(s));
+  return state;
+}
+function signQuestion(lanes) {                             // popisky pruhů jako edgeName (ta stojí mimo blok)
+  const criteria = {};
+  for (let i = 0; i < lanes; i++) criteria[`lane_${i + 1}`] = `Lane ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : '');
+  return { allowed: { type: 'choice', instructions: 'Each lane has a traffic sign. Exactly one lane is open to this vehicle. Choose that lane.', criteria } };
+}
+// Zahřívací úloha: pevná, bez losování. Auto 1.5 t, 1.5 m smí jen do prvního pruhu; prvních K značek dá pro K = 2–8 právě jeden povolený pruh.
+const SIGN_WARM = { vehicle: { type: 'car', weight_t: 1.5, height_m: 1.5 },
+                    signs: [['only', 'car'], ['no', 'car'], ['only', 'truck'], ['all_except', 'car'], ['except_only', 'bus'], ['only', 'bus'],
+                            ['except_only', 'tractor'], ['only', 'motorcycle']] };
+
+// Generátor řady se značkami: stejné kroky jako sign_case v bench.py, náhoda z předané funkce rand (stránka dává rnd, test vlastní).
+// Stejné semínko dá stejné řady; jiné úlohy než bench.py, protože Python má jiný generátor náhody.
+const pickOf = (rand, list) => list[Math.floor(rand() * list.length)];
+function signVehicle(rand) {                               // hodnota na jedno desetinné místo, nikdy rovná některé mezi
+  const type = pickOf(rand, Object.keys(SIGN_VEHICLES)), [, weight, height] = SIGN_VEHICLES[type], out = { type };
+  for (const [dim, [lo, hi]] of [['weight_t', weight], ['height_m', height]]) {
+    let value;
+    do value = Math.round((lo + rand() * (hi - lo)) * 10) / 10; while (SIGN_LIMITS[dim].includes(value));
+    out[dim] = value;
+  }
+  return out;
+}
+function signMake(rand, cls, vehicle, opens) {             // značka třídy cls, která vozidlo pouští (opens) nebo nepouští; null, když taková není
+  if (!isLimit(cls)) {
+    const same = (cls === 'only' || cls === 'except_only') === opens;      // „jen T“ pouští jen typ T, „zákaz T“ všechny kromě T
+    return [cls, same ? vehicle.type : pickOf(rand, Object.keys(SIGN_VEHICLES).filter(k => k !== vehicle.type))];
+  }
+  const options = Object.entries(SIGN_LIMITS).flatMap(([dim, xs]) => xs.filter(x => (vehicle[dim] < x) === opens).map(x => [dim, x]));
+  return options.length ? [cls, pickOf(rand, options)] : null;
+}
+const signStopped = vehicle => Object.entries(SIGN_LIMITS).some(([dim, xs]) => xs.some(x => x < vehicle[dim]));      // zastaví vozidlo aspoň jedna mez?
+const sameSign = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function signRow(lanes, rand) {                            // { vehicle, signs, truth: index jediného povoleného pruhu, cls: třída jeho značky }
+  const cls = pickOf(rand, SIGN_CLASSES), limit = isLimit(cls);
+  let vehicle, right;
+  do {                                                     // vozidlo, které třída umí pustit; u mezí jen takové, které nějaká mez zastaví
+    vehicle = signVehicle(rand);
+    right = limit && !signStopped(vehicle) ? null : signMake(rand, cls, vehicle, true);
+  } while (!right);
+  const signs = [right];
+  if (limit) signs.push(signMake(rand, pickOf(rand, ['limit_no', 'limit_up_to']), vehicle, false));      // aspoň jedna zakazující mez
+  while (signs.length < lanes) {
+    const sign = signMake(rand, pickOf(rand, SIGN_CLASSES), vehicle, false);
+    if (sign && !signs.some(s => sameSign(s, sign))) signs.push(sign);   // žádná značka dvakrát
+  }
+  for (let i = signs.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [signs[i], signs[j]] = [signs[j], signs[i]]; }
+  const open = signs.flatMap((s, i) => signAllowed(vehicle, s) ? [i] : []);
+  if (open.length !== 1) throw new Error(`signRow: ${open.length} lanes open instead of 1: ${JSON.stringify(signs)}`);      // zaručuje to konstrukce; nic se neopravuje potichu
+  return { vehicle, signs, truth: open[0], cls };
 }
 // ==== sdíleno s Pythonem: konec ====
 
@@ -1988,7 +2204,7 @@ function stepEstimate(kind, s) {                           // horní odhad dotaz
   let tasks;
   if (kind === 'bench') tasks = s.benchn;
   else if (s.mode === 'ladder') tasks = SC === obstacles ? Math.ceil(LADDER.reduce((t, v) => t + LEVEL / v, 0) * 1000 / HOSTED_MIN_MS) : rows(LADDER.length * LEVEL);
-  else if (SC !== obstacles) tasks = rows(s.runlen);       // e-maily, číselné duely: jedna úloha na řadu
+  else if (SC !== obstacles) tasks = rows(s.runlen);       // e-maily, číselné duely, zákazy a výjimky: jedna úloha na řadu
   else tasks = s.mode === 'turn' ? s.runlen + 1 : Math.ceil(s.runlen / s.speed * 1000 / HOSTED_MIN_MS);
   const mirror = s.mirror && (kind === 'bench' || s.mode === 'turn') && !SC.benchOnly;
   const requests = tasks * (mirror ? 3 : 1) + 1;           // + zahřívací dotaz
@@ -2373,6 +2589,7 @@ function draw(g) {
   }
   ctx.fillStyle = '#4cc2ff'; ctx.beginPath(); ctx.roundRect(x, CAR_Y - 22, w, 44, 9); ctx.fill();
   ctx.fillStyle = '#0b2536'; ctx.fillRect(x + w * 0.13, CAR_Y - 13, w * 0.74, 10);
+  SC.drawVehicle?.(g, x, w);                               // zákazy a výjimky: štítek vozidla pod autem; ostatní scénáře nic
   if (g.flash > 0) g.flash = Math.max(0, g.flash - 0.05);
 }
 
@@ -2455,7 +2672,7 @@ async function selectScenario() {
   const benchBack = () => { if (benchBefore !== null) { $('benchn').value = benchBefore; benchBefore = null; } };
   const notLoaded = r => apiError('', r.status, () => t('run.datasetFailed'));      // věta stránky: chyba ji nese i jako funkci say a stav ji po přepnutí jazyka složí znovu
   try {
-    if (v === 'obstacles' || v === 'numbers') { SC = v === 'numbers' ? numbers : obstacles; DS = null; benchBack(); }
+    if (v === 'obstacles' || v === 'numbers' || v === 'signs') { SC = { obstacles, numbers, signs }[v]; DS = null; benchBack(); }
     else if (v.startsWith('public/')) {
       const r = await req('/datasets/' + v);
       if (!r.ok) throw notLoaded(r);

@@ -475,12 +475,12 @@ def sign_question(lanes):
     }}
 
 
-# ---------- zrcadla a kalibrace (stejné jako v index.html, kromě klíče "allowed": scénář --signs stránka nemá) ----------
+# ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
     "category": "Decide which single category this e-mail belongs to, based on what the sender wants.",
     "largest": "Every gate carries a number. Pick the gate whose number is the greatest.",
-    "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",      # jen bench.py, stránka scénář nemá
+    "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",
 }
 
 
