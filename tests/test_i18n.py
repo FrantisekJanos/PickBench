@@ -352,7 +352,8 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "úložiště: dotazy na server, poslední nastavení", "plánovač: fronta kroků", "plánovač: běh fronty",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
-        "jádro: hra", "jádro: rozhodování", "jádro: kreslení"]      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
+        "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
+        "scénář: zákazy a výjimky"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -1745,7 +1746,7 @@ class PageStatic(unittest.TestCase):
         live = ("$('speed')", "$('mode')", "isRealtime(")
         for word in live:
             self.assertEqual(body("drawStats").count(word), 0, word)
-        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: veřejná sada (jen benchmark bez hry)"):
+        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: zákazy a výjimky", "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:
                 self.assertEqual(text.count(word), 0, (part, word))
