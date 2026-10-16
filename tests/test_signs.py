@@ -83,5 +83,79 @@ class Allowed(unittest.TestCase):
         self.assertEqual(sorted(c for pair in bench.SIGN_PAIRS for c in pair), sorted(bench.SIGN_CLASSES))
 
 
+class Generator(unittest.TestCase):
+    def test_spec_example_has_lane_4_open(self):
+        signs = [("only", "bus"), ("all_except", "truck"), ("limit_no", ("weight_t", 3.5)), ("limit_no", ("height_m", 3.5))]
+        self.assertEqual(bench.sign_state(TRUCK, signs), {"vehicle": {"type": "truck", "weight_t": 7.5, "height_m": 3.2},
+                                                          "lane_1": "buses only", "lane_2": "all vehicles except trucks",
+                                                          "lane_3": "no vehicles over 3.5 t", "lane_4": "no vehicles higher than 3.5 m"})
+        self.assertEqual([i for i, s in enumerate(signs) if bench.allowed(TRUCK, s)], [3])
+
+    def test_exactly_one_lane_is_open_and_the_index_points_to_it(self):
+        for lanes in range(2, 9):
+            for vehicle, signs, top, cls in bench.sign_cases(500, lanes):
+                self.assertEqual(len(signs), lanes)
+                self.assertEqual([i for i, s in enumerate(signs) if bench.allowed(vehicle, s)], [top])
+                self.assertEqual(signs[top][0], cls)
+
+    def test_classes_are_spread_evenly(self):
+        counts = {c: 0 for c in bench.SIGN_CLASSES}
+        for _, _, _, cls in bench.sign_cases(600):
+            counts[cls] += 1
+        for cls, n in counts.items():
+            self.assertTrue(60 <= n <= 140, (cls, n))
+
+    def test_vehicles_stay_in_range_and_never_equal_a_limit(self):
+        for vehicle, signs, _, _ in bench.sign_cases(500, 8):
+            self.assertEqual(list(vehicle), ["type", "weight_t", "height_m"])
+            _, weight, height = bench.VEHICLES[vehicle["type"]]
+            self.assertTrue(weight[0] <= vehicle["weight_t"] <= weight[1], vehicle)
+            self.assertTrue(height[0] <= vehicle["height_m"] <= height[1], vehicle)
+            for dim in ("weight_t", "height_m"):
+                self.assertEqual(vehicle[dim], round(vehicle[dim], 1))
+                self.assertNotIn(vehicle[dim], bench.LIMITS[dim])
+            for cls, param in signs:
+                if cls.startswith("limit_"):
+                    self.assertIn(param[1], bench.LIMITS[param[0]])
+                    self.assertNotEqual(vehicle[param[0]], param[1])
+                else:
+                    self.assertIn(param, bench.VEHICLES)
+
+    def test_limit_classes_always_have_a_closing_limit_sign(self):   # jinak by stačilo vybrat jedinou značku s číslem
+        for lanes in range(2, 9):
+            for vehicle, signs, top, cls in bench.sign_cases(300, lanes):
+                if cls.startswith("limit_"):
+                    closing = [s for i, s in enumerate(signs) if i != top and s[0].startswith("limit_")]
+                    self.assertTrue(closing, (vehicle, signs))
+                    self.assertTrue(all(not bench.allowed(vehicle, s) for s in closing))
+                    self.assertTrue(bench.stopped_by_a_limit(vehicle), vehicle)
+        self.assertFalse(bench.stopped_by_a_limit({"type": "motorcycle", "weight_t": 0.3, "height_m": 1.2}))
+        self.assertTrue(bench.stopped_by_a_limit({"type": "car", "weight_t": 2.1, "height_m": 1.5}))
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.sign_cases(50, 4), bench.sign_cases(50, 4))
+        self.assertEqual(bench.sign_cases(50, 4), bench.sign_cases(50, 4, seed=1))
+        self.assertNotEqual(bench.sign_cases(50, 4), bench.sign_cases(50, 4, seed=2))
+
+    def test_broken_guarantee_raises_instead_of_fixing(self):
+        with mock.patch.object(bench, "allowed", lambda vehicle, sign: True):
+            with self.assertRaises(RuntimeError):
+                bench.sign_case(random.Random(1), 3)
+
+    def test_state_with_eight_lanes_stays_under_600_tokens(self):     # odhad: 4 znaky JSON na token, ne skutečná tokenizace
+        longest = max(len(json.dumps(bench.sign_state(vehicle, signs))) for vehicle, signs, _, _ in bench.sign_cases(500, 8))
+        self.assertLess(longest / 4, 600)
+
+    def test_question_and_its_alternative_wording(self):
+        q = bench.sign_question(4)
+        self.assertEqual(list(q), ["allowed"])
+        self.assertEqual(q["allowed"]["type"], "choice")
+        self.assertEqual(q["allowed"]["instructions"], "Each lane has a traffic sign. Exactly one lane is open to this vehicle. Choose that lane.")
+        self.assertEqual(q["allowed"]["criteria"], {"lane_1": "Lane 1 (leftmost)", "lane_2": "Lane 2", "lane_3": "Lane 3", "lane_4": "Lane 4 (rightmost)"})
+        self.assertEqual(bench.ALT["allowed"], "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.")
+        self.assertEqual(bench.variant(q, 2)["allowed"]["instructions"], bench.ALT["allowed"])
+        self.assertEqual(list(bench.variant(q, 1)["allowed"]["criteria"]), ["lane_4", "lane_3", "lane_2", "lane_1"])
+
+
 if __name__ == "__main__":
     unittest.main()

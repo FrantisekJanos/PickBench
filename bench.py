@@ -381,11 +381,84 @@ def allowed(vehicle, sign):
     return vehicle[dim] < x
 
 
+def vehicle_of(rng):
+    """Náhodné vozidlo podle VEHICLES; hodnota na jedno desetinné místo a nikdy rovná některé mezi z LIMITS."""
+    kind = rng.choice(list(VEHICLES))
+    _, weight, height = VEHICLES[kind]
+    out = {"type": kind}
+    for dim, (lo, hi) in (("weight_t", weight), ("height_m", height)):
+        value = round(rng.uniform(lo, hi), 1)
+        while value in LIMITS[dim]:
+            value = round(rng.uniform(lo, hi), 1)
+        out[dim] = value
+    return out
+
+
+def make_sign(rng, cls, vehicle, opens):
+    """Značka třídy cls, která vozidlo pouští (opens=True), nebo nepouští. None, když taková značka neexistuje."""
+    if cls in ("only", "except_only", "no", "all_except"):
+        same = (cls in ("only", "except_only")) == opens          # „jen T“ pouští jen typ T, „zákaz T“ všechny kromě T
+        kinds = [vehicle["type"]] if same else [k for k in VEHICLES if k != vehicle["type"]]
+        return cls, rng.choice(kinds)
+    options = [(dim, x) for dim in LIMITS for x in LIMITS[dim] if (vehicle[dim] < x) == opens]
+    return (cls, rng.choice(options)) if options else None
+
+
+def stopped_by_a_limit(vehicle):
+    """Zastaví vozidlo aspoň jedna mez z LIMITS (v některém rozměru mez pod hodnotou)?"""
+    return any(x < vehicle[dim] for dim in LIMITS for x in LIMITS[dim])
+
+
+def sign_case(rng, lanes):
+    """Úloha se značkami. Vrací (vozidlo, značky po pruzích, index jediného povoleného pruhu, třída jeho značky)."""
+    cls = rng.choice(SIGN_CLASSES)
+    limit = cls in ("limit_no", "limit_up_to")
+    while True:                                      # vozidlo, které třída umí pustit (kamion 26 t pod žádnou mez nevjede)
+        vehicle = vehicle_of(rng)
+        if limit and not stopped_by_a_limit(vehicle):  # u mezí i zakazující mez, jinak by správná byla jediná značka s číslem
+            continue
+        right = make_sign(rng, cls, vehicle, True)
+        if right is not None:
+            break
+    signs = [right]
+    if limit:                                        # aspoň jeden zakazující pruh nese mez (lanes >= 2, takže místo je)
+        signs.append(make_sign(rng, rng.choice(("limit_no", "limit_up_to")), vehicle, False))
+    while len(signs) < lanes:
+        sign = make_sign(rng, rng.choice(SIGN_CLASSES), vehicle, False)
+        if sign is not None:                         # šablona zakazující značku vyrobit neumí: losuje se jiná
+            signs.append(sign)
+    rng.shuffle(signs)
+    open_lanes = [i for i, s in enumerate(signs) if allowed(vehicle, s)]
+    if len(open_lanes) != 1:                         # zaručuje to konstrukce; nic se neopravuje potichu
+        raise RuntimeError(f"sign_case: {len(open_lanes)} lanes open instead of 1: {signs}")
+    return vehicle, signs, open_lanes[0], cls
+
+
+def sign_cases(n, lanes=3, seed=1):
+    rng = random.Random(seed)
+    return [sign_case(rng, lanes) for _ in range(n)]
+
+
+def sign_state(vehicle, signs):
+    """Stav pro model: vozidlo a text značky v každém pruhu."""
+    return {"vehicle": dict(vehicle), **{k: sign_text(s) for k, s in zip(lane_keys(len(signs)), signs)}}
+
+
+def sign_question(lanes):
+    return {"allowed": {
+        "type": "choice",
+        "instructions": "Each lane has a traffic sign. Exactly one lane is open to this vehicle. Choose that lane.",
+        "criteria": {k: f"Lane {i + 1}" + (" (leftmost)" if i == 0 else " (rightmost)" if i == lanes - 1 else "")
+                     for i, k in enumerate(lane_keys(lanes))},
+    }}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
     "category": "Decide which single category this e-mail belongs to, based on what the sender wants.",
     "largest": "Every gate carries a number. Pick the gate whose number is the greatest.",
+    "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",      # jen bench.py, stránka scénář nemá
 }
 
 
