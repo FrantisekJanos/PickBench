@@ -385,6 +385,24 @@ class Memory(unittest.TestCase):
         for (history, steps, gates), message in zip(bad, got):
             self.assertTrue(str(message).startswith(f"memoryGates: {steps} steps back, {gates} gates in "), (history, steps, gates, message))
 
+    def test_errors_and_span_match_bench(self):                    # ručně sestavené úlohy a počty z tests/test_memory.py (Errors)
+        import bench
+        ten = list(bench.MEMORY_SIGNS[:10])                                             # circle … hexagon
+        five = (ten, 4, ["heart", "cross", "moon", "hexagon", "circle"], 0)           # heart 4 kroky zpět; cross 3, moon 5, hexagon 1, circle 10
+        two = (ten, 2, ["diamond", "hexagon", "cross"], 0)                            # N=2: nejnovější (hexagon) je zároveň soused
+        keys = bench.gate_keys(5)
+        cases = [five] * 8 + [two]
+        choices = ["gate_1", "gate_2", "gate_3", "gate_4", "gate_5", None, "nonsense", ["gate_1"], "gate_2"]
+        js_cases = [{"history": h, "steps": n, "signs": s, "truth": top} for h, n, s, top in cases]
+        got = run_js("memoryErrors(arg.cases, arg.choices, arg.keys)", {"cases": js_cases, "choices": choices, "keys": keys})
+        self.assertEqual(json.dumps(got), json.dumps(bench.memory_errors(cases, choices, keys)))       # i pořadí klíčů
+        self.assertEqual(got, {"near": 3, "latest": 1, "other": 1, "invalid": 3})
+        full = {n: [10, 10] for n in bench.MEMORY_STEPS}
+        tables = [full, {**full, 1: [7, 10]}, {**full, 3: [7, 10]}, {**full, 5: [8, 10]}, {**full, 5: [28, 35]}, {**full, 8: [3, 4]},
+                  {**full, 2: [0, 0]}, {n: [0, 0] for n in bench.MEMORY_STEPS}]
+        self.assertEqual([bench.memory_span(t) for t in tables], [8, None, 2, 8, 8, 7, 1, None])       # —, propad N=3 při N=4 v pořádku, přesně 80 %, prázdné N
+        self.assertEqual(run_js("arg.map(t => memorySpan(t))", tables), [bench.memory_span(t) for t in tables])
+
 
 # Generátor paměťové stopy stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady memoryRow.
 MEMORY_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "memoryRow(arg.gates, rand)")

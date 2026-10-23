@@ -1742,6 +1742,32 @@ function memoryRow(gates, rand) {                          // { history (nejstar
   const history = pool.slice(0, length), { signs, truth } = memoryGates(rand, history, steps, gates);
   return { history, steps, signs, truth };
 }
+
+// Rozbor chyb a rozsah paměti, stejné definice jako memory_errors a memory_span v bench.py. Úloha c = { history, steps, signs, truth }.
+// near: zvolená značka je o krok vedle hledané (|k − N| = 1); latest: zvolená je nejnovější (k = 1) a není near; other: ostatní chybné brány;
+// invalid: volba, která není klíčem brány (null, jiný text, jiný typ). Správná volba vrací null a nepočítá se nikam.
+function memoryErrorKind(c, choice, keys) {
+  if (typeof choice !== 'string' || !keys.includes(choice)) return 'invalid';
+  const picked = keys.indexOf(choice);
+  if (picked === c.truth) return null;
+  const k = c.history.length - c.history.indexOf(c.signs[picked]);
+  return Math.abs(k - c.steps) === 1 ? 'near' : k === 1 ? 'latest' : 'other';
+}
+function memoryErrors(cases, choices, keys) {
+  const counts = { near: 0, latest: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = memoryErrorKind(c, choices[i], keys); if (kind) counts[kind]++; });
+  return counts;
+}
+// bySteps: N → [správně, celkem]. Rozsah = největší N, pro které má každé n ≤ N aspoň jednu úlohu a podíl ok / n aspoň MEMORY_SPAN_SHARE; jinak null.
+function memorySpan(bySteps) {
+  let span = null;
+  for (const steps of MEMORY_STEPS) {
+    const [ok, n] = bySteps[steps] ?? [0, 0];
+    if (n === 0 || ok / n < MEMORY_SPAN_SHARE) break;     // podíl, ne ok >= 0.8 * n: plovoucí čárka by 28/35 neprošla
+    span = steps;
+  }
+  return span;
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
