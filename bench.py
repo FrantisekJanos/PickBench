@@ -596,6 +596,62 @@ def memory_span(by_steps):
     return span
 
 
+# ---------- scénář: závora ----------
+# Pole stavu v pořadí pravidel 1–5 a výsledek každé hodnoty: True jeď, False stůj, None nerozhoduje (rozhoduje další pravidlo).
+# Hodnoty jdou do modelu, proto anglicky a mimo i18n.
+BARRIER_FIELDS = (
+    ("police_officer", {"none": None, "signals the car to go": True, "signals the car to stop": False}),
+    ("emergency_vehicle", {"none": None, "parked at the roadside, siren off": None,          # návnada: záchranka bez sirény nerozhoduje
+                           "approaching from the left with siren on": False, "approaching from the right with siren on": False}),
+    ("pedestrian_on_crossing", {"no": None, "yes": False}),
+    ("light", {"off": None, "green": True, "yellow": False, "red": False}),
+    ("sign", {"priority road": True, "give way": False, "stop sign": False}),
+)
+BARRIER_GO_SHARE = 0.75                              # podíl úloh se správnou odpovědí jeď
+BARRIER_RULES = range(1, 6)
+BARRIER_CLASSES = ("agree", "conflict_high", "conflict_light", "last")    # nižší pravidla říkají totéž; opak: vyšší pravidlo
+                                                                          # přebíjí semafor nebo značku / semafor přebíjí značku; poslední pravidlo
+
+
+def barrier_decide(state, start=1):
+    """Projde pravidla od start do 5. Vrací (jeď?, číslo rozhodujícího pravidla); pravidlo 5 rozhoduje vždy."""
+    for rule in range(start, 6):
+        name, table = BARRIER_FIELDS[rule - 1]
+        go = table[state[name]]
+        if go is not None:
+            return go, rule
+    raise RuntimeError(f"barrier_decide: no rule from {start} decides {state}")
+
+
+def barrier_case(rng):
+    """Úloha závory. Vrací (stav, jeď?, rozhodující pravidlo, třída)."""
+    go = rng.random() < BARRIER_GO_SHARE
+    rule = rng.choice([r for r in BARRIER_RULES if go in BARRIER_FIELDS[r - 1][1].values()])
+    cls = "last" if rule == 5 else "conflict" if rng.random() < 0.5 else "agree"
+    state = {}
+    for name, table in BARRIER_FIELDS[:rule - 1]:
+        state[name] = rng.choice([v for v, out in table.items() if out is None])
+    name, table = BARRIER_FIELDS[rule - 1]
+    state[name] = rng.choice([v for v, out in table.items() if out is go])
+    for _ in range(1000):                            # pole pod rozhodujícím pravidlem, dokud stínový výsledek nesedí s třídou
+        for name, table in BARRIER_FIELDS[rule:]:
+            state[name] = rng.choice(list(table))
+        if rule == 5 or (barrier_decide(state, rule + 1)[0] != go) == (cls == "conflict"):
+            break
+    else:
+        raise RuntimeError(f"barrier_case: no {cls} state for rule {rule} after 1000 tries")
+    if barrier_decide(state) != (go, rule):          # zaručuje to konstrukce; nic se neopravuje potichu
+        raise RuntimeError(f"barrier_case: {state} does not give {(go, rule)}")
+    if cls == "conflict":                            # losuje se jen konflikt / shoda; konflikt se podle pravidla rozdělí
+        cls = "conflict_high" if rule < 4 else "conflict_light"
+    return state, go, rule, cls
+
+
+def barrier_cases(n, seed=1):
+    rng = random.Random(seed)
+    return [barrier_case(rng) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
