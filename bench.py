@@ -884,6 +884,21 @@ def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, 
     return r
 
 
+def run_memory(model, cases, gates=4, mirror=False, inject=False, deadline=None, count=False):
+    keys, question = gate_keys(gates), memory_question(gates, count)
+    state = lambda history, steps, signs: memory_state(history, steps, signs, count)    # podoba stavu; úlohy jsou stejné
+    ask(model, state(*cases[0][:3]), question)                   # zahřátí, nepočítá se
+    targets = inject_plan([{keys[top]} for _, _, _, top in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(state(history, steps, signs), note), {keys[top]}, "")
+             for (history, steps, signs, top), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_steps"] = class_tally(MEMORY_STEPS, [(top, steps) for _, steps, _, top in cases], choices, keys)      # N → [správně, celkem]
+    r["errors"] = memory_errors(cases, choices, keys)            # z původní varianty zadání, jako přesnost
+    r["span"] = memory_span(r["by_steps"])
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
