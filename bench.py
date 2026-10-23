@@ -475,6 +475,47 @@ def sign_question(lanes):
     }}
 
 
+# ---------- scénář: paměťová stopa ----------
+# Slova značek jdou do modelu, proto anglicky a mimo i18n. Každé musí jít nakreslit jako symbol, protože je převezme hra.
+MEMORY_SIGNS = ("circle", "square", "star", "triangle", "arrow", "moon",
+                "heart", "cross", "diamond", "hexagon", "bell", "leaf")
+MEMORY_STEPS = range(1, 9)                           # N: o kolik kroků zpět se model ptá
+MEMORY_LENGTH_MAX = 12                               # nejdelší historie (L)
+MEMORY_SPAN_SHARE = 0.8                              # rozsah paměti: největší N, do kterého je přesnost u každého N aspoň tolik
+
+
+def memory_gates(rng, history, steps, gates):
+    """Značky bran k historii (nejstarší první) a počtu kroků zpět. Vrací (značky bran, index správné brány).
+
+    Brány jsou souvislé okno gates po sobě jdoucích značek historie, které obsahuje hledanou značku. Začátek okna se losuje
+    rovnoměrně ze všech platných začátků, potom se brány zamíchají. Tvar nabídky tak neprozradí, která značka je hledaná."""
+    length = len(history)
+    if not 1 <= steps <= length or not 1 <= gates <= length or len(set(history)) != length:
+        raise RuntimeError(f"memory_gates: {steps} steps back, {gates} gates in {history}")
+    at = length - steps
+    target = history[at]
+    start = rng.randint(max(0, at - gates + 1), min(at, length - gates))      # okno obsahuje hledanou a vejde se do historie
+    signs = list(history[start:start + gates])                                # nový seznam (i z n-tice), historie zůstává
+    rng.shuffle(signs)
+    if len(signs) != gates or len(set(signs)) != gates or signs.count(target) != 1 or not set(signs) <= set(history):
+        raise RuntimeError(f"memory_gates: gates {signs} for {history}, {steps} steps back")      # nic se neopravuje potichu
+    return signs, signs.index(target)
+
+
+def memory_case(rng, gates):
+    """Úloha paměťové stopy. Vrací (historie, N, značky bran, index správné brány)."""
+    steps = rng.choice(MEMORY_STEPS)
+    length = rng.randint(max(steps, gates), MEMORY_LENGTH_MAX)
+    history = rng.sample(MEMORY_SIGNS, length)
+    signs, top = memory_gates(rng, history, steps, gates)
+    return history, steps, signs, top
+
+
+def memory_cases(n, gates=4, seed=1):
+    rng = random.Random(seed)
+    return [memory_case(rng, gates) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
