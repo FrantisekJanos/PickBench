@@ -469,6 +469,11 @@ class Page(unittest.TestCase):                                         # scéná
         page = page_source()
         self.assertEqual(page.count('<option value="memory" data-i18n="opt.scenario.memory"></option>'), 1)
         self.assertEqual(page.count('<canvas id="trail" width="300" height="70" hidden></canvas>'), 1)
+        # pás je ve sticky #stage ve sloupci se silnicí (při rolování zůstane u ní, šířka = šířka silnice);
+        # silnice se zmenší, aby se oba vešly do výšky, kterou dřív měla sama
+        self.assertEqual(page.count('<div id="stage"><div id="road-col"><canvas id="road" width="300" height="600"></canvas>'
+                                    '<canvas id="trail" width="300" height="70" hidden></canvas></div>'), 1)
+        self.assertEqual(page.count("#road-col:has(#trail:not([hidden])) canvas#road { height:calc((min(600px, 100vh - 96px) - 8px) * 600 / 670); }"), 1)
         self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory }[v];"), 1)
         self.assertEqual(page.count("['queue', 'legend', 'confPanel', 'trail'].forEach("), 1)        # pás se schovává jako ostatní panely scénáře
         self.assertEqual(page.count("SC.drawTrail?.(g);"), 1)

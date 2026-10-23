@@ -16,7 +16,10 @@
   #stage { display:flex; gap:12px; align-items:flex-start; position:sticky; top:12px; }
   /* výška podle okna, aby auto (dole) bylo vidět i na menší obrazovce bez rolování */
   canvas#road { background:#20262d; border:1px solid var(--line); border-radius:8px; display:block; height:min(600px, calc(100vh - 96px)); width:auto; }
+  /* pás historie (paměťová stopa) pod silnicí ve sticky #stage: šířka podle silnice; silnice se zmenší, aby se oba vešly do její dřívější výšky
+     (pás má výšku 70/600 silnice, obě plátna mají šířku W) */
   canvas#trail { background:#20262d; border:1px solid var(--line); border-radius:8px; display:block; margin-top:8px; width:100%; height:auto; }
+  #road-col:has(#trail:not([hidden])) canvas#road { height:calc((min(600px, 100vh - 96px) - 8px) * 600 / 670); }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
   .panel h2 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); font-weight:600; }
   .controls { display:flex; flex-wrap:wrap; gap:12px 18px; align-items:end; }
@@ -93,8 +96,7 @@
 <header><h1>PickBench</h1><span id="langSwitch" role="group"><button id="lang-cs" type="button">CS</button><button id="lang-en" type="button">EN</button></span><span><span data-i18n="page.subtitle"></span> <code>/v1/systemone</code></span></header>
 <main>
   <section>
-    <div id="stage"><canvas id="road" width="300" height="600"></canvas><div id="queue" hidden></div></div>
-    <canvas id="trail" width="300" height="70" hidden></canvas>
+    <div id="stage"><div id="road-col"><canvas id="road" width="300" height="600"></canvas><canvas id="trail" width="300" height="70" hidden></canvas></div><div id="queue" hidden></div></div>
     <div class="panel" id="legend" style="margin-top:14px" hidden></div>
     <div class="panel" style="margin-top:14px">
       <h2 data-i18n="ui.last"></h2>
