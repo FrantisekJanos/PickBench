@@ -4,6 +4,7 @@ import io
 import json
 import os
 import random
+import re
 import runpy
 import sys
 import time
@@ -447,6 +448,20 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --memory tev1", text)
             self.assertIn("\n--memory:   ", text)
             self.assertIn("\n--count:    ", text)
+
+
+def page_source():
+    return (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+class Page(unittest.TestCase):                                         # scénář ve stránce; stav, generátor a výpočty hlídá tests/test_parity.py (Memory)
+    def test_every_sign_has_its_own_symbol(self):
+        page = page_source()
+        body = page.split("\nfunction drawMemorySign(", 1)[1].split("\n}\n", 1)[0]
+        paths = re.findall(r"case '(\w+)':", body)
+        glyphs = re.findall(r"(\w+): '", re.search(r"\nconst MEMORY_GLYPH = \{(.*?)\};", page).group(1))
+        self.assertEqual(sorted(paths + glyphs), sorted(bench.MEMORY_SIGNS))             # každá značka právě jednou: cestou, nebo emoji
+        self.assertEqual(glyphs, ["moon", "heart", "bell", "leaf"])
 
 
 if __name__ == "__main__":

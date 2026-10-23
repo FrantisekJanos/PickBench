@@ -1453,6 +1453,28 @@ const signs = {
   },
 };
 
+// ---------- scénář: paměťová stopa ----------
+// Řada bran se značkami; každá řada je samostatná úloha s vlastní historií, N a okénkem bran (memoryRow ve sdíleném bloku).
+// Historie je ve stavu, model nic nepamatuje. Na silnici a v pásu historie je značka jen symbol pro diváka; model dostává slovo.
+const MEMORY_GLYPH = { moon: '🌙', heart: '❤️', bell: '🔔', leaf: '🍃' };     // emoji potřebují barevné písmo jako vozidla u zákazů; ostatní symboly kreslí cesta
+const memoryGlyph = name => MEMORY_GLYPH[name] ?? '?';
+function drawMemorySign(c, name, x, y, rad) {              // symbol značky na plátno c; volající nastaví textAlign = 'center', textBaseline = 'middle'
+  const poly = pts => { c.beginPath(); pts.forEach(([px, py], i) => c[i ? 'lineTo' : 'moveTo'](x + px * rad, y + py * rad)); c.closePath(); c.fill(); };
+  const ring = (k, r = 1, a0 = -Math.PI / 2) => [...Array(k)].map((_, i) => [r * Math.cos(a0 + i * 2 * Math.PI / k), r * Math.sin(a0 + i * 2 * Math.PI / k)]);
+  c.fillStyle = '#e6edf3';
+  switch (name) {
+    case 'circle': c.beginPath(); c.arc(x, y, rad * 0.85, 0, 7); c.fill(); break;
+    case 'square': c.fillRect(x - rad * 0.75, y - rad * 0.75, rad * 1.5, rad * 1.5); break;
+    case 'star': poly(ring(10).map(([px, py], i) => i % 2 ? [px * 0.42, py * 0.42] : [px, py])); break;
+    case 'triangle': poly(ring(3).map(([px, py]) => [px, py + 0.15])); break;
+    case 'arrow': poly([[-0.9, -0.25], [0.1, -0.25], [0.1, -0.7], [0.95, 0], [0.1, 0.7], [0.1, 0.25], [-0.9, 0.25]]); break;
+    case 'cross': c.fillRect(x - rad * 0.22, y - rad * 0.85, rad * 0.44, rad * 1.7); c.fillRect(x - rad * 0.85, y - rad * 0.22, rad * 1.7, rad * 0.44); break;
+    case 'diamond': poly([[0, -1], [0.7, 0], [0, 1], [-0.7, 0]]); break;
+    case 'hexagon': poly(ring(6, 0.9, 0)); break;
+    default: c.font = `${Math.round(rad * 1.5)}px "Segoe UI Emoji", sans-serif`; c.fillText(memoryGlyph(name), x, y + 1);      // moon, heart, bell, leaf
+  }
+}
+
 // ---------- scénář: veřejná sada (jen benchmark bez hry) ----------
 // Sady s desítkami tříd nebo s vlastními štítky u každé úlohy: pruhů je nejvýš 8 a auto by nemělo kudy jet,
 // proto tu není hra, jen benchmark. Rozhodnutí = index zvoleného štítku v nabídce úlohy (task.keys), −1 neplatná odpověď.
