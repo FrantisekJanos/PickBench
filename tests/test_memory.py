@@ -463,6 +463,21 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertEqual(sorted(paths + glyphs), sorted(bench.MEMORY_SIGNS))             # každá značka právě jednou: cestou, nebo emoji
         self.assertEqual(glyphs, ["moon", "heart", "bell", "leaf"])
 
+    def test_scenario_is_offered_selected_and_draws_its_trail(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="memory" data-i18n="opt.scenario.memory"></option>'), 1)
+        self.assertEqual(page.count('<canvas id="trail" width="300" height="70" hidden></canvas>'), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory }[v];"), 1)
+        self.assertEqual(page.count("['queue', 'legend', 'confPanel', 'trail'].forEach("), 1)        # pás se schovává jako ostatní panely scénáře
+        self.assertEqual(page.count("SC.drawTrail?.(g);"), 1)
+        self.assertEqual(page.count("drawTrail(g) {"), 1)                                         # háček má jen tento scénář
+        self.assertEqual(page.count("    c.hidden = !r;"), 1)                                     # benchmark bez hry nemá řady: prázdný pás se schová
+        # zahřívací úloha je pevná: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(memoryWarm(LANES), null, null); },"), 1)
+        body = page.split("\nconst memory = {", 1)[1].split("\n};\n", 1)[0]
+        for call in ("memoryRow(LANES, rnd)", "memoryState(", "memoryQuestion(LANES)", "memoryErrorKind(", "memorySpan(", "gateKeys(LANES).indexOf(a.recall?.choice)"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
 
 if __name__ == "__main__":
     unittest.main()

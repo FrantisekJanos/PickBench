@@ -346,7 +346,7 @@ SAME = {"mode.bench", "ui.start", "ui.stop", "ui.model", "ui.hardware", "ui.csv"
 # Předpony klíčů, které se skládají za běhu: t('state.' + st.state).
 DYNAMIC = ("tip.", "col.", "result.", "gap.", "state.")
 # Celé klíče, které se skládají za běhu a doslova ve skriptu nestojí: klíč → kde. Starší scénáře drží doslova seznam v legacyCells.
-COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)"}
+COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.memory": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -560,7 +560,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 4)                                      # e-maily, číselné duely, veřejná sada, zákazy a výjimky
+        self.assertEqual(len(blocks), 5)                                      # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -588,10 +588,25 @@ class PageTexts(unittest.TestCase):
         for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
             self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
-        self.assertEqual(COMPOSED, {"scenario.signs": COMPOSED["scenario.signs"]})
+        self.assertEqual(sorted(COMPOSED), ["scenario.memory", "scenario.signs"])
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("výjim", self.texts[key]["cs"], key)
             self.assertIn("bans and exceptions", self.texts[key]["en"], key)
+
+    def test_memory_texts_match_bench_and_name_the_scenario(self):            # řádek chyb jako bench.py, popisek voliče, popisky se scénáři s řadami, tvary podle počtu
+        self.assertLessEqual(set(COMPOSED), set(self.texts))
+        for code in ("cs", "en"):
+            self.assertEqual(self.texts["memory.errors"][code], i18n.TEXTS["bench.memory.errors"][code], code)
+            self.assertIn(self.texts["opt.scenario.memory"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.memory.extraTitle"][code], self.texts["scenario.memory.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("paměťov", self.texts[key]["cs"], key)
+            self.assertIn("memory trace", self.texts[key]["en"], key)
+        pick = "[1, 2, 3, 5, 8].map(n => [t('memory.steps', { n }), t('memory.seek', { n })])"
+        self.assertEqual(node(pick), [[f"před {n} {'krokem' if n == 1 else 'kroky'}", f"hledá se značka před {n} {'krokem' if n == 1 else 'kroky'}"]
+                                      for n in (1, 2, 3, 5, 8)])
+        self.assertEqual(node(pick, lang="en"), [[f"{n} {'step' if n == 1 else 'steps'} back", f"looking for the sign {n} {'step' if n == 1 else 'steps'} back"]
+                                                 for n in (1, 2, 3, 5, 8)])
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
@@ -1054,6 +1069,12 @@ class Results(unittest.TestCase):
         pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
         self.assertEqual(node(pick, rows), [["zákazy a výjimky", 5]])
         self.assertEqual(node(pick, rows, lang="en"), [["bans and exceptions", 5]])
+
+    def test_memory_row_reads_in_both_languages(self):                        # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.memory
+        rows = [{"vals": {**VALS, "scenario": "memory", "lanes": 4}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["paměťová stopa", 4]])
+        self.assertEqual(node(pick, rows, lang="en"), [["memory trace", 4]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
