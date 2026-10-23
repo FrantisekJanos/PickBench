@@ -1719,6 +1719,29 @@ function memoryWarm(gates) {
   const history = [...MEMORY_SIGNS];
   return { history, steps: 2, signs: history.slice(MEMORY_LENGTH_MAX - gates), truth: gates - 2 };
 }
+
+// Generátor řady bran: stejné kroky jako memory_case v bench.py (N, délka, historie bez opakování, začátek okna, zamíchání),
+// náhoda z předané funkce rand (stránka dává rnd, test vlastní). Jiné úlohy než bench.py, protože Python má jiný generátor náhody.
+const pickInt = (rand, lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));      // celé číslo lo…hi včetně, jako random.randint
+function memoryGates(rand, history, steps, gates) {        // { signs: značky bran, truth: index správné brány }; brány = souvislé okno historie kolem hledané
+  const length = history.length;
+  if (!(steps >= 1 && steps <= length && gates >= 1 && gates <= length) || new Set(history).size !== length)
+    throw new Error(`memoryGates: ${steps} steps back, ${gates} gates in ${JSON.stringify(history)}`);
+  const at = length - steps, target = history[at];
+  const start = pickInt(rand, Math.max(0, at - gates + 1), Math.min(at, length - gates));      // okno obsahuje hledanou a vejde se do historie
+  const signs = history.slice(start, start + gates);
+  for (let i = signs.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [signs[i], signs[j]] = [signs[j], signs[i]]; }
+  if (signs.length !== gates || new Set(signs).size !== gates || signs.filter(s => s === target).length !== 1 || !signs.every(s => history.includes(s)))
+    throw new Error(`memoryGates: gates ${JSON.stringify(signs)} for ${JSON.stringify(history)}, ${steps} steps back`);      // nic se neopravuje potichu
+  return { signs, truth: signs.indexOf(target) };
+}
+function memoryRow(gates, rand) {                          // { history (nejstarší první), steps: N, signs: značky bran, truth: index správné brány }
+  const steps = pickOf(rand, MEMORY_STEPS), length = pickInt(rand, Math.max(steps, gates), MEMORY_LENGTH_MAX);
+  const pool = [...MEMORY_SIGNS];
+  for (let i = 0; i < length; i++) { const j = i + Math.floor(rand() * (pool.length - i)); [pool[i], pool[j]] = [pool[j], pool[i]]; }      // výběr bez opakování (rng.sample) jako částečné zamíchání
+  const history = pool.slice(0, length), { signs, truth } = memoryGates(rand, history, steps, gates);
+  return { history, steps, signs, truth };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
