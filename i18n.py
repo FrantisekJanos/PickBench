@@ -102,6 +102,9 @@ TEXTS = {
                            "en": "{n} {n|task|tasks} with a history of signs (lookup by label), {lanes} gates, the same for all models"},
     "bench.intro.memoryCount": {"cs": "{n} úloh s historií značek (počítání polohy v seznamu), {lanes} bran, stejných pro všechny modely",
                                 "en": "{n} {n|task|tasks} with a history of signs (counting the position in a list), {lanes} gates, the same for all models"},
+    # Závora: {go} = podíl úloh se správnou odpovědí jeď, v celých procentech.
+    "bench.intro.barrier": {"cs": "{n} křižovatek, 5 pravidel s pořadím, {go} % jeď, stejných pro všechny modely",
+                            "en": "{n} {n|intersection|intersections}, 5 rules in order of priority, {go}% go, the same for all models"},
     "bench.intro.emails": {"cs": "{n} e-mailů ze sady „{name}“ ({categories} kategorií), stejných pro všechny modely",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} úloh ze sady „{name}“ ({labels} štítků), stejných pro všechny modely",
@@ -129,6 +132,17 @@ TEXTS = {
     # {span} = rozsah paměti, hotový text „N=3“ nebo „—“.
     "bench.memory.errors": {"cs": "chyby: o krok vedle {near}, nejnovější značka {latest}, jiné {other}, neplatné {invalid}; rozsah paměti {span}",
                             "en": "errors: one step off {near}, most recent sign {latest}, other {other}, invalid {invalid}; memory span {span}"},
+    # Závora (--barrier): bench.barrier.rule je popisek v poznámce za řádkem modelu („pravidlo 2 3/5“). V bench.barrier.errors
+    # jsou {false_go}, {needless} a třídy {agree}, {conflict_high} (vyšší pravidlo přebíjí semafor nebo značku), {conflict_light}
+    # (semafor přebíjí značku), {last} hotové zlomky („0/17“), {invalid} počet, {auroc} a {threshold} čísla na dvě desetinná
+    # místa (AUROC bez úloh jedné třídy „—“), {best} vyvážená přesnost při nejlepším prahu v procentech („95%“).
+    "bench.barrier.rule": {"cs": "pravidlo {n}", "en": "rule {n}"},
+    "bench.barrier.errors": {"cs": "falešný průjezd {false_go}, zbytečné stání {needless}, neplatné {invalid}; shodné {agree}, "
+                                   "přebitý semafor {conflict_high}, semafor přebil značku {conflict_light}, poslední pravidlo {last}; "
+                                   "AUROC {auroc}, nejlepší práh {threshold} → vyvážená {best}",
+                             "en": "false go {false_go}, needless stop {needless}, invalid {invalid}; agree {agree}, "
+                                   "light overridden {conflict_high}, light over sign {conflict_light}, last rule {last}; "
+                                   "AUROC {auroc}, best threshold {threshold} → balanced {best}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -159,6 +173,7 @@ TEXTS = {
                               "en": "The --mirror and --inject options cannot be combined with --public."},
     "bench.err.pairsSigns": {"cs": "Volba --pairs jde jen s --signs.", "en": "The --pairs option works only with --signs."},
     "bench.err.countMemory": {"cs": "Volba --count jde jen s --memory.", "en": "The --count option works only with --memory."},
+    "bench.err.lanesBarrier": {"cs": "Volba --lanes se s --barrier nekombinuje.", "en": "The --lanes option cannot be combined with --barrier."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",
