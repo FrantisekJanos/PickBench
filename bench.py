@@ -1260,6 +1260,22 @@ def print_memory(r):
           flush=True)
 
 
+def barrier_note(r):
+    """Poznámka za řádkem modelu: přesnost podle rozhodujícího pravidla."""
+    return class_note(r["by_rule"], {n: i18n.t("bench.barrier.rule", n=n) for n in BARRIER_RULES})
+
+
+def print_barrier(r):
+    """Řádek závory pod řádkem modelu: chyby, přesnost podle čtyř tříd, AUROC a nejlepší práh s vyváženou přesností."""
+    frac = lambda counts: f"{counts[0]}/{counts[1]}"
+    c, (t, best) = r["by_class"], r["threshold"]
+    auroc = "—" if r["auroc"] is None else f"{r['auroc']:.2f}"
+    print(" " * 20 + i18n.t("bench.barrier.errors", false_go=frac(r["false_go"]), needless=frac(r["needless"]), invalid=r["invalid"],
+                            agree=frac(c["agree"]), conflict_high=frac(c["conflict_high"]), conflict_light=frac(c["conflict_light"]),
+                            last=frac(c["last"]), auroc=auroc,
+                            threshold=f"{t:.2f}", best=pct(best)), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

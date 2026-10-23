@@ -129,6 +129,17 @@ TEXTS = {
     # {span} = rozsah paměti, hotový text „N=3“ nebo „—“.
     "bench.memory.errors": {"cs": "chyby: o krok vedle {near}, nejnovější značka {latest}, jiné {other}, neplatné {invalid}; rozsah paměti {span}",
                             "en": "errors: one step off {near}, most recent sign {latest}, other {other}, invalid {invalid}; memory span {span}"},
+    # Závora (--barrier): bench.barrier.rule je popisek v poznámce za řádkem modelu („pravidlo 2 3/5“). V bench.barrier.errors
+    # jsou {false_go}, {needless} a třídy {agree}, {conflict_high} (vyšší pravidlo přebíjí semafor nebo značku), {conflict_light}
+    # (semafor přebíjí značku), {last} hotové zlomky („0/17“), {invalid} počet, {auroc} a {threshold} čísla na dvě desetinná
+    # místa (AUROC bez úloh jedné třídy „—“), {best} vyvážená přesnost při nejlepším prahu v procentech („95%“).
+    "bench.barrier.rule": {"cs": "pravidlo {n}", "en": "rule {n}"},
+    "bench.barrier.errors": {"cs": "falešný průjezd {false_go}, zbytečné stání {needless}, neplatné {invalid}; shodné {agree}, "
+                                   "přebitý semafor {conflict_high}, semafor přebil značku {conflict_light}, poslední pravidlo {last}; "
+                                   "AUROC {auroc}, nejlepší práh {threshold} → vyvážená {best}",
+                             "en": "false go {false_go}, needless stop {needless}, invalid {invalid}; agree {agree}, "
+                                   "light overridden {conflict_high}, light over sign {conflict_light}, last rule {last}; "
+                                   "AUROC {auroc}, best threshold {threshold} → balanced {best}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
