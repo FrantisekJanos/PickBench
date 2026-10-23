@@ -890,6 +890,7 @@ const ALT = {                                              // jinak formulované
   category: 'Decide which single category this e-mail belongs to, based on what the sender wants.',
   largest: 'Every gate carries a number. Pick the gate whose number is the greatest.',
   allowed: 'Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.',
+  recall: 'For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.',
 };
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
   const key = Object.keys(q)[0];
@@ -1690,6 +1691,33 @@ function signRow(lanes, rand) {                            // { vehicle, signs, 
   const open = signs.flatMap((s, i) => signAllowed(vehicle, s) ? [i] : []);
   if (open.length !== 1) throw new Error(`signRow: ${open.length} lanes open instead of 1: ${JSON.stringify(signs)}`);      // zaručuje to konstrukce; nic se neopravuje potichu
   return { vehicle, signs, truth: open[0], cls };
+}
+
+// Paměťová stopa: abeceda značek, štítky kroků, stav pro model a otázka, stejné jako v bench.py (MEMORY_*, memory_label, memory_state, memory_question).
+// Historie je nejstarší první. Stránka má jen výchozí podobu stavu (dohledání podle štítku); podoba --count je jen v bench.py. Co jde do modelu, je anglicky.
+const MEMORY_SIGNS = ['circle', 'square', 'star', 'triangle', 'arrow', 'moon', 'heart', 'cross', 'diamond', 'hexagon', 'bell', 'leaf'];
+const MEMORY_STEPS = [1, 2, 3, 4, 5, 6, 7, 8];             // N: o kolik kroků zpět se model ptá
+const MEMORY_LENGTH_MAX = 12;                              // nejdelší historie (L)
+const MEMORY_SPAN_SHARE = 0.8;                             // rozsah paměti: největší N, do kterého je přesnost u každého N aspoň tolik
+const gateKeys = gates => [...Array(gates)].map((_, i) => `gate_${i + 1}`);
+const memoryLabel = steps => steps === 1 ? '1 step back' : `${steps} steps back`;
+function memoryState(history, steps, signs) {              // stav ve stejném tvaru a pořadí klíčů jako memory_state(…, count=False) v bench.py
+  const passed = {};
+  history.forEach((sign, i) => passed[memoryLabel(history.length - i)] = sign);
+  const state = { signs_passed: passed, target: memoryLabel(steps) };
+  gateKeys(signs.length).forEach((k, i) => state[k] = signs[i]);
+  return state;
+}
+function memoryQuestion(gates) {                           // popisky bran jako edgeName (ta stojí mimo blok)
+  const criteria = {};
+  gateKeys(gates).forEach((k, i) => criteria[k] = `Gate ${i + 1}` + (i === 0 ? ' (leftmost)' : i === gates - 1 ? ' (rightmost)' : ''));
+  return { recall: { type: 'choice', instructions: 'signs_passed maps how many steps back each sign was passed to that sign. Look up the sign at target. Choose the gate that shows that sign.', criteria } };
+}
+// Zahřívací úloha: pevná, bez losování. Historie je celá abeceda (nejdelší stav, takže odhad délky dotazu ve stepEstimate je horní), N = 2,
+// brány jsou posledních K značek v pořadí historie; hledaná značka (bell) je mezi nimi pro každé K = 2–8.
+function memoryWarm(gates) {
+  const history = [...MEMORY_SIGNS];
+  return { history, steps: 2, signs: history.slice(MEMORY_LENGTH_MAX - gates), truth: gates - 2 };
 }
 // ==== sdíleno s Pythonem: konec ====
 

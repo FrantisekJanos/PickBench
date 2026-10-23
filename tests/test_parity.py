@@ -275,5 +275,53 @@ class Signs(unittest.TestCase):
         self.assertTrue(got.startswith("signRow: 3 lanes open instead of 1: "), got)
 
 
+SPEC_HISTORY = ["circle", "square", "star", "triangle", "arrow", "moon"]         # příklad ze specu první iterace paměťové stopy
+MEMORY_TASKS = [                                                                  # (historie, N, značky bran): příklad ze specu, N = 1, nejdelší historie s 8 branami
+    (SPEC_HISTORY, 3, ["arrow", "triangle", "moon", "star"]),
+    (["heart", "cross", "bell"], 1, ["cross", "bell"]),
+    (["leaf", "bell", "hexagon", "diamond", "cross", "heart", "moon", "arrow", "triangle", "star", "square", "circle"], 8,
+     ["triangle", "heart", "diamond", "moon", "bell", "arrow", "hexagon", "cross"]),
+]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Memory(unittest.TestCase):
+    def test_constants_are_the_same_as_in_bench(self):
+        import bench
+        js = run_js("({ signs: MEMORY_SIGNS, steps: MEMORY_STEPS, length: MEMORY_LENGTH_MAX, share: MEMORY_SPAN_SHARE, labels: [1, 2, 12].map(memoryLabel) })", None)
+        self.assertEqual(js["signs"], list(bench.MEMORY_SIGNS))                         # pořadí rozhoduje o losování
+        self.assertEqual(js["steps"], list(bench.MEMORY_STEPS))
+        self.assertEqual((js["length"], js["share"]), (bench.MEMORY_LENGTH_MAX, bench.MEMORY_SPAN_SHARE))
+        self.assertEqual(js["labels"], [bench.memory_label(k) for k in (1, 2, 12)])
+
+    def test_state_and_question_match_bench(self):
+        import bench
+        got = run_js("arg.map(([h, n, s]) => memoryState(h, n, s))", MEMORY_TASKS)
+        for (history, steps, signs), js in zip(MEMORY_TASKS, got):
+            self.assertEqual(json.dumps(js), json.dumps(bench.memory_state(history, steps, signs)), (history, steps))      # bajtově stejně, i pořadí klíčů
+        got = run_js("arg.map(g => [gateKeys(g), memoryQuestion(g)])", list(range(2, 9)))
+        for gates, (keys, question) in zip(range(2, 9), got):
+            self.assertEqual(keys, bench.gate_keys(gates))
+            self.assertEqual(json.dumps(question), json.dumps(bench.memory_question(gates)), gates)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  recall: '([^'\\]*)',$", alt, re.M), [bench.ALT["recall"]])
+        self.assertNotIn("recall_count", alt)                      # podoba --count je jen v bench.py
+
+    def test_warm_task_is_fixed_and_has_the_target_at_the_gates(self):
+        import bench
+        for gates, warm in zip(range(2, 9), run_js("arg.map(g => memoryWarm(g))", list(range(2, 9)))):
+            history, steps, signs, truth = warm["history"], warm["steps"], warm["signs"], warm["truth"]
+            self.assertEqual(list(warm), ["history", "steps", "signs", "truth"])
+            self.assertEqual(history, list(bench.MEMORY_SIGNS))                         # nejdelší historie: horní odhad délky dotazu
+            self.assertIn(steps, bench.MEMORY_STEPS)
+            self.assertEqual(signs, history[len(history) - gates:])                     # souvislý úsek na konci historie
+            self.assertEqual(signs[truth], history[len(history) - steps])
+            self.assertEqual(signs.count(signs[truth]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
