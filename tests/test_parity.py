@@ -5,12 +5,14 @@ Před něj jde blok textů (značky „texty“): věty chyb validátoru bere sd
 Bez programu node se testy přeskočí."""
 import json
 import math
+import random
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -273,6 +275,138 @@ class Signs(unittest.TestCase):
     def test_broken_guarantee_raises_instead_of_fixing(self):
         got = run_js("(() => { signAllowed = () => true; try { signRow(3, Math.random); return null; } catch (e) { return e.message; } })()", None)
         self.assertTrue(got.startswith("signRow: 3 lanes open instead of 1: "), got)
+
+
+SPEC_HISTORY = ["circle", "square", "star", "triangle", "arrow", "moon"]         # příklad ze specu první iterace paměťové stopy
+MEMORY_TASKS = [                                                                  # (historie, N, značky bran): příklad ze specu, N = 1, nejdelší historie s 8 branami
+    (SPEC_HISTORY, 3, ["arrow", "triangle", "moon", "star"]),
+    (["heart", "cross", "bell"], 1, ["cross", "bell"]),
+    (["leaf", "bell", "hexagon", "diamond", "cross", "heart", "moon", "arrow", "triangle", "star", "square", "circle"], 8,
+     ["triangle", "heart", "diamond", "moon", "bell", "arrow", "hexagon", "cross"]),
+]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Memory(unittest.TestCase):
+    def test_constants_are_the_same_as_in_bench(self):
+        import bench
+        js = run_js("({ signs: MEMORY_SIGNS, steps: MEMORY_STEPS, length: MEMORY_LENGTH_MAX, share: MEMORY_SPAN_SHARE, labels: [1, 2, 12].map(memoryLabel) })", None)
+        self.assertEqual(js["signs"], list(bench.MEMORY_SIGNS))                         # pořadí rozhoduje o losování
+        self.assertEqual(js["steps"], list(bench.MEMORY_STEPS))
+        self.assertEqual((js["length"], js["share"]), (bench.MEMORY_LENGTH_MAX, bench.MEMORY_SPAN_SHARE))
+        self.assertEqual(js["labels"], [bench.memory_label(k) for k in (1, 2, 12)])
+
+    def test_state_and_question_match_bench(self):
+        import bench
+        got = run_js("arg.map(([h, n, s]) => memoryState(h, n, s))", MEMORY_TASKS)
+        for (history, steps, signs), js in zip(MEMORY_TASKS, got):
+            self.assertEqual(json.dumps(js), json.dumps(bench.memory_state(history, steps, signs)), (history, steps))      # bajtově stejně, i pořadí klíčů
+        got = run_js("arg.map(g => [gateKeys(g), memoryQuestion(g)])", list(range(2, 9)))
+        for gates, (keys, question) in zip(range(2, 9), got):
+            self.assertEqual(keys, bench.gate_keys(gates))
+            self.assertEqual(json.dumps(question), json.dumps(bench.memory_question(gates)), gates)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  recall: '([^'\\]*)',$", alt, re.M), [bench.ALT["recall"]])
+        self.assertNotIn("recall_count", alt)                      # podoba --count je jen v bench.py
+
+    def test_warm_task_is_fixed_and_has_the_target_at_the_gates(self):
+        import bench
+        for gates, warm in zip(range(2, 9), run_js("arg.map(g => memoryWarm(g))", list(range(2, 9)))):
+            history, steps, signs, truth = warm["history"], warm["steps"], warm["signs"], warm["truth"]
+            self.assertEqual(list(warm), ["history", "steps", "signs", "truth"])
+            self.assertEqual(history, list(bench.MEMORY_SIGNS))                         # nejdelší historie: horní odhad délky dotazu
+            self.assertIn(steps, bench.MEMORY_STEPS)
+            self.assertEqual(signs, history[len(history) - gates:])                     # souvislý úsek na konci historie
+            self.assertEqual(signs[truth], history[len(history) - steps])
+            self.assertEqual(signs.count(signs[truth]), 1)
+
+    def test_generated_rows_keep_the_rules_of_bench(self):
+        import bench
+        for gates in range(2, 9):
+            for row in run_js(MEMORY_ROWS_JS, {"seed": gates, "gates": gates, "n": 500}):
+                history, steps, signs, truth = row["history"], row["steps"], row["signs"], row["truth"]
+                with self.subTest(gates=gates, history=history, steps=steps, signs=signs):
+                    self.assertEqual(list(row), ["history", "steps", "signs", "truth"])
+                    self.assertIn(steps, bench.MEMORY_STEPS)
+                    self.assertTrue(max(steps, gates) <= len(history) <= bench.MEMORY_LENGTH_MAX)
+                    self.assertEqual(len(set(history)), len(history))                         # bez opakování
+                    self.assertTrue(set(history) <= set(bench.MEMORY_SIGNS))
+                    self.assertEqual(len(signs), gates)
+                    self.assertEqual(len(set(signs)), gates)
+                    self.assertTrue(set(signs) <= set(history))
+                    pos = sorted(history.index(s) for s in signs)
+                    self.assertEqual(pos, list(range(pos[0], pos[0] + gates)))                # souvislý úsek historie
+                    self.assertEqual(signs[truth], history[len(history) - steps])
+                    self.assertEqual(signs.count(signs[truth]), 1)
+
+    def test_steps_are_spread_evenly(self):
+        counts = Counter(row["steps"] for row in run_js(MEMORY_ROWS_JS, {"seed": 1, "gates": 4, "n": 800}))
+        self.assertEqual(sorted(counts), [1, 2, 3, 4, 5, 6, 7, 8])
+        for steps, n in counts.items():
+            self.assertTrue(60 <= n <= 140, (steps, n))
+
+    def test_strategies_without_counting_stay_near_chance(self):      # stejné strategie jako tests/test_memory.py, na generátoru stránky
+        # Neprojde-li tento test, implementace se zastaví a zapíše to do reportu; generátor se neladí potichu.
+        for gates in (3, 4, 8):
+            rows, rng = run_js(MEMORY_ROWS_JS, {"seed": 11, "gates": gates, "n": 4000}), random.Random(1)
+            cases = [(r["history"], r["signs"], r["truth"]) for r in rows]
+
+            def kth(k):                                                # vždy k-tá nejstarší značka okna
+                return lambda h, s: sorted(range(gates), key=lambda i: h.index(s[i]))[k]
+
+            def newest_sign(h, s):                                     # nejnovější značka historie, když je na branách; jinak náhodně
+                return s.index(h[-1]) if h[-1] in s else rng.randrange(gates)
+
+            def both_neighbours(h, s):                                 # značka, jejíž oba sousedé z historie jsou na branách; jinak náhodně
+                p = {h.index(x) for x in s}
+                return rng.choice([i for i, x in enumerate(s) if h.index(x) - 1 in p and h.index(x) + 1 in p] or range(gates))
+
+            strategies = {f"k={k + 1}": kth(k) for k in range(gates)} | {"newest": newest_sign, "neighbours": both_neighbours}
+            for name, pick in strategies.items():
+                acc = sum(pick(h, s) == top for h, s, top in cases) / len(cases)
+                with self.subTest(gates=gates, strategy=name, acc=acc):
+                    self.assertLessEqual(acc - 1 / gates, 0.15)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(MEMORY_ROWS_JS, {"seed": 7, "gates": 4, "n": 50})
+        self.assertEqual(run_js(MEMORY_ROWS_JS, {"seed": 7, "gates": 4, "n": 50}), first)
+        self.assertNotEqual(run_js(MEMORY_ROWS_JS, {"seed": 8, "gates": 4, "n": 50}), first)
+
+    def test_broken_guarantee_raises_instead_of_fixing(self):      # stejné vstupy jako tests/test_memory.py; chyba se chytá v JS (run_js bere jen konec výpisu)
+        bad = [[["moon", "moon", "star"], 1, 3],                   # opakování v historii
+               [["circle", "square"], 1, 3],                       # méně značek než bran
+               [SPEC_HISTORY, 1, 0],                               # žádná brána
+               [SPEC_HISTORY, 7, 3], [SPEC_HISTORY, 0, 3]]         # N mimo 1…L
+        got = run_js("arg.map(([h, n, k]) => { try { memoryGates(Math.random, h, n, k); return null; } catch (e) { return e.message; } })", bad)
+        for (history, steps, gates), message in zip(bad, got):
+            self.assertTrue(str(message).startswith(f"memoryGates: {steps} steps back, {gates} gates in "), (history, steps, gates, message))
+
+    def test_errors_and_span_match_bench(self):                    # ručně sestavené úlohy a počty z tests/test_memory.py (Errors)
+        import bench
+        ten = list(bench.MEMORY_SIGNS[:10])                                             # circle … hexagon
+        five = (ten, 4, ["heart", "cross", "moon", "hexagon", "circle"], 0)           # heart 4 kroky zpět; cross 3, moon 5, hexagon 1, circle 10
+        two = (ten, 2, ["diamond", "hexagon", "cross"], 0)                            # N=2: nejnovější (hexagon) je zároveň soused
+        keys = bench.gate_keys(5)
+        cases = [five] * 8 + [two]
+        choices = ["gate_1", "gate_2", "gate_3", "gate_4", "gate_5", None, "nonsense", ["gate_1"], "gate_2"]
+        js_cases = [{"history": h, "steps": n, "signs": s, "truth": top} for h, n, s, top in cases]
+        got = run_js("memoryErrors(arg.cases, arg.choices, arg.keys)", {"cases": js_cases, "choices": choices, "keys": keys})
+        self.assertEqual(json.dumps(got), json.dumps(bench.memory_errors(cases, choices, keys)))       # i pořadí klíčů
+        self.assertEqual(got, {"near": 3, "latest": 1, "other": 1, "invalid": 3})
+        full = {n: [10, 10] for n in bench.MEMORY_STEPS}
+        tables = [full, {**full, 1: [7, 10]}, {**full, 3: [7, 10]}, {**full, 5: [8, 10]}, {**full, 5: [28, 35]}, {**full, 8: [3, 4]},
+                  {**full, 2: [0, 0]}, {n: [0, 0] for n in bench.MEMORY_STEPS}]
+        self.assertEqual([bench.memory_span(t) for t in tables], [8, None, 2, 8, 8, 7, 1, None])       # —, propad N=3 při N=4 v pořádku, přesně 80 %, prázdné N
+        self.assertEqual(run_js("arg.map(t => memorySpan(t))", tables), [bench.memory_span(t) for t in tables])
+
+
+# Generátor paměťové stopy stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady memoryRow.
+MEMORY_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "memoryRow(arg.gates, rand)")
+assert MEMORY_ROWS_JS != ROWS_JS
 
 
 if __name__ == "__main__":

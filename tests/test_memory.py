@@ -4,7 +4,10 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
+import subprocess
 import sys
 import time
 import unittest
@@ -447,6 +450,57 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --memory tev1", text)
             self.assertIn("\n--memory:   ", text)
             self.assertIn("\n--count:    ", text)
+
+
+def page_source():
+    return (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+class Page(unittest.TestCase):                                         # scénář ve stránce; stav, generátor a výpočty hlídá tests/test_parity.py (Memory)
+    def test_every_sign_has_its_own_symbol(self):
+        page = page_source()
+        body = page.split("\nfunction drawMemorySign(", 1)[1].split("\n}\n", 1)[0]
+        paths = re.findall(r"case '(\w+)':", body)
+        glyphs = re.findall(r"(\w+): '", re.search(r"\nconst MEMORY_GLYPH = \{(.*?)\};", page).group(1))
+        self.assertEqual(sorted(paths + glyphs), sorted(bench.MEMORY_SIGNS))             # každá značka právě jednou: cestou, nebo emoji
+        self.assertEqual(glyphs, ["moon", "heart", "bell", "leaf"])
+
+    def test_scenario_is_offered_selected_and_draws_its_trail(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="memory" data-i18n="opt.scenario.memory"></option>'), 1)
+        self.assertEqual(page.count('<canvas id="trail" width="300" height="70" hidden></canvas>'), 1)
+        # pás je ve sticky #stage ve sloupci se silnicí (při rolování zůstane u ní, šířka = šířka silnice);
+        # silnice se zmenší, aby se oba vešly do výšky, kterou dřív měla sama
+        self.assertEqual(page.count('<div id="stage"><div id="road-col"><canvas id="road" width="300" height="600"></canvas>'
+                                    '<canvas id="trail" width="300" height="70" hidden></canvas></div>'), 1)
+        self.assertEqual(page.count("#road-col:has(#trail:not([hidden])) canvas#road { height:calc((min(600px, 100vh - 96px) - 8px) * 600 / 670); }"), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory }[v];"), 1)
+        self.assertEqual(page.count("['queue', 'legend', 'confPanel', 'trail'].forEach("), 1)        # pás se schovává jako ostatní panely scénáře
+        self.assertEqual(page.count("SC.drawTrail?.(g);"), 1)
+        self.assertEqual(page.count("drawTrail(g) {"), 1)                                         # háček má jen tento scénář
+        self.assertEqual(page.count("    c.hidden = !r;"), 1)                                     # benchmark bez hry nemá řady: prázdný pás se schová
+        # zahřívací úloha je pevná: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(memoryWarm(LANES), null, null); },"), 1)
+        body = page.split("\nconst memory = {", 1)[1].split("\n};\n", 1)[0]
+        for call in ("memoryRow(LANES, rnd)", "memoryState(", "memoryQuestion(LANES)", "memoryErrorKind(", "memorySpan(", "gateKeys(LANES).indexOf(a.recall?.choice)"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_trail_shows_the_row_being_decided(self):
+        # Po tazích posune turnCells auto o y + 0,6: projetá řada zůstane na y = −0,6, zatímco model rozhoduje další.
+        # Pás má ukázat tu další; projetou jen těsně po průjezdu (pohyb mezi tahy, v reálném čase půl pole).
+        fn = re.search(r"\nfunction memoryTrailRow\(g\) \{.*?\n\}\n", page_source(), re.S).group(0)
+        cases = [
+            {"history": [{"id": 1, "y": -0.6, "result": "ok"}], "rows": [{"id": 1, "y": -0.6, "result": "ok"}, {"id": 2, "y": 3, "result": None}]},
+            {"history": [{"id": 1, "y": -0.3, "result": "bad"}], "rows": [{"id": 1, "y": -0.3, "result": "bad"}, {"id": 2, "y": 2.7, "result": None}]},
+            {"history": [{"id": 1, "y": -1.5, "result": "ok"}], "rows": [{"id": 2, "y": 1.5, "result": None}]},
+            {"history": [], "rows": [{"id": 1, "y": 0.4, "result": None}, {"id": 2, "y": 3.4, "result": None}]},
+            {"history": [], "rows": []},                                                          # benchmark bez hry: žádná řada, pás se schová
+        ]
+        script = fn + f"process.stdout.write(JSON.stringify({json.dumps(cases)}.map(g => memoryTrailRow(g)?.id ?? null)));"
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(json.loads(out.stdout), [2, 1, 2, 1, None])
 
 
 if __name__ == "__main__":
