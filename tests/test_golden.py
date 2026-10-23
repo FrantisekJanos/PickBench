@@ -38,6 +38,8 @@ BENCH = {                                            # jméno zlatého souboru �
     "bench-signs-pairs": ["12", "--signs", "--pairs", "--deadline-ms", "9", "m1", "m2"],
     "bench-memory": ["16", "--memory", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],       # bez --lanes: drží i výchozí 4 brány
     "bench-memory-count": ["12", "--memory", "--count", "--lanes", "3", "m1"],
+    "bench-barrier": ["24", "--barrier", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],     # 24 úloh: objeví se všech pět pravidel
+    "bench-barrier-plain": ["24", "--barrier", "m1"],
 }
 HWBENCH = {                                          # jméno zlatého souboru → argumenty hwbench.py
     "hwbench-latency": ["latency", "--n", "20", "m1"],
@@ -89,6 +91,9 @@ def fake_urlopen(req, timeout=None):
     doc, seed = json.loads(body), zlib.crc32(body)
     answers = {}
     for i, (key, question) in enumerate(doc["questions"].items()):
+        if question.get("type") == "noul":                  # otázka ano/ne: pravděpodobnost „ano“ 0.00–1.00, bez confidence (jako Ollama)
+            answers[key] = {"noul": ((seed + i) % 101) / 100}
+            continue
         options = list(question["criteria"])
         answers[key] = {"choice": options[(seed + i) % len(options)], "confidence": 0.5 + (seed % 50) / 100}
     out = {"model": doc["model"], "answers": answers, "usage": {"input_tokens": len(body) // 4, "output_tokens": 1}}
@@ -230,7 +235,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "hwbench-latency", "hwbench-questions", "hwbench-context"):
+        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "hwbench-latency", "hwbench-questions", "hwbench-context"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)

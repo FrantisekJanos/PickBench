@@ -4,6 +4,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -11,6 +12,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 60 --numbers --lanes 4 --mirror tev1
           python bench.py 100 --signs --pairs tev1
           python bench.py 100 --memory tev1
+          python bench.py 100 --barrier tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -25,6 +27,14 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             Při 100 úlohách připadá na jedno N asi 12 úloh, takže rozsah paměti je hrubý údaj.
 --count:    jen s --memory: stejné úlohy, ale historie je seznam (nejstarší první) a počet kroků zpět je číslo;
             měří počítání polohy v seznamu.
+--barrier:  závora: auto stojí u křižovatky a model odpoví, jestli smí projet. Otázka je typu noul: odpověď je pravděpodobnost
+            „ano“, jeď je aspoň 0,5, jistota = max(p, 1 − p). Pět pravidel s pořadím je v zadání, takže se měří čtení zadání
+            a stavu, ne znalost předpisů. N křižovatek (výchozí 100), tři čtvrtiny z nich jeď. Za řádkem modelu přesnost
+            podle rozhodujícího pravidla, pod ním falešný průjezd, zbytečné stání, neplatné odpovědi a přesnost ve čtyřech
+            třídách: shodné (nižší pravidlo říká totéž), přebitý semafor (pravidlo 1–3 ruší opačný semafor nebo značku),
+            semafor přebil značku, poslední pravidlo; dál AUROC a nejlepší práh s vyváženou přesností (průměr jeď a stůj).
+            S --mirror je druhou variantou obrácená otázka „Must the car stop now?“ (pokyn trojského koně je v ní obrácený);
+            řádek variant ji vypisuje jako „obrácené pořadí“. S --lanes se nekombinuje.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
