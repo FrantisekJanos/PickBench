@@ -48,17 +48,19 @@ async () => {
   const log = [];
 
   await sleep(1500); snap();                                // po načtení, s prvním stavem GPU
-  for (const scenario of ['numbers', 'signs', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
+  for (const scenario of ['numbers', 'signs', 'memory', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
   await use({ scenario: 'neni-v-nabidce.json' }); snap();
 
   // benchmark bez hry: Pravidla a Náhodně, všechny scénáře, limit, trojský kůň
   log.push((await run('bench', { inject: true, deadline: 50 })).why);
   log.push((await run('bench', { scenario: 'numbers', lanes: 4, inject: true })).why);
   log.push((await run('bench', { scenario: 'signs', lanes: 8, inject: true })).why);
+  log.push((await run('bench', { scenario: 'memory', lanes: 8, inject: true })).why);
   for (const scenario of [...emails.slice(0, 2), ...publics]) log.push((await run('bench', { scenario, benchn: 10, deadline: 50 })).why);
   Math.random = () => 0;                                    // řidič Náhodně volí vždy první možnost: stejné texty při každé prohlídce
   log.push((await run('bench', { driver: 'random', inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'signs', lanes: 4, inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'memory', lanes: 4, inject: true })).why);
   if (emails.length) log.push((await run('bench', { driver: 'random', scenario: emails[0], benchn: 10, inject: true })).why);
   for (const scenario of publics) log.push((await run('bench', { driver: 'random', scenario, benchn: 10 })).why);
 
@@ -67,6 +69,7 @@ async () => {
   log.push((await run('game', { scenario: 'numbers', runlen: 12 })).why);
   log.push((await run('game', { driver: 'random', scenario: 'numbers', runlen: 12, inject: true })).why);
   log.push((await run('game', { scenario: 'signs', lanes: 8, runlen: 12, inject: true })).why);
+  log.push((await run('game', { scenario: 'memory', lanes: 8, runlen: 12, inject: true })).why);
   if (emails.length) {
     log.push((await run('game', { scenario: emails[0], runlen: 12 })).why);
     log.push((await run('game', { driver: 'random', scenario: emails[0], runlen: 16, inject: true })).why);
@@ -95,6 +98,7 @@ async () => {
     // kvůli otisku dotazů (řádek „asks“): modelem projde každý scénář i volby, které dotaz mění (2. otázka, zrcadla, trojský kůň)
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'numbers', lanes: 4, mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'signs', lanes: 5, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'memory', lanes: 4, mirror: true, inject: true })).why);
     if (emails.length) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: emails[0], benchn: 8, inject: true })).why);
     for (const scenario of publics) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario, benchn: 6 })).why);
   }
