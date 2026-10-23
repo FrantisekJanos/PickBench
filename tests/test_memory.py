@@ -241,5 +241,31 @@ class StateAndQuestion(unittest.TestCase):
                 self.assertLess(longest / 4, 600)
 
 
+class Errors(unittest.TestCase):
+    def test_error_classes_on_hand_built_choices(self):
+        five = (TEN, 4, ["heart", "cross", "moon", "hexagon", "circle"], 0)   # heart 4 kroky zpět; cross 3, moon 5, hexagon 1, circle 10
+        two = (TEN, 2, ["diamond", "hexagon", "cross"], 0)                  # N=2: nejnovější (hexagon) je zároveň soused
+        keys = bench.gate_keys(5)
+        cases = [five] * 8 + [two]
+        choices = ["gate_1", "gate_2", "gate_3", "gate_4", "gate_5", None, "nonsense", ["gate_1"], "gate_2"]
+        self.assertEqual(bench.memory_errors(cases, choices, keys), {"near": 3, "latest": 1, "other": 1, "invalid": 3})
+        self.assertEqual(list(bench.memory_errors(cases, choices, keys)), ["near", "latest", "other", "invalid"])
+        self.assertEqual(bench.memory_errors([five], ["gate_1"], keys), {"near": 0, "latest": 0, "other": 0, "invalid": 0})
+
+    def test_memory_span(self):
+        full = {n: [10, 10] for n in bench.MEMORY_STEPS}
+        self.assertEqual(bench.memory_span(full), 8)
+        self.assertIsNone(bench.memory_span({**full, 1: [7, 10]}))                 # nezvládne ani N=1 → —
+        self.assertEqual(bench.memory_span({**full, 3: [7, 10]}), 2)                # N=3 propadne, N=4 projde: rozsah je 2
+        self.assertEqual(bench.memory_span({**full, 5: [8, 10]}), 8)                # přesně 80 % stačí
+        self.assertEqual(bench.memory_span({**full, 5: [28, 35]}), 8)               # 28/35 = 80 %, i v plovoucí čárce
+        self.assertEqual(bench.memory_span({**full, 8: [3, 4]}), 7)
+
+    def test_memory_span_needs_tasks_at_every_step(self):                        # N bez úloh rozsah ukončí, nedělí se nulou
+        full = {n: [10, 10] for n in bench.MEMORY_STEPS}
+        self.assertEqual(bench.memory_span({**full, 2: [0, 0]}), 1)
+        self.assertIsNone(bench.memory_span({n: [0, 0] for n in bench.MEMORY_STEPS}))
+
+
 if __name__ == "__main__":
     unittest.main()

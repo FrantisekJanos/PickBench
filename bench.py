@@ -541,6 +541,43 @@ def memory_question(gates, count=False):
     return {key: {"type": "choice", "instructions": text, "criteria": position_criteria(gate_keys(gates), "Gate")}}
 
 
+def memory_errors(cases, choices, keys):
+    """Rozbor chybných voleb podle toho, kolik kroků zpět (k) je zvolená značka; správná volba se nepočítá nikam.
+
+    near: zvolená značka je o krok vedle hledané (|k − N| = 1).
+    latest: zvolená značka je nejnovější (k = 1) a zároveň není near.
+    other: ostatní chybné volby mezi branami.
+    invalid: volba, která není klíčem brány (None, jiný řetězec, jiný typ)."""
+    counts = {"near": 0, "latest": 0, "other": 0, "invalid": 0}
+    for (history, steps, signs, top), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in keys):
+            counts["invalid"] += 1
+            continue
+        picked = keys.index(choice)
+        if picked == top:
+            continue
+        k = len(history) - history.index(signs[picked])
+        if abs(k - steps) == 1:
+            counts["near"] += 1
+        elif k == 1:
+            counts["latest"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def memory_span(by_steps):
+    """Rozsah paměti: největší N, pro které má každé n ≤ N aspoň jednu úlohu a přesnost aspoň MEMORY_SPAN_SHARE; jinak None.
+
+    N bez úloh rozsah ukončí. Porovnává se podíl ok / n, ne ok >= 0,8 * n (plovoucí čárka by 28/35 neprošla)."""
+    span = None
+    for steps, (ok, n) in by_steps.items():
+        if n == 0 or ok / n < MEMORY_SPAN_SHARE:
+            break
+        span = steps
+    return span
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
