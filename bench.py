@@ -892,7 +892,10 @@ def ask_noul(model, state, questions, label=""):
         out, ms = post(model, {"state": state, "questions": questions})
     except Exception as e:
         raise RuntimeError(f"{e} ({label})" if label else str(e)) from e
-    a = (out.get("answers") or {}).get(next(iter(questions))) or {}
+    answers = out.get("answers")
+    a = answers.get(next(iter(questions))) if isinstance(answers, dict) else None
+    if not isinstance(a, dict):                       # nečíselná nebo poškozená odpověď = neplatná (noul None), běh nespadne
+        a = {}
     usage = out.get("usage")
     return a.get("noul"), ms, usage.get("input_tokens") if isinstance(usage, dict) else None
 

@@ -245,6 +245,15 @@ class Decision(unittest.TestCase):
         with mock.patch.object(bench, "post", lambda m, p: ({"answers": {}, "usage": None}, 7.0)):
             self.assertEqual(bench.ask_noul("m", SPEC_STATE, bench.barrier_question()), (None, 7.0, None))
 
+    def test_malformed_answers_are_invalid_not_a_crash(self):
+        bad = [{"answers": {"go": 0.8}}, {"answers": {"go": "0.8"}}, {"answers": {"go": [0.8]}},
+               {"answers": [{"noul": 0.8}]}, {"answers": "x"}, {"answers": 5}, {"answers": {"go": True}}]
+        for out in bad:
+            with self.subTest(out=out), mock.patch.object(bench, "post", lambda m, p, out=out: (out, 7.0)):
+                self.assertEqual(bench.ask_noul("m", SPEC_STATE, bench.barrier_question()), (None, 7.0, None))
+                r, probs = bench.measure_noul("m", [(SPEC_STATE, True, ""), (SPEC_STATE, False, "")], bench.barrier_question())
+                self.assertEqual((r["acc"], probs), (0, [None, None]))
+
 
 class MeasureNoul(unittest.TestCase):
     """measure_noul na úlohách (stav s číslem úlohy, jeď?, popisek); podstrčený model odpovídá podle čísla úlohy."""
