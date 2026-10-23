@@ -175,5 +175,71 @@ class Generator(unittest.TestCase):
                     bench.memory_gates(random.Random(1), history, steps, gates)
 
 
+LOOKUP = {"signs_passed": {"6 steps back": "circle", "5 steps back": "square", "4 steps back": "star",
+                           "3 steps back": "triangle", "2 steps back": "arrow", "1 step back": "moon"},
+          "target": "3 steps back", "gate_1": "arrow", "gate_2": "triangle", "gate_3": "moon", "gate_4": "star"}      # stav ze specu, dohledání
+COUNT = {"signs_passed": ["circle", "square", "star", "triangle", "arrow", "moon"], "steps_back": 3,
+         "gate_1": "arrow", "gate_2": "triangle", "gate_3": "moon", "gate_4": "star"}                                   # stav ze specu, --count
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_labels(self):
+        self.assertEqual([bench.memory_label(k) for k in (1, 2, 12)], ["1 step back", "2 steps back", "12 steps back"])
+
+    def test_spec_example_states_and_truth(self):
+        gates = ["arrow", "triangle", "moon", "star"]
+        for count, want in ((False, LOOKUP), (True, COUNT)):
+            with self.subTest(count=count):
+                state = bench.memory_state(SPEC, 3, gates, count)
+                self.assertEqual(json.dumps(state), json.dumps(want))          # i pořadí klíčů a štítků ve slovníku
+                self.assertEqual(recall(state), "gate_2")
+        self.assertEqual(bench.memory_state(SPEC, 3, gates), LOOKUP)            # výchozí podoba je dohledání
+        self.assertIsNot(bench.memory_state(SPEC, 3, gates, True)["signs_passed"], SPEC)       # stav nesdílí seznam s úlohou
+
+    def test_questions_and_their_alternative_wordings(self):
+        criteria = {"gate_1": "Gate 1 (leftmost)", "gate_2": "Gate 2", "gate_3": "Gate 3", "gate_4": "Gate 4 (rightmost)"}
+        table = (
+            (False, "recall",
+             "signs_passed maps how many steps back each sign was passed to that sign. Look up the sign at target. "
+             "Choose the gate that shows that sign.",
+             "For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target "
+             "and pick the gate that shows it."),
+            (True, "recall_count",
+             "signs_passed lists the signs the car has passed, oldest first, so the last item is the most recent one "
+             "(1 step back). Choose the gate that shows the sign passed steps_back steps back.",
+             "The list signs_passed holds every sign the car went past, from the oldest to the newest; its last entry "
+             "is 1 step back. Pick the gate whose sign was passed exactly steps_back steps ago."),
+        )
+        for count, key, text, alt in table:
+            with self.subTest(count=count):
+                q = bench.memory_question(4, count)
+                self.assertEqual(list(q), [key])
+                self.assertEqual(q[key]["type"], "choice")
+                self.assertEqual(q[key]["instructions"], text)
+                self.assertEqual(q[key]["criteria"], criteria)
+                self.assertEqual(bench.ALT[key], alt)
+                self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt)
+                self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), ["gate_4", "gate_3", "gate_2", "gate_1"])
+        self.assertEqual(bench.memory_question(4), bench.memory_question(4, False))
+
+    def test_both_forms_carry_the_same_task(self):
+        for history, steps, signs, _ in bench.memory_cases(300, 6):
+            a, b = bench.memory_state(history, steps, signs), bench.memory_state(history, steps, signs, True)
+            with self.subTest(history=history, steps=steps):
+                self.assertEqual(list(a["signs_passed"].values()), b["signs_passed"])
+                self.assertEqual(list(a["signs_passed"]), [bench.memory_label(len(history) - i) for i in range(len(history))])
+                self.assertEqual(a["target"], bench.memory_label(b["steps_back"]))
+                self.assertEqual(a["signs_passed"][a["target"]], history[len(history) - steps])
+                self.assertEqual({k: a[k] for k in gates_of(a)}, {k: b[k] for k in gates_of(b)})
+
+    def test_state_with_eight_gates_stays_under_600_tokens(self):        # odhad: 4 znaky JSON na token, ne skutečná tokenizace
+        full = list(bench.MEMORY_SIGNS)                                    # L = 12, 8 bran
+        for count in (False, True):
+            with self.subTest(count=count):
+                self.assertLess(len(json.dumps(bench.memory_state(full, 8, full[:8], count))) / 4, 600)
+                longest = max(len(json.dumps(bench.memory_state(h, s, g, count))) for h, s, g, _ in bench.memory_cases(500, 8))
+                self.assertLess(longest / 4, 600)
+
+
 if __name__ == "__main__":
     unittest.main()

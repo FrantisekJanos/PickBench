@@ -516,12 +516,39 @@ def memory_cases(n, gates=4, seed=1):
     return [memory_case(rng, gates) for _ in range(n)]
 
 
+def memory_label(steps):
+    """Štítek kroku pro model: „1 step back“, jinak „k steps back“."""
+    return "1 step back" if steps == 1 else f"{steps} steps back"
+
+
+def memory_state(history, steps, signs, count=False):
+    """Stav pro model. Výchozí podoba (dohledání): signs_passed je slovník štítek kroku → značka, nejstarší první, target je
+    štítek hledané značky. count (počítání): signs_passed je seznam, nejstarší první, steps_back je číslo. Brány jsou v obou stejné."""
+    gates = dict(zip(gate_keys(len(signs)), signs))
+    if count:
+        return {"signs_passed": list(history), "steps_back": steps, **gates}
+    length = len(history)
+    return {"signs_passed": {memory_label(length - i): sign for i, sign in enumerate(history)}, "target": memory_label(steps), **gates}
+
+
+def memory_question(gates, count=False):
+    if count:
+        key, text = "recall_count", ("signs_passed lists the signs the car has passed, oldest first, so the last item is the most recent one "
+                                     "(1 step back). Choose the gate that shows the sign passed steps_back steps back.")
+    else:
+        key, text = "recall", ("signs_passed maps how many steps back each sign was passed to that sign. Look up the sign at target. "
+                               "Choose the gate that shows that sign.")
+    return {key: {"type": "choice", "instructions": text, "criteria": position_criteria(gate_keys(gates), "Gate")}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
     "category": "Decide which single category this e-mail belongs to, based on what the sender wants.",
     "largest": "Every gate carries a number. Pick the gate whose number is the greatest.",
     "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",
+    "recall": "For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.",
+    "recall_count": "The list signs_passed holds every sign the car went past, from the oldest to the newest; its last entry is 1 step back. Pick the gate whose sign was passed exactly steps_back steps ago.",
 }
 
 
