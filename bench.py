@@ -3,12 +3,14 @@
 Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
           python bench.py 100 --signs --pairs tev1
+          python bench.py 100 --memory tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -16,6 +18,13 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             N úloh (výchozí 100); za řádkem modelu přesnost podle třídy značky.
 --pairs:    jen s --signs: ke každé úloze dvojče se stejnou odpovědí, jinak formulovaná je jen značka správného pruhu;
             přibude řádek shody dvojic a řádek podle dvojic tříd. S --mirror a --inject se nekombinuje.
+--memory:   paměťová stopa: stav nese minuté značky se štítkem „k steps back“ a štítek hledané značky, model volí z K bran
+            (výchozí 4) tu s hledanou značkou, N úloh (výchozí 100). Měří dohledání položky podle štítku, ne paměť
+            modelu. Za řádkem modelu přesnost podle kroků zpět (N=1 až N=8), pod ním rozbor chyb
+            a rozsah paměti = největší N, do kterého je každé N správně aspoň z 80 %.
+            Při 100 úlohách připadá na jedno N asi 12 úloh, takže rozsah paměti je hrubý údaj.
+--count:    jen s --memory: stejné úlohy, ale historie je seznam (nejstarší první) a počet kroků zpět je číslo;
+            měří počítání polohy v seznamu.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -46,12 +55,14 @@ USAGE_EN = """Compares decision models on the same set of tasks (without the gam
 Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
           python bench.py 100 --signs --pairs tev1
+          python bench.py 100 --memory tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -59,6 +70,13 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             N tasks (default 100); after the model row, the accuracy by sign class.
 --pairs:    only with --signs: every task gets a twin with the same answer, only the sign of the correct lane is worded differently;
             adds a line with the pair agreement and a line by class pair. It cannot be combined with --mirror or --inject.
+--memory:   memory trace: the state holds the signs passed, each labelled "k steps back", and the label of the sign to find;
+            out of K gates (default 4) the model picks the one with that sign, N tasks (default 100). It measures looking
+            an item up by its label, not the memory of the model. After the model row, the accuracy by steps back
+            (N=1 to N=8); below it the errors and the memory span = the largest N up to which every N is at least 80% correct.
+            With 100 tasks, about 12 tasks fall on each N, so the memory span is a rough estimate.
+--count:    only with --memory: the same tasks, but the history is a list (oldest first) and the number of steps back
+            is a number; it measures counting the position in a list.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -475,12 +493,117 @@ def sign_question(lanes):
     }}
 
 
+# ---------- scénář: paměťová stopa ----------
+# Slova značek jdou do modelu, proto anglicky a mimo i18n. Každé musí jít nakreslit jako symbol, protože je převezme hra.
+MEMORY_SIGNS = ("circle", "square", "star", "triangle", "arrow", "moon",
+                "heart", "cross", "diamond", "hexagon", "bell", "leaf")
+MEMORY_STEPS = range(1, 9)                           # N: o kolik kroků zpět se model ptá
+MEMORY_LENGTH_MAX = 12                               # nejdelší historie (L)
+MEMORY_SPAN_SHARE = 0.8                              # rozsah paměti: největší N, do kterého je přesnost u každého N aspoň tolik
+
+
+def memory_gates(rng, history, steps, gates):
+    """Značky bran k historii (nejstarší první) a počtu kroků zpět. Vrací (značky bran, index správné brány).
+
+    Brány jsou souvislé okno gates po sobě jdoucích značek historie, které obsahuje hledanou značku. Začátek okna se losuje
+    rovnoměrně ze všech platných začátků, potom se brány zamíchají. Tvar nabídky tak neprozradí, která značka je hledaná."""
+    length = len(history)
+    if not 1 <= steps <= length or not 1 <= gates <= length or len(set(history)) != length:
+        raise RuntimeError(f"memory_gates: {steps} steps back, {gates} gates in {history}")
+    at = length - steps
+    target = history[at]
+    start = rng.randint(max(0, at - gates + 1), min(at, length - gates))      # okno obsahuje hledanou a vejde se do historie
+    signs = list(history[start:start + gates])                                # nový seznam (i z n-tice), historie zůstává
+    rng.shuffle(signs)
+    if len(signs) != gates or len(set(signs)) != gates or signs.count(target) != 1 or not set(signs) <= set(history):
+        raise RuntimeError(f"memory_gates: gates {signs} for {history}, {steps} steps back")      # nic se neopravuje potichu
+    return signs, signs.index(target)
+
+
+def memory_case(rng, gates):
+    """Úloha paměťové stopy. Vrací (historie, N, značky bran, index správné brány)."""
+    steps = rng.choice(MEMORY_STEPS)
+    length = rng.randint(max(steps, gates), MEMORY_LENGTH_MAX)
+    history = rng.sample(MEMORY_SIGNS, length)
+    signs, top = memory_gates(rng, history, steps, gates)
+    return history, steps, signs, top
+
+
+def memory_cases(n, gates=4, seed=1):
+    rng = random.Random(seed)
+    return [memory_case(rng, gates) for _ in range(n)]
+
+
+def memory_label(steps):
+    """Štítek kroku pro model: „1 step back“, jinak „k steps back“."""
+    return "1 step back" if steps == 1 else f"{steps} steps back"
+
+
+def memory_state(history, steps, signs, count=False):
+    """Stav pro model. Výchozí podoba (dohledání): signs_passed je slovník štítek kroku → značka, nejstarší první, target je
+    štítek hledané značky. count (počítání): signs_passed je seznam, nejstarší první, steps_back je číslo. Brány jsou v obou stejné."""
+    gates = dict(zip(gate_keys(len(signs)), signs))
+    if count:
+        return {"signs_passed": list(history), "steps_back": steps, **gates}
+    length = len(history)
+    return {"signs_passed": {memory_label(length - i): sign for i, sign in enumerate(history)}, "target": memory_label(steps), **gates}
+
+
+def memory_question(gates, count=False):
+    if count:
+        key, text = "recall_count", ("signs_passed lists the signs the car has passed, oldest first, so the last item is the most recent one "
+                                     "(1 step back). Choose the gate that shows the sign passed steps_back steps back.")
+    else:
+        key, text = "recall", ("signs_passed maps how many steps back each sign was passed to that sign. Look up the sign at target. "
+                               "Choose the gate that shows that sign.")
+    return {key: {"type": "choice", "instructions": text, "criteria": position_criteria(gate_keys(gates), "Gate")}}
+
+
+def memory_errors(cases, choices, keys):
+    """Rozbor chybných voleb podle toho, kolik kroků zpět (k) je zvolená značka; správná volba se nepočítá nikam.
+
+    near: zvolená značka je o krok vedle hledané (|k − N| = 1).
+    latest: zvolená značka je nejnovější (k = 1) a zároveň není near.
+    other: ostatní chybné volby mezi branami.
+    invalid: volba, která není klíčem brány (None, jiný řetězec, jiný typ)."""
+    counts = {"near": 0, "latest": 0, "other": 0, "invalid": 0}
+    for (history, steps, signs, top), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in keys):
+            counts["invalid"] += 1
+            continue
+        picked = keys.index(choice)
+        if picked == top:
+            continue
+        k = len(history) - history.index(signs[picked])
+        if abs(k - steps) == 1:
+            counts["near"] += 1
+        elif k == 1:
+            counts["latest"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def memory_span(by_steps):
+    """Rozsah paměti: největší N, pro které má každé n ≤ N aspoň jednu úlohu a přesnost aspoň MEMORY_SPAN_SHARE; jinak None.
+
+    N bez úloh rozsah ukončí. Porovnává se podíl ok / n, ne ok >= 0,8 * n (plovoucí čárka by 28/35 neprošla)."""
+    span = None
+    for steps, (ok, n) in by_steps.items():
+        if n == 0 or ok / n < MEMORY_SPAN_SHARE:
+            break
+        span = steps
+    return span
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
     "category": "Decide which single category this e-mail belongs to, based on what the sender wants.",
     "largest": "Every gate carries a number. Pick the gate whose number is the greatest.",
     "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",
+    "recall": "For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.",
+    "recall_count": "The list signs_passed holds every sign the car went past, from the oldest to the newest; its last entry is 1 step back. Pick the gate whose sign was passed exactly steps_back steps ago.",
 }
 
 
@@ -779,6 +902,21 @@ def run_signs(model, cases, lanes=3, mirror=False, inject=False, deadline=None, 
     return r
 
 
+def run_memory(model, cases, gates=4, mirror=False, inject=False, deadline=None, count=False):
+    keys, question = gate_keys(gates), memory_question(gates, count)
+    state = lambda history, steps, signs: memory_state(history, steps, signs, count)    # podoba stavu; úlohy jsou stejné
+    ask(model, state(*cases[0][:3]), question)                   # zahřátí, nepočítá se
+    targets = inject_plan([{keys[top]} for _, _, _, top in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(state(history, steps, signs), note), {keys[top]}, "")
+             for (history, steps, signs, top), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_steps"] = class_tally(MEMORY_STEPS, [(top, steps) for _, steps, _, top in cases], choices, keys)      # N → [správně, celkem]
+    r["errors"] = memory_errors(cases, choices, keys)            # z původní varianty zadání, jako přesnost
+    r["span"] = memory_span(r["by_steps"])
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
@@ -812,10 +950,12 @@ def parse_args(argv):
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--max-usd", type=float)
     p.add_argument("--max-hosted", type=int)
-    p.add_argument("--lanes", type=int, default=3)
+    p.add_argument("--lanes", type=int)                     # výchozí dosadí níže: 4 brány pro --memory, jinak 3
     p.add_argument("--emails")
     p.add_argument("--numbers", action="store_true")
     p.add_argument("--signs", action="store_true")
+    p.add_argument("--memory", action="store_true")
+    p.add_argument("--count", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -825,6 +965,8 @@ def parse_args(argv):
     a = p.parse_intermixed_args(argv)                # volby smí stát mezi N a modely
     a.n = int(a.rest.pop(0)) if a.rest and a.rest[0].isdigit() else None
     a.models = a.rest
+    if a.lanes is None:
+        a.lanes = 4 if a.memory else 3               # paměťová stopa: výchozí 4 brány podle specu
     return a
 
 
@@ -899,6 +1041,19 @@ def print_pairs(r):
     print(pad + i18n.t("bench.pairs.groups", list=groups), flush=True)
 
 
+def memory_note(r):
+    """Poznámka za řádkem modelu: přesnost podle počtu kroků zpět."""
+    return class_note(r["by_steps"], {n: f"N={n}" for n in MEMORY_STEPS})
+
+
+def print_memory(r):
+    """Řádek rozboru chyb paměťové stopy a rozsahu paměti, odsazený pod řádek modelu."""
+    e = r["errors"]
+    span = "—" if r["span"] is None else f"N={r['span']}"
+    print(" " * 20 + i18n.t("bench.memory.errors", near=e["near"], latest=e["latest"], other=e["other"], invalid=e["invalid"], span=span),
+          flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
@@ -921,7 +1076,7 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public, args.signs))) > 1:
+    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public, args.signs, args.memory))) > 1:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -929,6 +1084,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.pairsSigns"))
     if args.pairs and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.pairsCombo"))
+    if args.count and not args.memory:
+        sys.exit(i18n.t("bench.err.countMemory"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
         sys.exit(i18n.t("bench.err.deadline"))
     if args.max_usd is not None or args.max_hosted is not None:
@@ -985,6 +1142,18 @@ def main(argv):
                 r = run_signs(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.pairs)
                 print_row(r, sign_note(r))
                 print_pairs(r)
+    elif args.memory:
+        cases = memory_cases(args.n or 100, args.lanes)  # úlohy jsou v obou podobách stejné, --count mění jen zápis stavu
+        if args.count:
+            print(i18n.t("bench.intro.memoryCount", n=len(cases), lanes=args.lanes) + "\n")
+        else:
+            print(i18n.t("bench.intro.memory", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_memory(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.count)
+                print_row(r, memory_note(r))
+                print_memory(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

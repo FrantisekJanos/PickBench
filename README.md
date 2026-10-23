@@ -76,13 +76,15 @@ Every tile, column header and control has a tooltip explaining what the number m
 
 ## Command line
 
-- `bench.py` — compares models on the same set of tasks: `python bench.py 100 model-a model-b`. Options: `--lanes K`, `--numbers`, `--signs`, `--pairs`, `--emails datasets/cz-firemni-emaily.json`, `--mirror`, `--inject`.
+- `bench.py` — compares models on the same set of tasks: `python bench.py 100 model-a model-b`. Options: `--lanes K`, `--numbers`, `--signs`, `--pairs`, `--memory`, `--count`, `--emails datasets/cz-firemni-emaily.json`, `--mirror`, `--inject`.
 - `hwbench.py` — measures how this machine serves one model: `python hwbench.py latency --n 200 model-a`. Tests: `latency`, `cold`, `concurrency`, `questions`, `context`, `soak`, `server`.
 - `fetch_datasets.py` — downloads the public datasets: `python fetch_datasets.py banking77 clinc150 massive`.
 
 All three print Czech by default and English with `--lang en`; see "Languages" above.
 
 `bench.py --signs` gives every lane a traffic sign, such as `buses only`, `no vehicles over 3.5 t` or `all vehicles except trucks`, and asks the model for the one lane the vehicle may enter; the note after the model row splits the accuracy by sign class. `--pairs` adds a twin of every task in which only the sign of the open lane is worded the other way (`no trucks` becomes `all vehicles except trucks`), so the answer stays the same, and reports how often the model got both tasks of a pair right.
+
+`bench.py --memory` lets the car pass a series of roadside signs and then offers a row of gates, each showing one sign; the model picks the gate with the sign passed a given number of steps back (1 to 8). A decision model has no memory of its own, so the state carries the signs passed: by default as a map from a label such as `3 steps back` to the sign, with the label to find in `target`, so the scenario measures looking an item up by its label, not memory. `--count` gives the same tasks with the history as a plain list (`signs_passed`, oldest first) and the number of steps as a number (`steps_back`), so the model has to count the position in the list. The gates show a run of consecutive signs from the history that contains the right one, in shuffled order, so the shape of the offer does not give the answer away. There are 4 gates by default. The note after the model row gives the accuracy by steps back; the line below counts the errors (one step off, most recent sign, other, invalid) and gives the memory span, the largest number of steps back up to which every number of steps is at least 80% correct. With 100 tasks about 12 fall on each number of steps, so the span is a rough estimate. The page does not have this scenario yet.
 
 `bench.py --public datasets/public/massive-en-us.json model-a` measures a public dataset and prints accuracy, macro-F1 (the mean of F1 over the classes), the worst classes and the most frequent confusions; for a dataset with an out-of-scope label also how many out-of-scope tasks the model recognized. `--deadline-ms L` adds **goodput**: the share of decisions that were both correct and in time.
 

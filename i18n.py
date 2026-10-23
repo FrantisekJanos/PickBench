@@ -97,6 +97,11 @@ TEXTS = {
                             "en": "{n} {n|row|rows} of numbers, {lanes} gates, the same for all models"},
     "bench.intro.signs": {"cs": "{n} úloh se značkami, {lanes} pruhů, stejných pro všechny modely",
                           "en": "{n} {n|task|tasks} with traffic signs, {lanes} lanes, the same for all models"},
+    # Paměťová stopa: úvodní věta říká, která podoba stavu se měří (výchozí dohledání podle štítku, --count počítání polohy).
+    "bench.intro.memory": {"cs": "{n} úloh s historií značek (dohledání podle štítku), {lanes} bran, stejných pro všechny modely",
+                           "en": "{n} {n|task|tasks} with a history of signs (lookup by label), {lanes} gates, the same for all models"},
+    "bench.intro.memoryCount": {"cs": "{n} úloh s historií značek (počítání polohy v seznamu), {lanes} bran, stejných pro všechny modely",
+                                "en": "{n} {n|task|tasks} with a history of signs (counting the position in a list), {lanes} gates, the same for all models"},
     "bench.intro.emails": {"cs": "{n} e-mailů ze sady „{name}“ ({categories} kategorií), stejných pro všechny modely",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} úloh ze sady „{name}“ ({labels} štítků), stejných pro všechny modely",
@@ -120,6 +125,10 @@ TEXTS = {
     "bench.pairs": {"cs": "dvojice: obě správně {both}, jen původní {original}, jen dvojče {twin}, žádná {none} ({n} dvojic)",
                     "en": "pairs: both correct {both}, original only {original}, twin only {twin}, neither {none} ({n} {n|pair|pairs})"},
     "bench.pairs.groups": {"cs": "dvojice podle tříd (obě správně / celkem): {list}", "en": "pairs by class (both correct / total): {list}"},
+    # Paměťová stopa (--memory): rozbor chyb pod řádkem modelu. {near}, {latest}, {other}, {invalid} = počty chybných odpovědí;
+    # {span} = rozsah paměti, hotový text „N=3“ nebo „—“.
+    "bench.memory.errors": {"cs": "chyby: o krok vedle {near}, nejnovější značka {latest}, jiné {other}, neplatné {invalid}; rozsah paměti {span}",
+                            "en": "errors: one step off {near}, most recent sign {latest}, other {other}, invalid {invalid}; memory span {span}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -149,6 +158,7 @@ TEXTS = {
     "bench.err.publicCombo": {"cs": "Volby --mirror a --inject se s --public nekombinují.",
                               "en": "The --mirror and --inject options cannot be combined with --public."},
     "bench.err.pairsSigns": {"cs": "Volba --pairs jde jen s --signs.", "en": "The --pairs option works only with --signs."},
+    "bench.err.countMemory": {"cs": "Volba --count jde jen s --memory.", "en": "The --count option works only with --memory."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",

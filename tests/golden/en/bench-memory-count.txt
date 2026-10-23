@@ -1,0 +1,5 @@
+12 tasks with a history of signs (counting the position in a list), 3 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      58%      80%    36%     134   (N=1 1/3, N=2 0/0, N=3 1/3, N=4 1/1, N=5 0/0, N=6 2/3, N=7 1/1, N=8 1/1)
+                    errors: one step off 3, most recent sign 1, other 1, invalid 0; memory span —
