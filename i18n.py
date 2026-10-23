@@ -120,6 +120,10 @@ TEXTS = {
     "bench.pairs": {"cs": "dvojice: obě správně {both}, jen původní {original}, jen dvojče {twin}, žádná {none} ({n} dvojic)",
                     "en": "pairs: both correct {both}, original only {original}, twin only {twin}, neither {none} ({n} {n|pair|pairs})"},
     "bench.pairs.groups": {"cs": "dvojice podle tříd (obě správně / celkem): {list}", "en": "pairs by class (both correct / total): {list}"},
+    # Paměťová stopa (--memory): rozbor chyb pod řádkem modelu. {near}, {latest}, {other}, {invalid} = počty chybných odpovědí;
+    # {span} = rozsah paměti, hotový text „N=3“ nebo „—“.
+    "bench.memory.errors": {"cs": "chyby: o krok vedle {near}, nejnovější značka {latest}, jiné {other}, neplatné {invalid}; rozsah paměti {span}",
+                            "en": "errors: one step off {near}, most recent sign {latest}, other {other}, invalid {invalid}; memory span {span}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "

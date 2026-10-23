@@ -1019,6 +1019,19 @@ def print_pairs(r):
     print(pad + i18n.t("bench.pairs.groups", list=groups), flush=True)
 
 
+def memory_note(r):
+    """Poznámka za řádkem modelu: přesnost podle počtu kroků zpět."""
+    return class_note(r["by_steps"], {n: f"N={n}" for n in MEMORY_STEPS})
+
+
+def print_memory(r):
+    """Řádek rozboru chyb paměťové stopy a rozsahu paměti, odsazený pod řádek modelu."""
+    e = r["errors"]
+    span = "—" if r["span"] is None else f"N={r['span']}"
+    print(" " * 20 + i18n.t("bench.memory.errors", near=e["near"], latest=e["latest"], other=e["other"], invalid=e["invalid"], span=span),
+          flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
