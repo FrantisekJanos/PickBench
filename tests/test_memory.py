@@ -6,6 +6,8 @@ import os
 import random
 import re
 import runpy
+import shutil
+import subprocess
 import sys
 import time
 import unittest
@@ -477,6 +479,23 @@ class Page(unittest.TestCase):                                         # scéná
         body = page.split("\nconst memory = {", 1)[1].split("\n};\n", 1)[0]
         for call in ("memoryRow(LANES, rnd)", "memoryState(", "memoryQuestion(LANES)", "memoryErrorKind(", "memorySpan(", "gateKeys(LANES).indexOf(a.recall?.choice)"):
             self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_trail_shows_the_row_being_decided(self):
+        # Po tazích posune turnCells auto o y + 0,6: projetá řada zůstane na y = −0,6, zatímco model rozhoduje další.
+        # Pás má ukázat tu další; projetou jen těsně po průjezdu (pohyb mezi tahy, v reálném čase půl pole).
+        fn = re.search(r"\nfunction memoryTrailRow\(g\) \{.*?\n\}\n", page_source(), re.S).group(0)
+        cases = [
+            {"history": [{"id": 1, "y": -0.6, "result": "ok"}], "rows": [{"id": 1, "y": -0.6, "result": "ok"}, {"id": 2, "y": 3, "result": None}]},
+            {"history": [{"id": 1, "y": -0.3, "result": "bad"}], "rows": [{"id": 1, "y": -0.3, "result": "bad"}, {"id": 2, "y": 2.7, "result": None}]},
+            {"history": [{"id": 1, "y": -1.5, "result": "ok"}], "rows": [{"id": 2, "y": 1.5, "result": None}]},
+            {"history": [], "rows": [{"id": 1, "y": 0.4, "result": None}, {"id": 2, "y": 3.4, "result": None}]},
+            {"history": [], "rows": []},                                                          # benchmark bez hry: žádná řada, pás se schová
+        ]
+        script = fn + f"process.stdout.write(JSON.stringify({json.dumps(cases)}.map(g => memoryTrailRow(g)?.id ?? null)));"
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(json.loads(out.stdout), [2, 1, 2, 1, None])
 
 
 if __name__ == "__main__":

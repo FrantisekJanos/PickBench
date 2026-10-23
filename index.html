@@ -1492,6 +1492,13 @@ function drawMemorySign(c, name, x, y, rad) {              // symbol značky na 
   }
 }
 
+// Řada pro pás historie: nejbližší neprojetá, jen těsně po průjezdu ještě ta projetá (zelená hledaná značka).
+// Mez −0,5 leží nad −0,6, kam projetou řadu po tazích odsune turnCells: zatímco model rozhoduje další řadu, pás ukazuje tu.
+function memoryTrailRow(g) {
+  const done = g.history[0];
+  return done && done.y > -0.5 ? done : g.rows.find(r => r.result === null);
+}
+
 const memory = {
   __proto__: rowBase,
   id: 'memory', lanesFree: true,
@@ -1543,8 +1550,8 @@ const memory = {
     const c = $('trail'), tc = c.getContext('2d');
     if (c.width !== W) c.width = W;
     tc.fillStyle = '#20262d'; tc.fillRect(0, 0, c.width, c.height);
-    const done = g.history[0], r = done && done.y > -1 ? done : g.rows.find(r => r.result === null);
-    c.hidden = !r;                                         // benchmark bez hry nemá řady: prázdný pás se schová
+    const r = memoryTrailRow(g);
+    c.hidden = !r;                                        // benchmark bez hry nemá řady: prázdný pás se schová
     if (!r) return;
     const n = r.history.length, cell = W / MEMORY_LENGTH_MAX, rad = Math.min(cell * 0.36, 12), x0 = W - n * cell;
     tc.textAlign = 'center'; tc.textBaseline = 'middle';
