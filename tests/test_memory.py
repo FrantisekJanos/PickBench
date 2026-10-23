@@ -354,5 +354,100 @@ class Lines(unittest.TestCase):
         self.assertTrue(printed("en", bench.print_memory, none)[0].endswith("; memory span —"))
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--memory", "m1"])
+        self.assertEqual((a.n, a.memory, a.count, a.lanes, a.models), (40, True, False, 4, ["m1"]))      # výchozí 4 brány, dohledání
+        a = bench.parse_args(["--memory", "--count", "--lanes", "3", "m1"])
+        self.assertEqual((a.memory, a.count, a.lanes), (True, True, 3))
+        a = bench.parse_args(["m1"])
+        self.assertEqual((a.memory, a.count, a.lanes), (False, False, 3))                                # ostatní scénáře dál 3
+        self.assertEqual(bench.parse_args(["--numbers", "m1"]).lanes, 3)
+
+    def test_first_line_and_rows(self):
+        table = ((["1", "--memory", "m1"], "1 úloh s historií značek (dohledání podle štítku), 4 bran",
+                  "1 task with a history of signs (lookup by label), 4 gates"),
+                 (["7", "--memory", "--count", "--lanes", "6", "m1"], "7 úloh s historií značek (počítání polohy v seznamu), 6 bran",
+                  "7 tasks with a history of signs (counting the position in a list), 6 gates"))
+        for argv, cs, en in table:
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        lines = self.cli("--memory", "m1")[0].splitlines()
+        self.assertEqual(lines[0], "100 úloh s historií značek (dohledání podle štítku), 4 bran, stejných pro všechny modely")   # výchozí počet úloh a bran
+        en = self.cli("6", "--memory", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 5)
+        self.assertRegex(en[3], r"^m1 .*   \(N=1 \d+/\d+, N=2 \d+/\d+, N=3 \d+/\d+, N=4 \d+/\d+, N=5 \d+/\d+, N=6 \d+/\d+, N=7 \d+/\d+, N=8 \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}errors: one step off \d+, most recent sign \d+, other \d+, invalid \d+; memory span (N=[1-8]|—)$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv in (["6", "--memory", "--pairs", "m1"], ["6", "--memory", "--pairs", "--mirror", "m1"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", "Volba --pairs jde jen s --signs."))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", "The --pairs option works only with --signs."))
+        for argv in (["6", "--count", "m1"], ["--count", "--numbers", "m1"], ["--count", "--signs", "m1"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", "Volba --count jde jen s --memory."))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", "The --count option works only with --memory."))
+        for argv in (["--memory", "--numbers", "m1"], ["--memory", "--signs", "m1"], ["--memory", "--signs", "--pairs", "m1"],
+                     ["--memory", "--emails", "x.json", "m1"], ["--memory", "--public", "x.json", "m1"],
+                     ["--memory", "--lanes", "9", "m1"], ["--memory", "--lanes", "1", "m1"], ["--memory"], ["--memory", "--count"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_tasks(self):
+        self.cli("6", "--memory", "m1")
+        lookup, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--memory", "--count", "m1")
+        count = [json.loads(body) for body in self.sent]
+        self.assertEqual(len(lookup), 7)                                  # zahřátí a šest úloh
+        self.assertEqual(len(count), 7)
+        self.assertTrue(all(list(a["questions"]) == ["recall"] and list(b["questions"]) == ["recall_count"] for a, b in zip(lookup, count)))
+        for a, b in zip((p["state"] for p in lookup), (p["state"] for p in count)):
+            self.assertEqual(list(a["signs_passed"].values()), b["signs_passed"])
+            self.assertEqual(a["target"], bench.memory_label(b["steps_back"]))
+            self.assertEqual({k: a[k] for k in gates_of(a)}, {k: b[k] for k in gates_of(b)})
+
+    def test_mirror_and_inject_work_with_memory(self):
+        out, code = self.cli("8", "--memory", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("chyby: o krok vedle "), lines[6])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --memory tev1", text)
+            self.assertIn("\n--memory:   ", text)
+            self.assertIn("\n--count:    ", text)
+
+
 if __name__ == "__main__":
     unittest.main()

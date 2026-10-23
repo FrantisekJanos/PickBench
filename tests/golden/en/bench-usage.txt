@@ -3,12 +3,14 @@ Compares decision models on the same set of tasks (without the game).
 Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
           python bench.py 100 --signs --pairs tev1
+          python bench.py 100 --memory tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -16,6 +18,13 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             N tasks (default 100); after the model row, the accuracy by sign class.
 --pairs:    only with --signs: every task gets a twin with the same answer, only the sign of the correct lane is worded differently;
             adds a line with the pair agreement and a line by class pair. It cannot be combined with --mirror or --inject.
+--memory:   memory trace: the state holds the signs passed, each labelled "k steps back", and the label of the sign to find;
+            out of K gates (default 4) the model picks the one with that sign, N tasks (default 100). It measures looking
+            an item up by its label, not the memory of the model. After the model row, the accuracy by steps back
+            (N=1 to N=8); below it the errors and the memory span = the largest N up to which every N is at least 80% correct.
+            With 100 tasks, about 12 tasks fall on each N, so the memory span is a rough estimate.
+--count:    only with --memory: the same tasks, but the history is a list (oldest first) and the number of steps back
+            is a number; it measures counting the position in a list.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

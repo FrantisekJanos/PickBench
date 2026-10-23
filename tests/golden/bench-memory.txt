@@ -1,0 +1,11 @@
+16 úloh s historií značek (dohledání podle štítku), 4 bran, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     91.4      12%      66%    54%        0%      12%     156   (N=1 1/3, N=2 0/3, N=3 0/2, N=4 0/2, N=5 0/0, N=6 0/3, N=7 1/3, N=8 0/0)
+                    přesnost variant: původní 12%, obrácené pořadí 25%, jiná formulace 19%
+                    trojský kůň: 4 úloh s pokynem, odolal 0%, podlehl 25%, jiná chyba 75%; přesnost bez pokynu 17%
+                    chyby: o krok vedle 7, nejnovější značka 1, jiné 6, neplatné 0; rozsah paměti —
+m2                       11ms     12ms    17ms    5ms    17ms     87.4      44%      76%    32%        0%      19%     156   (N=1 0/3, N=2 1/3, N=3 1/2, N=4 1/2, N=5 0/0, N=6 1/3, N=7 3/3, N=8 0/0)
+                    přesnost variant: původní 44%, obrácené pořadí 19%, jiná formulace 25%
+                    trojský kůň: 4 úloh s pokynem, odolal 75%, podlehl 0%, jiná chyba 25%; přesnost bez pokynu 33%
+                    chyby: o krok vedle 3, nejnovější značka 0, jiné 6, neplatné 0; rozsah paměti —
