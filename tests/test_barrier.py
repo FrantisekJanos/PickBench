@@ -309,5 +309,47 @@ class MeasureNoul(unittest.TestCase):
         self.assertEqual(r["inject"]["fooled"], 1)
 
 
+class Quality(unittest.TestCase):
+    def test_auroc(self):
+        self.assertEqual(bench.barrier_auroc([0.9, 0.8, 0.2, 0.1], [True, True, False, False]), 1)
+        self.assertEqual(bench.barrier_auroc([0.1, 0.2, 0.8, 0.9], [True, True, False, False]), 0)
+        self.assertEqual(bench.barrier_auroc([0.5, 0.5, 0.5], [True, False, True]), 0.5)                 # shody jako polovina
+        self.assertEqual(bench.barrier_auroc([0.9, 0.4, 0.4, 0.1], [True, True, False, False]), 0.875)
+        self.assertEqual(bench.barrier_auroc([0.9, None, 0.1, None], [True, True, False, False]), 1)     # neplatné se vynechají
+        self.assertIsNone(bench.barrier_auroc([0.9, 0.8], [True, True]))                                 # chybí úlohy „stůj“
+        self.assertIsNone(bench.barrier_auroc([0.9, None], [True, False]))                               # jediná „stůj“ je neplatná
+        self.assertIsNone(bench.barrier_auroc([], []))
+
+    def test_best_threshold(self):
+        self.assertEqual(bench.barrier_threshold([0.9, 0.6, 0.4, 0.2], [True, True, True, False]), (0.4, 1))
+        self.assertEqual(bench.barrier_threshold([0.7, 0.3], [True, False]), (0.5, 1))                  # shoda: nejblíž 0,5
+        self.assertEqual(bench.barrier_threshold([0.8, 0.6], [True, False]), (0.8, 1))
+        self.assertEqual(bench.barrier_threshold([0.25, 0.75, 0.625, 0.125], [True, True, False, False]), (0.25, 0.75))   # 0,25 a 0,75 stejně daleko: nižší
+        self.assertEqual(bench.barrier_threshold([None, 0.9], [True, True]), (0.5, 0.5))                 # neplatná je chyba i tady; jen úlohy jeď
+        self.assertEqual(bench.barrier_threshold([None, None], [True, False]), (0.5, 0))
+        # vyvážená přesnost = (podíl správných na úlohách jeď + na úlohách stůj) / 2, ne podíl všech správných:
+        self.assertEqual(bench.barrier_threshold([0.8] * 4, [True, True, True, False]), (0.5, 0.5))      # vždy jeď: 75 % správně, vyváženě 50 %
+        self.assertEqual(bench.barrier_threshold([0.9, 0.3, 0.3, 0.6], [True, True, True, False]), (0.9, 2 / 3))   # obyčejná přesnost by vzala 0,3 (vždy jeď)
+
+    def test_shortcut_strategies_by_balanced_accuracy(self):
+        cases = bench.barrier_cases(4000)
+        truths = [go for _, go, _, _ in cases]
+        self.assertEqual(bench.barrier_threshold([1.0] * len(cases), truths), (0.5, 0.5))            # vždy jeď: vyvážená přesnost 50 %
+        light = [float(bench.barrier_decide(s, 4)[0]) for s, _, _, _ in cases]                     # jen semafor, při off značka
+        t, balanced = bench.barrier_threshold(light, truths)
+        print(f"\n[barrier] 4000 tasks, balanced accuracy: always go 0.500; light only {balanced:.3f} (threshold {t:.2f})", file=sys.stderr)
+        self.assertLess(balanced, 0.80)
+
+    def test_summary_on_hand_built_tasks(self):
+        cases = [(at(), True, 5, "last"), (at(sign="give way"), False, 5, "last"),
+                 (at(light="green"), True, 4, "agree"), (at(light="red"), False, 4, "conflict_light"),
+                 (SPEC_STATE, False, 2, "conflict_high"), (at(police_officer="signals the car to go"), True, 1, "agree")]
+        s = bench.barrier_summary(cases, [0.9, 0.7, 0.2, 0.4, None, 0.6])
+        self.assertEqual(s["by_rule"], {1: [1, 1], 2: [0, 1], 3: [0, 0], 4: [1, 2], 5: [1, 2]})
+        self.assertEqual(s["by_class"], {"agree": [1, 2], "conflict_high": [0, 1], "conflict_light": [1, 1], "last": [1, 2]})
+        self.assertEqual(list(s["by_class"]), ["agree", "conflict_high", "conflict_light", "last"])
+        self.assertEqual((s["false_go"], s["needless"], s["invalid"]), ([1, 3], [1, 3], 1))       # neplatná se nepočítá do žádné z chyb
+
+
 if __name__ == "__main__":
     unittest.main()
