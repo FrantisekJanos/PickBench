@@ -1110,6 +1110,19 @@ def run_memory(model, cases, gates=4, mirror=False, inject=False, deadline=None,
     return r
 
 
+def run_barrier(model, cases, mirror=False, inject=False, deadline=None):
+    question = barrier_question()
+    ask_noul(model, cases[0][0], question)                       # zahřátí, nepočítá se
+    truths = [go for _, go, _, _ in cases]
+    targets = inject_plan([{"go" if go else "stop"} for go in truths], ["go", "stop"]) if inject else None      # cíl = opačná odpověď
+    items = [(state, go, "") for state, go, _, _ in cases]       # pokyn do stavu přidá measure_noul, u každé varianty zvlášť
+    r, probs = measure_noul(model, items, question, mirror, targets, deadline)
+    r.update(barrier_summary(cases, probs))                      # z původní varianty zadání, jako přesnost
+    r["auroc"] = barrier_auroc(probs, truths)
+    r["threshold"] = barrier_threshold(probs, truths)
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
