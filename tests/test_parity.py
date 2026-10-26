@@ -3,6 +3,7 @@
 Blok mezi značkami „sdíleno s Pythonem“ se z index.html vytáhne a pustí v node nad stejnými daty jako Python.
 Před něj jde blok textů (značky „texty“): věty chyb validátoru bere sdílený blok z něj funkcí t(), v jazyce stránky.
 Bez programu node se testy přeskočí."""
+import itertools
 import json
 import math
 import random
@@ -404,9 +405,157 @@ class Memory(unittest.TestCase):
         self.assertEqual(run_js("arg.map(t => memorySpan(t))", tables), [bench.memory_span(t) for t in tables])
 
 
+BARRIER_NAMES = ["police_officer", "emergency_vehicle", "pedestrian_on_crossing", "light", "sign"]
+BARRIER_STATES = [                                                               # příklad ze specu Závory (rozhoduje záchranka), pravidlo 5
+    {"police_officer": "none", "emergency_vehicle": "approaching from the left with siren on", "pedestrian_on_crossing": "no",
+     "light": "green", "sign": "priority road"},
+    {"police_officer": "none", "emergency_vehicle": "parked at the roadside, siren off", "pedestrian_on_crossing": "no",
+     "light": "off", "sign": "give way"},
+]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Barrier(unittest.TestCase):
+    def test_constants_and_question_are_the_same_as_in_bench(self):
+        import bench
+        js = run_js("({ fields: BARRIER_FIELDS, share: BARRIER_GO_SHARE, rules: BARRIER_RULES, classes: BARRIER_CLASSES,"
+                    " go: BARRIER_GO, stop: BARRIER_STOP, note: INJECT_NOTE_NOUL, question: barrierQuestion() })", None)
+        self.assertEqual(json.dumps(js["fields"]), json.dumps(bench.BARRIER_FIELDS))       # i pořadí polí a hodnot: rozhoduje o losování
+        self.assertEqual((js["share"], js["rules"], js["classes"]),
+                         (bench.BARRIER_GO_SHARE, list(bench.BARRIER_RULES), list(bench.BARRIER_CLASSES)))
+        self.assertEqual((js["go"], js["stop"], js["note"]), (bench.BARRIER_GO, bench.BARRIER_STOP, bench.INJECT_NOTE_NOUL))
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.barrier_question()))
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r'^  go: "([^"\\]*)",$', alt, re.M), [bench.ALT["go"]])
+
+    def test_decide_matches_bench_on_every_state(self):
+        import bench
+        states = [dict(zip(BARRIER_NAMES, combo)) for combo in itertools.product(*(list(table) for _, table in bench.BARRIER_FIELDS))]
+        self.assertEqual(len(states), 288)
+        got = run_js("arg.map(s => [1, 2, 3, 4, 5].map(k => barrierDecide(s, k)))", states)
+        self.assertEqual(got, [[list(bench.barrier_decide(s, k)) for k in range(1, 6)] for s in states])
+        errors = run_js("[[arg, 6], [{ ...arg, light: 'blue' }, 1]].map(([s, k]) => { try { barrierDecide(s, k); return null; } catch (e) { return e.message; } })",
+                        BARRIER_STATES[1])
+        self.assertTrue(errors[0].startswith("barrierDecide: no rule from 6 decides "), errors[0])      # Python: RuntimeError
+        self.assertTrue(errors[1].startswith("barrierDecide: unknown light "), errors[1])              # Python: KeyError; nic se neopravuje potichu
+
+    def test_note_matches_bench(self):                              # stav s pokynem: bajtově stejně, i pořadí klíčů (note na konci)
+        import bench
+        calls = [[s, target, inverted] for s in BARRIER_STATES for target in ("go", "stop", None) for inverted in (False, True)]
+        got = run_js("arg.map(([s, target, inverted]) => withNoulNote(s, target, inverted))", calls)
+        for (state, target, inverted), js in zip(calls, got):
+            self.assertEqual(json.dumps(js), json.dumps(bench.with_noul_note(state, target, inverted)), (target, inverted))
+        self.assertTrue(run_js("withNoulNote(arg, null) === arg", BARRIER_STATES[0]))          # bez cíle stav beze změny, jako v Pythonu
+
+    def test_warm_task_is_fixed_and_decided_by_the_police(self):
+        import bench
+        warm = run_js("BARRIER_WARM", None)
+        tables = dict(bench.BARRIER_FIELDS)
+        self.assertEqual(list(warm), ["state", "go", "rule", "cls"])
+        self.assertEqual(list(warm["state"]), BARRIER_NAMES)
+        self.assertEqual(bench.barrier_decide(warm["state"]), (True, 1))
+        self.assertEqual((warm["go"], warm["rule"], warm["cls"]), (True, 1, "conflict_high"))
+        self.assertIs(bench.barrier_decide(warm["state"], 4)[0], False)                        # semafor říká opak: přebitý semafor
+        for name in BARRIER_NAMES[1:]:                                                          # pod policistou nejdelší hodnoty: odhad délky dotazu je horní
+            self.assertEqual(warm["state"][name], max(tables[name], key=len), name)
+
+    def test_noul_decision_matches_bench(self):
+        import bench
+        values = [0.5, 0.4999, 1, 0, 1.0, 0.0, 0.73, -0.1, 1.01, None, True, False, "0.7", [0.7], {"noul": 0.7}]
+        got = run_js("arg.map(p => [noulDecision(p), noulDecision(p, true)])", values)
+        self.assertEqual(got, [[bench.noul_decision(p), bench.noul_decision(p, True)] for p in values])
+        self.assertEqual(run_js("[NaN, Infinity, -Infinity, undefined].map(p => [noulDecision(p), noulDecision(p, true)])", None), [[None, None]] * 4)
+
+    def test_generated_cases_keep_the_rules_of_bench(self):
+        import bench
+        tables = dict(bench.BARRIER_FIELDS)
+        cases = run_js(BARRIER_ROWS_JS, {"seed": 11, "n": 4000})
+        self.assertTrue(0.70 <= sum(c["go"] for c in cases) / len(cases) <= 0.80)
+        for c in cases:
+            state, go, rule, cls = c["state"], c["go"], c["rule"], c["cls"]
+            with self.subTest(state=state, rule=rule, cls=cls):
+                self.assertEqual(list(c), ["state", "go", "rule", "cls"])
+                self.assertEqual(list(state), BARRIER_NAMES)                                   # pevné pořadí klíčů stavu
+                self.assertTrue(all(state[name] in tables[name] for name in BARRIER_NAMES))
+                self.assertEqual(bench.barrier_decide(state), (go, rule))
+                self.assertTrue(all(tables[name][state[name]] is None for name in BARRIER_NAMES[:rule - 1]))      # pole nad pravidlem nerozhodují
+                if rule == 5:
+                    self.assertEqual(cls, "last")
+                else:                                                                          # stín: semafor (při off značka), u pravidla 4 značka
+                    shadow = bench.barrier_decide(state, 4 if rule < 4 else 5)[0]
+                    self.assertEqual(cls, ("conflict_high" if rule < 4 else "conflict_light") if shadow != go else "agree")
+        lower = ["agree" if c["cls"] == "agree" else "conflict" for c in cases if c["rule"] < 5]
+        for cls in ("agree", "conflict"):
+            self.assertTrue(0.40 <= lower.count(cls) / len(lower) <= 0.60, (cls, lower.count(cls), len(lower)))
+        self.assertEqual({c["rule"] for c in cases if c["cls"] == "conflict_high"}, {1, 2, 3})
+        self.assertEqual({c["rule"] for c in cases if c["cls"] == "conflict_light"}, {4})
+        for name, table in bench.BARRIER_FIELDS:                                                # každá hodnota se objeví
+            self.assertEqual({c["state"][name] for c in cases}, set(table), name)
+
+        def light_only(state):                                                                 # strategie „jen semafor, při off značka“
+            light = tables["light"][state["light"]]
+            return tables["sign"][state["sign"]] if light is None else light
+        high = [c for c in cases if c["cls"] == "conflict_high"]
+        agree_top = [c for c in cases if c["cls"] == "agree" and c["rule"] < 4]
+        self.assertEqual(sum(light_only(c["state"]) == c["go"] for c in high), 0)
+        self.assertEqual(sum(light_only(c["state"]) == c["go"] for c in agree_top), len(agree_top))
+
+    def test_same_seed_same_cases(self):
+        first = run_js(BARRIER_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(BARRIER_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(BARRIER_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_endless_retry_raises_instead_of_looping(self):        # jako Stuck v tests/test_barrier.py: jeď, pravidlo 1, konflikt, pole pod ním vždy první hodnota
+        got = run_js("(() => { try { barrierCase(() => 0); return null; } catch (e) { return e.message; } })()", None)
+        self.assertTrue(str(got).startswith("barrierCase: no conflict state for rule 1 after 1000 tries"), got)
+
+    def test_summary_matches_bench(self):
+        import bench
+        cases, rng = bench.barrier_cases(400, seed=5), random.Random(3)
+        probs = [rng.choice([None, "x", 1.5, True, 0.5, 1, 0, round(rng.random(), 1), round(rng.random(), 3)]) for _ in cases]
+        js = run_js("barrierSummary(arg.cases, arg.probs)",
+                    {"cases": [{"go": go, "rule": rule, "cls": cls} for _, go, rule, cls in cases], "probs": probs})
+        self.assertEqual(json.dumps(js), json.dumps(bench.barrier_summary(cases, probs)))     # i pořadí klíčů
+        self.assertGreater(js["invalid"], 0)
+
+    def test_auroc_and_threshold_match_metrics(self):
+        sets = [([0.9, 0.8, 0.2, 0.1], [True, True, False, False]), ([0.5, 0.5, 0.5], [True, False, True]),
+                ([0.9, None, 0.1, None], [True, True, False, False]), ([0.9, 0.8], [True, True]), ([0.9, None], [True, False]),
+                ([0.25, 0.75, 0.625, 0.125], [True, True, False, False]), ([None, 0.9], [True, True]), ([None, None], [True, False]),
+                ([0.8] * 4, [True, True, True, False]), ([0.9, 0.3, 0.3, 0.6], [True, True, True, False])]      # z tests/test_barrier.py (Quality)
+        rng = random.Random(4)
+        for k in range(40):                                      # náhodné sady se shodami hodnot; každá pátá jen úlohy jeď, každá sedmá jen stůj
+            n = rng.randint(1, 60)
+            truths = [True] * n if k % 5 == 0 else [False] * n if k % 7 == 0 else [rng.random() < 0.75 for _ in range(n)]
+            sets.append(([None if rng.random() < 0.1 else round(rng.random(), rng.choice([1, 2, 3])) for _ in range(n)], truths))
+        got = run_js("arg.map(([p, t]) => [auroc(p, t), bestThreshold(p, t)])", sets)
+        for (probs, truths), (a, th) in zip(sets, got):
+            self.assertEqual(a, metrics.auroc(probs, truths), (probs, truths))
+            self.assertEqual(th, list(metrics.best_threshold(probs, truths)), (probs, truths))   # přesně, ne s tolerancí
+        self.assertIsNone(run_js("bestThreshold([], [])", None))                                # prázdný běh: stránka ukáže „—“
+
+    def test_auroc_and_threshold_match_metrics_on_a_large_set(self):     # stránka počítá v n log n, Python po párech: přesná shoda i u tisíců úloh
+        rng = random.Random(11)
+        sets = []
+        for n, share in ((3000, 0.7), (2001, 0.5)):
+            truths = [rng.random() < share for _ in range(n)]
+            sets.append(([None if rng.random() < 0.05 else round(rng.random(), rng.choice([1, 2])) for _ in range(n)], truths))   # mnoho shod hodnot
+        got = run_js("arg.map(([p, t]) => [auroc(p, t), bestThreshold(p, t)])", sets)
+        for (probs, truths), (a, th) in zip(sets, got):
+            self.assertEqual(a, metrics.auroc(probs, truths))
+            self.assertEqual(th, list(metrics.best_threshold(probs, truths)))
+
+
 # Generátor paměťové stopy stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady memoryRow.
 MEMORY_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "memoryRow(arg.gates, rand)")
 assert MEMORY_ROWS_JS != ROWS_JS
+# Generátor Závory stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy barrierCase.
+BARRIER_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "barrierCase(rand)")
+assert BARRIER_ROWS_JS != ROWS_JS
 
 
 if __name__ == "__main__":

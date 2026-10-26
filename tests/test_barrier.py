@@ -4,7 +4,10 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
+import subprocess
 import sys
 import time
 import unittest
@@ -527,6 +530,154 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --barrier tev1", text)
             self.assertIn("\n--barrier:  ", text)
             self.assertIn("Must the car stop now?", text)
+
+
+def page_source():
+    return (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def run_page_js(code):
+    """Pustí v node kus skriptu stránky (vytažené funkce) a vrátí JSON, který vypsal."""
+    out = subprocess.run(["node", "-e", code], capture_output=True, text=True, encoding="utf-8", timeout=60)
+    if out.returncode:
+        raise AssertionError("node: " + out.stderr[-800:])
+    return json.loads(out.stdout)
+
+
+def page_function(name):
+    """Celá funkce stránky `function name(…) {` … `\n}` (musí tam být právě jednou)."""
+    found = re.findall(r"\nfunction %s\(.*?\n\}\n" % name, page_source(), re.S)
+    if len(found) != 1:
+        raise AssertionError(f"funkce {name} má být ve stránce právě jednou, je tam {len(found)}×")
+    return found[0]
+
+
+class Page(unittest.TestCase):                                         # scénář ve stránce; pravidla, generátor a výpočty hlídá tests/test_parity.py (Barrier)
+    def test_core_hooks_for_a_two_option_scenario(self):
+        page = page_source()
+        self.assertEqual(page.count("function pickWrong(truths, r, options = LANES) {"), 1)
+        self.assertEqual(page.count("function rollInject(truths, options = LANES) {"), 1)
+        self.assertEqual(page.count("pickWrong(truths, pick, options)"), 1)
+        self.assertEqual(page.count("newRow: (g, y, data, options = LANES) => ("), 1)
+        self.assertEqual(page.count("inject: rollInject([data.truth], options)"), 1)
+        self.assertEqual(page.count("state: SC.stateOf?.(task, variant) ?? task.state"), 1)       # obrácená otázka zrcadla nese obrácený pokyn
+        self.assertEqual(page.count("SC.parse(j.answers || {}, task, variant)"), 1)
+        self.assertEqual(page.count("SC.tally(G, task, res.move, res);"), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_wrong_option_among_two(self):
+        code = "let LANES = 4;" + page_function("pickWrong") + (
+            "process.stdout.write(JSON.stringify([pickWrong([0], 0.99, 2), pickWrong([1], 0, 2), pickWrong([0, 1], 0.5, 2),"
+            " pickWrong([2], 0.99), pickWrong([0], 0)]));")
+        self.assertEqual(run_page_js(code), [1, 0, None, 3, 1])                  # bez třetího parametru jako dřív: LANES možností
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="barrier" data-i18n="opt.scenario.barrier"></option>'), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier }[v];"), 1)
+        self.assertEqual(page.count("// ---------- scénář: závora ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(BARRIER_WARM, null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, barrierRow(rnd), 2)); },"), 1)
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for call in ("barrierRow(rnd)", "rollInject([d.go ? 0 : 1], 2)", "withNoulNote(", "stateOf(task, v)", "noulDecision(", "barrierQuestion()",
+                     "{ stop: { type: 'noul', instructions: BARRIER_STOP } }", "barrierSummary(", "auroc(", "bestThreshold(", "barrierOutcome("):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_outcome_and_open_barrier(self):                # neplatná odpověď (chosen −1) má vlastní výsledek na řadě jeď i stůj
+        code = page_function("barrierOutcome") + page_function("barrierOpen") + (
+            "process.stdout.write(JSON.stringify([[['ok', 0, 0], ['ok', 1, 1], ['bad', 1, 0], ['bad', 0, 1], ['late', 0, undefined], ['late', 1, undefined],"
+            " ['bad', 0, -1], ['bad', 1, -1]].map(([r, t, c]) => barrierOutcome(r, t, c)),"
+            " [{ result: null, chosen: undefined, y: 3 }, { result: null, chosen: 0, y: 3 }, { result: null, chosen: 1, y: 3 },"
+            "  { result: null, chosen: 1, y: 0.4 }, { result: null, chosen: undefined, y: 0.4 }, { result: 'ok', chosen: 1, y: -0.5 }].map(barrierOpen)]));")
+        self.assertEqual(run_page_js(code), [["go", "stop", "falseGo", "needless", "late", "lateCrash", "invalid", "invalid"],
+                                             [False, True, False, True, True, True]])            # stůj: závora dole, zvedne se těsně před autem
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_parse_reads_only_the_asked_key(self):          # stojí za háčkem parse v askModel: odpověď se čte jen pod klíčem otázky dané varianty
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        parse = re.search(r"\n  parse\(a, task, v = 0\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = page_function("noulDecision") + "const b = {" + parse + "};" + (
+            "const A = [[{ go: { noul: 0.8 } }, 0], [{ go: { noul: 0.2 } }, 0], [{ stop: { noul: 0.2 } }, 1], [{ go: { noul: 0.8 } }, 1],"
+            " [{ go: { noul: '0.8' } }, 0], [{ go: { noul: true } }, 2], [{ go: null }, 0], [{}, 0], [{ go: { noul: 1.5 } }, 2]];"
+            "process.stdout.write(JSON.stringify(A.map(([a, v]) => { const r = b.parse(a, null, v); return [r.move, r.conf ?? null, r.noul]; })));")
+        self.assertEqual(run_page_js(code), [[0, 0.8, 0.8], [1, 0.8, 0.2], [0, 0.8, 0.2], [-1, None, None],
+                                             [-1, None, None], [-1, None, None], [-1, None, None], [-1, None, None], [-1, None, None]])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_takes_noul_or_derives_it(self):          # řidiči Pravidla a Náhodně noul nemají: 1 jeď, 0 stůj; neplatná odpověď null
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        tally = re.search(r"\n  tally\(g, task, move, res\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = "const base = { tally() {} }; const b = { __proto__: base," + tally + "}; const g = { cases: [], probs: [] }, task = { go: true, rule: 4, cls: 'agree' };" + (
+            "[[0, { move: 0, noul: 0.7 }], [1, { move: 1, noul: null }], [0, { move: 0, ms: 1 }], [1, { move: 1, ms: 1 }], [-1, { move: -1, ms: 1 }]]"
+            ".forEach(([m, r]) => b.tally(g, task, m, r)); process.stdout.write(JSON.stringify(g));")
+        self.assertEqual(run_page_js(code), {"cases": [{"go": True, "rule": 4, "cls": "agree"}] * 5, "probs": [0.7, None, 1, 0, None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_class_split_by_go_and_stop(self):              # panel dělí třídy na jeď a stůj: strategie „vždy jeď“ se v přebitém semaforu neschová
+        classes = re.search(r"\nconst BARRIER_CLASSES = \[.*?\];\n", page_source()).group(0)
+        code = classes + page_function("noulDecision") + page_function("barrierClassGo") + (
+            "const cases = [{ go: true, rule: 1, cls: 'conflict_high' }, { go: true, rule: 2, cls: 'conflict_high' }, { go: false, rule: 3, cls: 'conflict_high' },"
+            " { go: false, rule: 1, cls: 'conflict_high' }, { go: false, rule: 2, cls: 'conflict_high' }, { go: true, rule: 4, cls: 'agree' }, { go: false, rule: 5, cls: 'last' }];"
+            "const r = barrierClassGo(cases, [0.9, 0.2, 0.1, null, 0.5, 1.5, 0]);"
+            "process.stdout.write(JSON.stringify([Object.keys(r), r]));")
+        self.assertEqual(run_page_js(code), [["agree", "conflict_high", "conflict_light", "last"],      # pořadí BARRIER_CLASSES
+                                             {"agree": {"go": [0, 1], "stop": [0, 0]}, "conflict_high": {"go": [1, 2], "stop": [1, 3]},
+                                              "conflict_light": {"go": [0, 0], "stop": [0, 0]}, "last": {"go": [0, 0], "stop": [1, 1]}}])     # neplatná (null, 1,5) je chyba
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_summary_is_computed_once_per_answer(self):     # překreslení po každém rozhodnutí: quality i renderExtra čtou jeden rozbor, nový až po další odpovědi
+        page = page_source()
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for call in ("barrierSummary(", "barrierClassGo(", "auroc(", "bestThreshold("):
+            self.assertEqual(body.count(call), 1, call)                                            # jen v summary(g)
+        summary = re.search(r"\n  summary\(g\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        consts = "".join(re.search(r"\nconst %s = .*?;\n" % name, page, re.S).group(0) for name in ("BARRIER_RULES", "BARRIER_CLASSES"))
+        code = consts + "".join(page_function(f) for f in ("noulDecision", "barrierSummary", "barrierClassGo", "auroc", "bestThreshold")) + (
+            "const b = {" + summary + "}; const g = { cases: [{ go: true, rule: 4, cls: 'agree' }, { go: false, rule: 5, cls: 'last' }], probs: [0.9, 0.2] };"
+            "const a = b.summary(g), same = b.summary(g) === a;"
+            "g.cases.push({ go: false, rule: 1, cls: 'conflict_high' }); g.probs.push(0.9); const c = b.summary(g);"
+            "process.stdout.write(JSON.stringify([same, c !== a, a.area, c.area, c.sum.false_go, c.split.conflict_high.stop, c.best]));")
+        self.assertEqual(run_page_js(code), [True, True, 1, 0.75, [1, 2], [0, 1], [0.5, 0.75]])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_brake_lights_follow_the_nearest_answered_row(self):     # v reálném čase jádro nejbližší řadu přeskočí a ptá se na další
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        draw = re.search(r"\n  drawVehicle\(g, x, w\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = "const CAR_Y = 540; let lit = 0; const ctx = { fillRect() { lit++; } }; const b = {" + draw + "};" + (
+            "const R = [[{ result: 'ok', chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }, { result: null, chosen: 1 }],"
+            " [{ result: null, chosen: undefined }, { result: null, chosen: 0 }], [{ result: null, chosen: -1 }, { result: null, chosen: 1 }],"
+            " [{ result: null, chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }], []];"
+            "process.stdout.write(JSON.stringify(R.map(rows => { lit = 0; b.drawVehicle({ rows }, 0, 40); return lit > 0; })));")
+        self.assertEqual(run_page_js(code), [True, True, False, False, False, False, False])      # neplatná (−1) bez světel
+
+    def test_drawing_shows_every_field_and_writes_only_through_t(self):
+        page = page_source()
+        glyphs = re.findall(r"(\w+): '", re.search(r"\nconst BARRIER_GLYPH = \{(.*?)\};", page).group(1))
+        self.assertEqual(glyphs, ["police", "emergency", "pedestrian"])
+        draw = page_function("drawBarrier")
+        for name in ("police_officer", "emergency_vehicle", "pedestrian_on_crossing", "light", "sign"):
+            self.assertIn("s." + name, draw, name)                                                 # divák vidí všech pět polí stavu
+        self.assertNotIn("fillText('", draw)                                                       # žádný pevný text na plátně (nápis STOP ani písmena)
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for part in ("drawRing(r, y, rad) {", "drawVehicle(g, x, w) {", "t('barrier.decided'", "t('barrier.needless')", "t('answer.invalid')",
+                     "barrierOutcome(r.result, r.truth, r.chosen), x = (r.passLane + 0.5) * LW", "ctx.strokeStyle = BARRIER_COLOR[out]"):
+            self.assertIn(part, body)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_only_a_crash_flashes(self):                    # falešný průjezd a nestihl na řadě stůj blikají; zbytečné stání a neplatná odpověď blik nemění
+        page = page_source()
+        method = lambda src: re.search(r"\n  onStep\(g\) \{.*?\n  \},", src, re.S).group(0)[1:-1]
+        core = method(page.split("\nconst rowBase = {", 1)[1].split("\n};\n", 1)[0])
+        own = method(page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0])
+        code = page_function("barrierOutcome") + "const base = { steer() {}," + core + "}; const b = { __proto__: base," + own + "};" + (
+            "const C = [[0, 1], [undefined, 1], [1, 0], [-1, 1], [-1, 0], [0, 0], [1, 1]];"        # [chosen, truth]
+            "process.stdout.write(JSON.stringify(C.map(([chosen, truth]) => {"
+            " const g = { rows: [{ y: 0, result: null, chosen, truth }, { y: 3, result: null, chosen: 1, truth: 1 }], history: [], flash: 0.3, good: 0, bad: 0, late: 0 };"
+            " b.onStep(g); return [g.rows[0].result, g.flash, g.rows[1].result]; })));")
+        self.assertEqual(run_page_js(code), [["bad", 1, None], ["late", 1, None], ["bad", 0.3, None], ["bad", 0.3, None],
+                                             ["bad", 0.3, None], ["ok", 0.3, None], ["ok", 0.3, None]])
 
 
 if __name__ == "__main__":
