@@ -788,6 +788,80 @@ def lookahead_class(depth):
     return "d1" if depth == 1 else "d2" if depth == 2 else "d3+"
 
 
+def lookahead_open_moves(rows, lane):
+    """Tahy do volného pole nejbližší řady v mezích silnice, v pořadí stay, left, right (pořadí shody kontrolních strategií)."""
+    return [(move, lane + LOOKAHEAD_SHIFT[move]) for move in ("stay", "left", "right")
+            if 0 <= lane + LOOKAHEAD_SHIFT[move] < len(rows[0]) and rows[0][lane + LOOKAHEAD_SHIFT[move]] == "."]
+
+
+def lookahead_pick(rows, lane, score):
+    """Z tahů do volného pole ten s ostře nejvyšším skóre score(cílový pruh), shoda → dřívější; žádný volný tah → stay."""
+    best = None
+    for move, target in lookahead_open_moves(rows, lane):
+        value = score(target)
+        if best is None or value > best[0]:
+            best = (value, move)
+    return "stay" if best is None else best[1]
+
+
+def lookahead_density(rows, lane):
+    """Kontrolní strategie hustota: tah, jehož cílový pruh spolu se sousedními pruhy má ve všech řadách nejvíc volných polí."""
+    lanes = len(rows[0])
+    free = [sum(row[j] == "." for row in rows) for j in range(lanes)]
+    return lookahead_pick(rows, lane, lambda t: sum(free[max(0, t - 1):min(lanes, t + 2)]))
+
+
+def lookahead_center(rows, lane):
+    """Kontrolní strategie střed: tah do pruhu nejblíž středu silnice."""
+    middle = (len(rows[0]) - 1) / 2
+    return lookahead_pick(rows, lane, lambda t: -abs(t - middle))
+
+
+LOOKAHEAD_SHORTCUTS = {"greedy": lookahead_greedy, "density": lookahead_density, "center": lookahead_center}
+
+
+def lookahead_case(rng, lanes, cls):
+    """Úloha dvou kroků dopředu dané třídy. Vrací (řady, pruh auta, správný tah, hloubka pasti, tah hladového řidiče).
+
+    Řady se losují s hustotou LOOKAHEAD_DENSITY a zamítají, dokud nemají jediný nejlepší tah, který projede všech R řad,
+    s hloubkou pasti ve třídě cls. V d2 a d3+ se předem vylosuje, které kontrolní strategie mají trefit (každá s pravděpodobností
+    1/3; density jen při K ≥ 4, center jen při K ≥ 5), a úloha se přijme, jen když se trefují přesně tak. V d1 je každý tah
+    do volného pole správný.
+
+    Při K = 3 se density nehlídá: v d2 a d3+ tam greedy a density nikdy nemíjejí obě zároveň (ze středního pruhu pokryje
+    stay se sousedy celou silnici), takže vylosování „obě mimo“ nejde splnit."""
+    if not 3 <= lanes <= 8 or cls not in LOOKAHEAD_CLASSES:
+        raise RuntimeError(f"lookahead_case: no {cls} task for {lanes} lanes")
+    want = {}
+    if cls != "d1":
+        want["greedy"] = rng.random() < 1 / 3
+        if lanes >= 4:
+            want["density"] = rng.random() < 1 / 3
+        if lanes >= 5:
+            want["center"] = rng.random() < 1 / 3
+    for _ in range(LOOKAHEAD_TRIES):
+        rows = tuple("".join("#" if rng.random() < LOOKAHEAD_DENSITY else "." for _ in range(lanes)) for _ in range(LOOKAHEAD_ROWS))
+        if any("." not in row for row in rows):
+            continue
+        lane = rng.randrange(lanes)
+        answer, depth = lookahead_depth(rows, lane)
+        if answer is None or lookahead_class(depth) != cls or max(lookahead_values(rows, lane).values()) != LOOKAHEAD_ROWS:
+            continue
+        if all((LOOKAHEAD_SHORTCUTS[name](rows, lane) == answer) == hit for name, hit in want.items()):
+            break
+    else:
+        raise RuntimeError(f"lookahead_case: no {cls} task for {lanes} lanes after {LOOKAHEAD_TRIES} tries")
+    values = lookahead_values(rows, lane)
+    if lookahead_best(values) != [answer] or values[answer] != LOOKAHEAD_ROWS:     # zaručuje to konstrukce; nic se neopravuje potichu
+        raise RuntimeError(f"lookahead_case: {rows}, lane {lane} has best moves {values}, not only {answer}")
+    return rows, lane, answer, depth, lookahead_greedy(rows, lane)
+
+
+def lookahead_cases(n, lanes=4, seed=1):
+    rng = random.Random(seed)
+    return [lookahead_case(rng, lanes, rng.choice(LOOKAHEAD_CLASSES)) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
