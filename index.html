@@ -594,7 +594,7 @@ const TEXTS = {
   'barrier.auroc': { cs: 'AUROC {auroc}, nejlepší práh {threshold} → vyvážená {best}', en: 'AUROC {auroc}, best threshold {threshold} → balanced {best}' },
   'barrier.go': { cs: 'jeď', en: 'go' },
   'barrier.stop': { cs: 'stůj', en: 'stop' },
-  'barrier.decided': { cs: 'rozhodlo: pravidlo {n} {name}', en: 'decided by rule {n}: {name}' },
+  'barrier.decided': { cs: 'rozhodlo pravidlo {n}: {name}', en: 'decided by rule {n}: {name}' },
   'barrier.needless': { cs: 'stál zbytečně', en: 'stopped needlessly' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
@@ -1689,12 +1689,12 @@ function drawBarrier(r, y) {
 
 const barrier = {
   __proto__: rowBase,
-  id: 'barrier', lanesFree: true,
+  id: 'barrier',                                   // úloha nemá pruhy: silnice má vždy 4, ať se výsledky nedělí podle voliče
   get about() { return t('scenario.barrier.about'); },
   panels: ['confPanel'], get extraTitle() { return t('scenario.barrier.extraTitle'); },
   get extraTip() { return t('scenario.barrier.extraTip'); },
   get matchTip() { return t('scenario.barrier.tip.match'); },
-  lanes: () => +$('lanes').value,
+  lanes: () => 4,
   newGame() { return { ...this.baseGame(), cases: [], probs: [] }; },
   task(d, row = null, inject = row ? row.inject : rollInject([d.go ? 0 : 1], 2)) {      // úloha bez pokynu pole note nemá; base = stav bez pokynu pro obrácenou otázku
     return { row, base: d.state, state: withNoulNote(d.state, inject === null ? null : NOUL_TARGET[inject]), go: d.go, rule: d.rule, cls: d.cls, truth: d.go ? 0 : 1, inject };
@@ -2757,7 +2757,9 @@ function stepEstimate(kind, s) {                           // horní odhad dotaz
   else tasks = s.mode === 'turn' ? s.runlen + 1 : Math.ceil(s.runlen / s.speed * 1000 / HOSTED_MIN_MS);
   const mirror = s.mirror && (kind === 'bench' || s.mode === 'turn') && !SC.benchOnly;
   const requests = tasks * (mirror ? 3 : 1) + 1;           // + zahřívací dotaz
-  const task = SC.warmTask(), chars = JSON.stringify({ state: task.state, questions: SC.questions(0, task) }).length;
+  const task = SC.warmTask(), note = s.inject && !SC.benchOnly ? Math.max(INJECT_NOTE.length, INJECT_NOTE_NOUL.length, INJECT_EMAIL.length) + 30 : 0;      // pokyn trojského koně s klíčem
+  const chars = Math.max(...(mirror ? [0, 1, 2] : [0]).map(v =>                  // nejdelší varianta zadání
+    JSON.stringify({ state: SC.stateOf?.(task, v) ?? task.state, questions: SC.questions(v, task) }).length)) + note;
   return { requests, usd: requests * Math.ceil(chars / EST_CHARS_PER_TOKEN) * h.usd_per_m / 1e6 };
 }
 
