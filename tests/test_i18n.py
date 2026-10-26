@@ -1755,7 +1755,7 @@ class PageStatic(unittest.TestCase):
 
     def test_request_to_the_model_carries_nothing_of_the_page_language(self):  # tělo dotazu skládá jediný řádek; jazyk ani text ze slovníku v něm není
         body = piece(r"^  const body = \{[^\n]*\};$")
-        self.assertEqual(body, "  const body = { model: $('model').value, state: task.state, questions: SC.questions(variant, task) };")
+        self.assertEqual(body, "  const body = { model: $('model').value, state: SC.stateOf?.(task, variant) ?? task.state, questions: SC.questions(variant, task) };")
 
     def test_kind_of_error_is_not_read_from_its_sentence(self):
         code = script()

@@ -4,7 +4,10 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
+import subprocess
 import sys
 import time
 import unittest
@@ -527,6 +530,46 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --barrier tev1", text)
             self.assertIn("\n--barrier:  ", text)
             self.assertIn("Must the car stop now?", text)
+
+
+def page_source():
+    return (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def run_page_js(code):
+    """Pustí v node kus skriptu stránky (vytažené funkce) a vrátí JSON, který vypsal."""
+    out = subprocess.run(["node", "-e", code], capture_output=True, text=True, encoding="utf-8", timeout=60)
+    if out.returncode:
+        raise AssertionError("node: " + out.stderr[-800:])
+    return json.loads(out.stdout)
+
+
+def page_function(name):
+    """Celá funkce stránky `function name(…) {` … `\n}` (musí tam být právě jednou)."""
+    found = re.findall(r"\nfunction %s\(.*?\n\}\n" % name, page_source(), re.S)
+    if len(found) != 1:
+        raise AssertionError(f"funkce {name} má být ve stránce právě jednou, je tam {len(found)}×")
+    return found[0]
+
+
+class Page(unittest.TestCase):                                         # scénář ve stránce; pravidla, generátor a výpočty hlídá tests/test_parity.py (Barrier)
+    def test_core_hooks_for_a_two_option_scenario(self):
+        page = page_source()
+        self.assertEqual(page.count("function pickWrong(truths, r, options = LANES) {"), 1)
+        self.assertEqual(page.count("function rollInject(truths, options = LANES) {"), 1)
+        self.assertEqual(page.count("pickWrong(truths, pick, options)"), 1)
+        self.assertEqual(page.count("newRow: (g, y, data, options = LANES) => ("), 1)
+        self.assertEqual(page.count("inject: rollInject([data.truth], options)"), 1)
+        self.assertEqual(page.count("state: SC.stateOf?.(task, variant) ?? task.state"), 1)       # obrácená otázka zrcadla nese obrácený pokyn
+        self.assertEqual(page.count("SC.parse(j.answers || {}, task, variant)"), 1)
+        self.assertEqual(page.count("SC.tally(G, task, res.move, res);"), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_wrong_option_among_two(self):
+        code = "let LANES = 4;" + page_function("pickWrong") + (
+            "process.stdout.write(JSON.stringify([pickWrong([0], 0.99, 2), pickWrong([1], 0, 2), pickWrong([0, 1], 0.5, 2),"
+            " pickWrong([2], 0.99), pickWrong([0], 0)]));")
+        self.assertEqual(run_page_js(code), [1, 0, None, 3, 1])                  # bez třetího parametru jako dřív: LANES možností
 
 
 if __name__ == "__main__":
