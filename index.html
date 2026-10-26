@@ -1950,6 +1950,27 @@ const BARRIER_WARM = {
            light: 'yellow', sign: 'priority road' },
   go: true, rule: 1, cls: 'conflict_high',
 };
+// Úloha Závory: náhoda z předané funkce (jiné úlohy než bench.py, kroky a pořadí losování stejné jako barrier_case).
+function barrierCase(rand) {                               // { state, go, rule, cls }
+  const go = rand() < BARRIER_GO_SHARE;
+  const rule = pickOf(rand, BARRIER_RULES.filter(r => Object.values(BARRIER_FIELDS[r - 1][1]).includes(go)));
+  let cls = rule === 5 ? 'last' : rand() < 0.5 ? 'conflict' : 'agree';
+  const state = {}, valuesOf = (table, out) => Object.keys(table).filter(v => table[v] === out);
+  for (const [name, table] of BARRIER_FIELDS.slice(0, rule - 1)) state[name] = pickOf(rand, valuesOf(table, null));
+  const [name, table] = BARRIER_FIELDS[rule - 1];
+  state[name] = pickOf(rand, valuesOf(table, go));
+  const shadowFrom = rule < 4 ? 4 : rule + 1;             // stín: co by řekl semafor (při off značka), u pravidla 4 značka
+  let found = false;
+  for (let i = 0; i < 1000 && !found; i++) {               // pole pod rozhodujícím pravidlem, dokud stínový výsledek nesedí s třídou
+    for (const [below, values] of BARRIER_FIELDS.slice(rule)) state[below] = pickOf(rand, Object.keys(values));
+    found = rule === 5 || (barrierDecide(state, shadowFrom)[0] !== go) === (cls === 'conflict');
+  }
+  if (!found) throw new Error(`barrierCase: no ${cls} state for rule ${rule} after 1000 tries`);
+  const [got, by] = barrierDecide(state);
+  if (got !== go || by !== rule) throw new Error(`barrierCase: ${JSON.stringify(state)} does not give ${go}, ${rule}`);      // zaručuje to konstrukce
+  if (cls === 'conflict') cls = rule < 4 ? 'conflict_high' : 'conflict_light';
+  return { state, go, rule, cls };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------

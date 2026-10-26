@@ -470,10 +470,56 @@ class Barrier(unittest.TestCase):
         self.assertEqual(got, [[bench.noul_decision(p), bench.noul_decision(p, True)] for p in values])
         self.assertEqual(run_js("[NaN, Infinity, -Infinity, undefined].map(p => [noulDecision(p), noulDecision(p, true)])", None), [[None, None]] * 4)
 
+    def test_generated_cases_keep_the_rules_of_bench(self):
+        import bench
+        tables = dict(bench.BARRIER_FIELDS)
+        cases = run_js(BARRIER_ROWS_JS, {"seed": 11, "n": 4000})
+        self.assertTrue(0.70 <= sum(c["go"] for c in cases) / len(cases) <= 0.80)
+        for c in cases:
+            state, go, rule, cls = c["state"], c["go"], c["rule"], c["cls"]
+            with self.subTest(state=state, rule=rule, cls=cls):
+                self.assertEqual(list(c), ["state", "go", "rule", "cls"])
+                self.assertEqual(list(state), BARRIER_NAMES)                                   # pevné pořadí klíčů stavu
+                self.assertTrue(all(state[name] in tables[name] for name in BARRIER_NAMES))
+                self.assertEqual(bench.barrier_decide(state), (go, rule))
+                self.assertTrue(all(tables[name][state[name]] is None for name in BARRIER_NAMES[:rule - 1]))      # pole nad pravidlem nerozhodují
+                if rule == 5:
+                    self.assertEqual(cls, "last")
+                else:                                                                          # stín: semafor (při off značka), u pravidla 4 značka
+                    shadow = bench.barrier_decide(state, 4 if rule < 4 else 5)[0]
+                    self.assertEqual(cls, ("conflict_high" if rule < 4 else "conflict_light") if shadow != go else "agree")
+        lower = ["agree" if c["cls"] == "agree" else "conflict" for c in cases if c["rule"] < 5]
+        for cls in ("agree", "conflict"):
+            self.assertTrue(0.40 <= lower.count(cls) / len(lower) <= 0.60, (cls, lower.count(cls), len(lower)))
+        self.assertEqual({c["rule"] for c in cases if c["cls"] == "conflict_high"}, {1, 2, 3})
+        self.assertEqual({c["rule"] for c in cases if c["cls"] == "conflict_light"}, {4})
+        for name, table in bench.BARRIER_FIELDS:                                                # každá hodnota se objeví
+            self.assertEqual({c["state"][name] for c in cases}, set(table), name)
+
+        def light_only(state):                                                                 # strategie „jen semafor, při off značka“
+            light = tables["light"][state["light"]]
+            return tables["sign"][state["sign"]] if light is None else light
+        high = [c for c in cases if c["cls"] == "conflict_high"]
+        agree_top = [c for c in cases if c["cls"] == "agree" and c["rule"] < 4]
+        self.assertEqual(sum(light_only(c["state"]) == c["go"] for c in high), 0)
+        self.assertEqual(sum(light_only(c["state"]) == c["go"] for c in agree_top), len(agree_top))
+
+    def test_same_seed_same_cases(self):
+        first = run_js(BARRIER_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(BARRIER_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(BARRIER_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_endless_retry_raises_instead_of_looping(self):        # jako Stuck v tests/test_barrier.py: jeď, pravidlo 1, konflikt, pole pod ním vždy první hodnota
+        got = run_js("(() => { try { barrierCase(() => 0); return null; } catch (e) { return e.message; } })()", None)
+        self.assertTrue(str(got).startswith("barrierCase: no conflict state for rule 1 after 1000 tries"), got)
+
 
 # Generátor paměťové stopy stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady memoryRow.
 MEMORY_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "memoryRow(arg.gates, rand)")
 assert MEMORY_ROWS_JS != ROWS_JS
+# Generátor Závory stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy barrierCase.
+BARRIER_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "barrierCase(rand)")
+assert BARRIER_ROWS_JS != ROWS_JS
 
 
 if __name__ == "__main__":
