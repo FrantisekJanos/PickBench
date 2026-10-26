@@ -6,6 +6,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -15,6 +16,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
+          python bench.py 100 --rule tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -45,6 +47,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             crash or off the road, other, invalid.
 --rows, --blocked:  only with --lookahead: the form of the state. rows = every row as a string, one character per lane ("." free,
             "#" blocked); blocked = for every row, the list of the numbers of its blocked lanes. Without the option: blocked.
+--rule:     hidden rule: a sample card (color, shape, count) and three gates, each matching the sample in exactly one feature.
+            A hidden rule says by which feature a gate is right; after every three correct picks in a row it changes to another
+            feature. The model gets a log of earlier picks (the feature the picked gate shared with the sample, and whether
+            it was correct) and picks the gate by the rule in force now. N tasks (default 100). After the model row, the
+            accuracy by class (repeat: a correct pick gives the rule; switch: after a change, the rule is what is left once
+            the others are ruled out; eliminate: no change and no correct pick); below it the accuracy by log length (short
+            3–5, long 6–10 picks) and perseveration = how often the model picked the gate of the old rule in switch. Not with --lanes.
+--labeled, --matched-by:  only with --rule: the form of the state; the log is the same in both. labeled = each gate
+            says only the feature it shares with the sample, the model sees no cards; matched_by = the sample card and the
+            cards of the gates, so the model has to find the shared feature itself. Without the option: labeled.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

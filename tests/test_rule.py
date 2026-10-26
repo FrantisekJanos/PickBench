@@ -400,5 +400,104 @@ class Lines(unittest.TestCase):
         self.assertEqual(printed("en", bench.print_rule, r), [" " * 20 + "log short 1/1, long 0/0; perseveration 0/0"])
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--rule", "m1"])
+        self.assertEqual((a.n, a.rule, a.matched_by, a.labeled, a.lanes_given, a.models), (40, True, False, False, False, ["m1"]))
+        a = bench.parse_args(["--labeled", "--rule", "m1"])
+        self.assertEqual((a.rule, a.matched_by, a.labeled), (True, False, True))
+        self.assertTrue(bench.parse_args(["--rule", "--matched-by", "m1"]).matched_by)
+
+    def test_first_line_and_rows(self):
+        form = bench.RULE_FORM
+        for argv, cs, en in ((["1", "--rule", "m1"], f"1 úloh se skrytým pravidlem (podoba stavu {form}), 3 brány",
+                              f"1 task with a hidden rule (state form {form}), 3 gates"),
+                             (["7", "--rule", "--labeled", "m1"], "7 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány",
+                              "7 tasks with a hidden rule (state form labeled), 3 gates"),
+                             (["7", "--matched-by", "--rule", "m1"], "7 úloh se skrytým pravidlem (podoba stavu matched_by), 3 brány",
+                              "7 tasks with a hidden rule (state form matched_by), 3 gates")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--rule", "m1")[0].startswith("100 úloh se skrytým pravidlem"))      # výchozí počet úloh
+        en = self.cli("6", "--rule", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 5)
+        self.assertRegex(en[3], r"^m1 .*   \(repeat \d+/\d+, switch \d+/\d+, eliminate \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}log short \d+/\d+, long \d+/\d+; perseveration \d+/\d+$")
+        self.assertEqual(len(self.cli("1", "--rule", "m1")[0].splitlines()), 5)            # jediná úloha: prázdné třídy 0/0
+
+    def test_option_errors_in_both_languages(self):
+        form_cs, form_en = "Volby --matched-by a --labeled jdou jen s --rule.", "The --matched-by and --labeled options work only with --rule."
+        for argv, cs, en in (
+                (["6", "--rule", "--lanes", "3", "m1"], "Volba --lanes se s --rule nekombinuje.", "The --lanes option cannot be combined with --rule."),
+                (["6", "--labeled", "m1"], form_cs, form_en),
+                (["--matched-by", "--lookahead", "m1"], form_cs, form_en),
+                (["--rule", "--blocked", "m1"], "Volby --rows a --blocked jdou jen s --lookahead.", "The --rows and --blocked options work only with --lookahead."),
+                (["--rule", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--rule", "--lookahead", "m1"], ["--rule", "--barrier", "m1"], ["--rule", "--memory", "m1"], ["--rule", "--numbers", "m1"],
+                     ["--rule", "--matched-by", "--labeled", "m1"], ["--rule", "--lanes", "9", "m1"], ["--rule"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_tasks(self):
+        self.cli("6", "--rule", "--matched-by", "m1")
+        matched, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--rule", "--labeled", "m1")
+        labeled = [json.loads(body) for body in self.sent]
+        self.assertEqual((len(matched), len(labeled)), (7, 7))                  # zahřátí a šest úloh
+        self.assertTrue(all(list(a["questions"]) == ["gate"] and list(b["questions"]) == ["gate_labeled"] for a, b in zip(matched, labeled)))
+        for a, b in zip((p["state"] for p in matched), (p["state"] for p in labeled)):
+            self.assertEqual(a["log"], b["log"])
+            self.assertNotIn("sample", b)
+            sample = parse_card(a["sample"])
+            for k in GATES:
+                self.assertEqual(b[k], {"matches_sample_by": bench.rule_shared(sample, parse_card(a[k]))[0]})
+            self.assertEqual(solve(a), solve(b))
+
+    def test_mirror_and_inject_work_with_rule(self):
+        out, code = self.cli("8", "--rule", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("deník krátký "), lines[6])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --rule tev1", text)
+            self.assertIn("\n--rule:     ", text)
+            self.assertIn("\n--labeled, --matched-by:  ", text)
+            self.assertIn(bench.RULE_FORM + ".", text)
+
+
 if __name__ == "__main__":
     unittest.main()

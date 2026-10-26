@@ -6,6 +6,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -15,6 +16,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
+          python bench.py 100 --rule tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -45,6 +47,16 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --rows, --blocked:  jen s --lookahead: podoba stavu. rows = každá řada jako řetězec se znakem pro každý pruh
             („.“ volno, „#“ překážka); blocked = u každé řady seznam čísel zablokovaných pruhů.
             Bez volby platí blocked.
+--rule:     skryté pravidlo: vzorová karta (barva, tvar, počet) a tři brány, každá se vzorem shodná právě v jednom znaku.
+            Skryté pravidlo říká, podle kterého znaku je brána správná, a po každých třech správných pokusech v řadě se mění
+            na jiný znak. Model dostane deník dřívějších pokusů (u každého znak, ve kterém se zvolená brána shodovala se vzorem,
+            a jestli byl pokus správný) a volí bránu podle pravidla, které platí teď. N úloh (výchozí 100). Za řádkem modelu
+            přesnost podle třídy (opakování: pravidlo určí správný pokus; přepnutí: po změně zbude pravidlo vyloučením;
+            vyloučení: bez změny a bez správného pokusu), pod ním přesnost podle délky deníku (krátký 3–5, dlouhý 6–10 pokusů)
+            a perseverace = kolikrát model ve třídě přepnutí zvolil bránu starého pravidla. S --lanes se nekombinuje.
+--labeled, --matched-by:  jen s --rule: podoba stavu, deník je v obou stejný. labeled = každá brána říká jen znak,
+            ve kterém se shoduje se vzorem, karty model nevidí; matched_by = karta vzoru a karty bran, znak shody
+            musí model najít sám. Bez volby platí labeled.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -78,6 +90,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -87,6 +100,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
+          python bench.py 100 --rule tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -117,6 +131,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             crash or off the road, other, invalid.
 --rows, --blocked:  only with --lookahead: the form of the state. rows = every row as a string, one character per lane ("." free,
             "#" blocked); blocked = for every row, the list of the numbers of its blocked lanes. Without the option: blocked.
+--rule:     hidden rule: a sample card (color, shape, count) and three gates, each matching the sample in exactly one feature.
+            A hidden rule says by which feature a gate is right; after every three correct picks in a row it changes to another
+            feature. The model gets a log of earlier picks (the feature the picked gate shared with the sample, and whether
+            it was correct) and picks the gate by the rule in force now. N tasks (default 100). After the model row, the
+            accuracy by class (repeat: a correct pick gives the rule; switch: after a change, the rule is what is left once
+            the others are ruled out; eliminate: no change and no correct pick); below it the accuracy by log length (short
+            3–5, long 6–10 picks) and perseveration = how often the model picked the gate of the old rule in switch. Not with --lanes.
+--labeled, --matched-by:  only with --rule: the form of the state; the log is the same in both. labeled = each gate
+            says only the feature it shares with the sample, the model sees no cards; matched_by = the sample card and the
+            cards of the gates, so the model has to find the shared feature itself. Without the option: labeled.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -1628,6 +1652,9 @@ def parse_args(argv):
     p.add_argument("--lookahead", action="store_true")
     p.add_argument("--rows", action="store_true")
     p.add_argument("--blocked", action="store_true")
+    p.add_argument("--rule", action="store_true")
+    p.add_argument("--matched-by", action="store_true")
+    p.add_argument("--labeled", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -1789,9 +1816,9 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead)
+    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
-            or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked)):
+            or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -1803,6 +1830,10 @@ def main(argv):
         sys.exit(i18n.t("bench.err.countMemory"))
     if (args.rows or args.blocked) and not args.lookahead:
         sys.exit(i18n.t("bench.err.formLookahead"))
+    if (args.matched_by or args.labeled) and not args.rule:
+        sys.exit(i18n.t("bench.err.formRule"))
+    if args.rule and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesRule"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -1893,6 +1924,16 @@ def main(argv):
                 r = run_lookahead(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, lookahead_note(r))
                 print_lookahead(r)
+    elif args.rule:
+        form = "labeled" if args.labeled else "matched_by" if args.matched_by else RULE_FORM
+        cases = rule_cases(args.n or 100)                # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        print(i18n.t("bench.intro.rule", n=len(cases), form=form) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_rule(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, rule_note(r))
+                print_rule(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

@@ -1,0 +1,5 @@
+12 tasks with a hidden rule (state form matched_by), 3 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      69%    52%     245   (repeat 0/4, switch 1/2, eliminate 1/6)
+                    log short 1/7, long 1/5; perseveration 1/2

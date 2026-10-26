@@ -1587,7 +1587,8 @@ REAL_TIME_ONLY = {"tip.speed": "posuvník rychlosti platí jen pro volbu Reáln�
 CARD_OK = {"index.html scenario.emails.about": "karta e-mailu vedle silnice",
            "i18n.py fetch.about.cfpb": "karta kopie databáze na Hugging Face (dataset card)",
            "datasets/cfpb-complaints-300.json": "tentýž popis, jak ho fetch_datasets.py zapsal do přibalené sady",
-           "README.md": "karta kopie databáze CFPB na Hugging Face (its card)"}
+           "README.md": "karta kopie databáze CFPB na Hugging Face (its card)",
+           "bench.py USAGE_EN": "karta vzoru a karty bran ve scénáři Skryté pravidlo (--rule)"}
 # Přibalené sady a zkušební sady testů: jejich anglický popis (about_en) čte divák anglické stránky.
 SHIPPED_SETS = ("datasets/cfpb-complaints-300.json", "datasets/cz-emaily-300.json", "datasets/cz-firemni-emaily-kos.json", "datasets/cz-firemni-emaily.json",
                 "tests/public-mini.json", "tests/public-options.json")
