@@ -76,5 +76,32 @@ class Goodput(unittest.TestCase):
         self.assertIsNone(metrics.goodput([], 100))
 
 
+class Barrier(unittest.TestCase):                   # AUROC a nejlepší práh otázky noul; případy z tests/test_barrier.py (Quality)
+    def test_auroc(self):
+        self.assertEqual(metrics.auroc([0.9, 0.8, 0.2, 0.1], [True, True, False, False]), 1)
+        self.assertEqual(metrics.auroc([0.1, 0.2, 0.8, 0.9], [True, True, False, False]), 0)
+        self.assertEqual(metrics.auroc([0.5, 0.5, 0.5], [True, False, True]), 0.5)                 # shody jako polovina
+        self.assertEqual(metrics.auroc([0.9, 0.4, 0.4, 0.1], [True, True, False, False]), 0.875)
+        self.assertEqual(metrics.auroc([0.9, None, 0.1, None], [True, True, False, False]), 1)     # neplatné se vynechají
+        self.assertIsNone(metrics.auroc([0.9, 0.8], [True, True]))                                 # chybí úlohy „stůj“
+        self.assertIsNone(metrics.auroc([0.9, None], [True, False]))                               # jediná „stůj“ je neplatná
+        self.assertIsNone(metrics.auroc([], []))
+
+    def test_best_threshold(self):
+        self.assertEqual(metrics.best_threshold([0.9, 0.6, 0.4, 0.2], [True, True, True, False]), (0.4, 1))
+        self.assertEqual(metrics.best_threshold([0.7, 0.3], [True, False]), (0.5, 1))                  # shoda: nejblíž 0,5
+        self.assertEqual(metrics.best_threshold([0.8, 0.6], [True, False]), (0.8, 1))
+        self.assertEqual(metrics.best_threshold([0.25, 0.75, 0.625, 0.125], [True, True, False, False]), (0.25, 0.75))   # stejně daleko: nižší
+        self.assertEqual(metrics.best_threshold([None, 0.9], [True, True]), (0.5, 0.5))                 # neplatná je chyba; jen úlohy jeď
+        self.assertEqual(metrics.best_threshold([None, None], [True, False]), (0.5, 0))
+        self.assertEqual(metrics.best_threshold([0.8] * 4, [True, True, True, False]), (0.5, 0.5))      # vždy jeď: vyváženě 50 %
+        self.assertEqual(metrics.best_threshold([0.9, 0.3, 0.3, 0.6], [True, True, True, False]), (0.9, 2 / 3))
+
+    def test_bench_uses_these_functions(self):      # bench.py je po přesunu jen přejmenovává; stejný výpočet má stránka (tests/test_parity.py)
+        import bench
+        self.assertIs(bench.barrier_auroc, metrics.auroc)
+        self.assertIs(bench.barrier_threshold, metrics.best_threshold)
+
+
 if __name__ == "__main__":
     unittest.main()

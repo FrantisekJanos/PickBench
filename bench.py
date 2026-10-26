@@ -693,27 +693,8 @@ def noul_decision(p, inverted=False):
     return p < 0.5 if inverted else p >= 0.5
 
 
-def barrier_auroc(probs, truths):
-    """AUROC z noul proti pravdě jeď; shody jako polovina, neplatné (None) se vynechají. Bez úloh jedné třídy None."""
-    pos = [p for p, go in zip(probs, truths) if go and p is not None]
-    neg = [p for p, go in zip(probs, truths) if not go and p is not None]
-    if not pos or not neg:
-        return None
-    return sum((a > b) + 0.5 * (a == b) for a in pos for b in neg) / (len(pos) * len(neg))
-
-
-def barrier_threshold(probs, truths):
-    """Nejlepší práh t z vrácených hodnot noul a 0,5 podle vyvážené přesnosti rozhodnutí noul >= t: průměr podílu
-    správných na úlohách jeď a na úlohách stůj (neplatná = chyba; chybí-li úlohy jedné třídy, jen podíl té druhé).
-    Při shodě vyhrává práh nejblíž 0,5, potom nižší. Vrací (t, vyvážená přesnost). Zlomky, aby shoda byla přesná."""
-    from fractions import Fraction
-    groups = [(want, [p for p, go in zip(probs, truths) if go == want]) for want in (True, False)]
-    groups = [(want, ps) for want, ps in groups if ps]
-
-    def balanced(t):
-        return sum(Fraction(sum(p is not None and (p >= t) == want for p in ps), len(ps)) for want, ps in groups) / len(groups)
-    t = min({0.5, *(p for p in probs if p is not None)}, key=lambda t: (-balanced(t), abs(t - 0.5), t))
-    return t, float(balanced(t))
+barrier_auroc = metrics.auroc                        # výpočet je v metrics.py, stejný má stránka (sdílený blok); jména zůstávají
+barrier_threshold = metrics.best_threshold           # pro run_barrier a tests/test_barrier.py
 
 
 def barrier_summary(cases, probs):
