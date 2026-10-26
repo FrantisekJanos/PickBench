@@ -932,6 +932,59 @@ def lookahead_errors(cases, choices):
     return counts
 
 
+# ---------- scénář: skryté pravidlo ----------
+# Karta je dict s klíči v pořadí RULE_FEATURES. Položka deníku začíná (znak, správně?): znak, ve kterém se zvolená brána
+# shodovala se vzorem, a jestli byla volba správná.
+RULE_FEATURES = ("color", "shape", "count")
+RULE_VALUES = {"color": ("red", "blue", "green"), "shape": ("circle", "star", "square"), "count": (1, 2, 3)}
+RULE_CLASSES = ("repeat", "switch", "eliminate")     # pravidlo plyne ze správného pokusu, ze změny, z vyloučení
+RULE_STREAK = 3                                      # po tolika správných v řadě se pravidlo mění
+RULE_LOG = (3, 10)                                   # nejkratší a nejdelší deník
+RULE_SHORT = 5                                       # krátký deník: nejvýš tolik pokusů
+RULE_LENGTHS = ("short", "long")
+RULE_STICK = 0.8                                     # skript pokusů: po správném pokusu s touto pravděpodobností stejný znak
+RULE_FORMS = ("labeled", "matched_by")
+RULE_FORM = "labeled"                                # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-26
+RULE_TRIES = 10000                                   # mez pokusů na jednu úlohu
+
+
+def card_text(card):
+    """Karta jako text: „2 red stars“, „1 green circle“."""
+    n = card["count"]
+    return f"{n} {card['color']} {card['shape']}{'s' if n > 1 else ''}"
+
+
+def rule_shared(a, b):
+    """Znaky, ve kterých se dvě karty shodují, v pořadí RULE_FEATURES."""
+    return [f for f in RULE_FEATURES if a[f] == b[f]]
+
+
+def rule_read(log):
+    """Co o pravidle ví čtenář deníku (jen z výsledků). Vrací (kandidáti, starý znak nebo None, třída nebo None).
+
+    Série správných se počítá od začátku, špatný pokus ji nuluje; po třetím správném v řadě se pravidlo mění (starý znak
+    je znak toho pokusu) a série začíná znovu. Končí-li deník změnou, nové pravidlo určené není. Jinak kandidáti jsou znaky
+    kromě starého; v úseku od poslední změny správný pokus nastaví jeho znak, špatný znak vyřadí. Třída: repeat se správným
+    pokusem v úseku, jinak switch se změnou, jinak eliminate; None, když kandidát není právě jeden."""
+    streak, change, old = 0, -1, None
+    for i, (feature, ok, *_) in enumerate(log):
+        streak = streak + 1 if ok else 0
+        if streak == RULE_STREAK:                    # po třetím správném v řadě se pravidlo mění, série začíná znovu
+            change, old, streak = i, feature, 0
+    candidates = set(RULE_FEATURES) - {old}
+    if change == len(log) - 1:                       # deník končí změnou: nové pravidlo neznámé
+        return candidates, old, None
+    tail = log[change + 1:]
+    for feature, ok, *_ in tail:
+        if ok:
+            candidates = {feature}
+        else:
+            candidates.discard(feature)
+    if len(candidates) != 1:
+        return candidates, old, None
+    return candidates, old, "repeat" if any(ok for _, ok, *_ in tail) else "switch" if old else "eliminate"
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
