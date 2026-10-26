@@ -150,6 +150,12 @@ TEXTS = {
                              "en": "false go {false_go}, needless stop {needless}, invalid {invalid}; agree {agree}, "
                                    "light overridden {conflict_high}, light over sign {conflict_light}, last rule {last}; "
                                    "AUROC {auroc}, best threshold {threshold} → balanced {best}"},
+    # Skryté pravidlo (--rule): jména tříd v poznámce za řádkem modelu a řádek pod ním ({short}, {long}, {persev} = „správně/celkem“).
+    "bench.rule.repeat": {"cs": "opakování", "en": "repeat"},
+    "bench.rule.switch": {"cs": "přepnutí", "en": "switch"},
+    "bench.rule.eliminate": {"cs": "vyloučení", "en": "eliminate"},
+    "bench.rule.line": {"cs": "deník krátký {short}, dlouhý {long}; perseverace {persev}",
+                        "en": "log short {short}, long {long}; perseveration {persev}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "

@@ -1754,6 +1754,19 @@ def print_lookahead(r):
     print(" " * 20 + i18n.t("bench.lookahead.errors", **r["errors"]), flush=True)
 
 
+def rule_note(r):
+    """Poznámka za řádkem modelu: přesnost podle třídy úlohy skrytého pravidla."""
+    return class_note(r["by_class"], {"repeat": i18n.t("bench.rule.repeat"), "switch": i18n.t("bench.rule.switch"),
+                                      "eliminate": i18n.t("bench.rule.eliminate")})
+
+
+def print_rule(r):
+    """Řádek pod řádkem modelu: přesnost podle délky deníku a perseverace (správně/celkem)."""
+    frac = lambda counts: f"{counts[0]}/{counts[1]}"
+    print(" " * 20 + i18n.t("bench.rule.line", short=frac(r["by_length"]["short"]), long=frac(r["by_length"]["long"]),
+                            persev=frac(r["persev"])), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
