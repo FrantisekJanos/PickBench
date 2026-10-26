@@ -31,7 +31,7 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             „ano“, jeď je aspoň 0,5, jistota = max(p, 1 − p). Pět pravidel s pořadím je v zadání, takže se měří čtení zadání
             a stavu, ne znalost předpisů. N křižovatek (výchozí 100), tři čtvrtiny z nich jeď. Za řádkem modelu přesnost
             podle rozhodujícího pravidla, pod ním falešný průjezd, zbytečné stání, neplatné odpovědi a přesnost ve čtyřech
-            třídách: shodné (nižší pravidlo říká totéž), přebitý semafor (pravidlo 1–3 ruší opačný semafor nebo značku),
+            třídách: shodné (semafor, při off značka, říká totéž), přebitý semafor (pravidlo 1–3 ruší opačný semafor nebo značku),
             semafor přebil značku, poslední pravidlo; dál AUROC a nejlepší práh s vyváženou přesností (průměr jeď a stůj).
             S --mirror je druhou variantou obrácená otázka „Must the car stop now?“ (pokyn trojského koně je v ní obrácený);
             řádek variant ji vypisuje jako „obrácené pořadí“. S --lanes se nekombinuje.

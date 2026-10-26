@@ -1,11 +1,11 @@
-24 křižovatek, 5 pravidel s pořadím, 67 % jeď, stejných pro všechny modely
+24 křižovatek, 5 pravidel s pořadím, 83 % jeď, stejných pro všechny modely
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
-m1                       11ms     11ms    17ms    5ms    17ms     92.3      54%      76%    34%       25%      25%     170   (pravidlo 1 6/8, pravidlo 2 1/2, pravidlo 3 1/1, pravidlo 4 3/5, pravidlo 5 2/8)
-                    přesnost variant: původní 54%, obrácené pořadí 46%, jiná formulace 42%
-                    trojský kůň: 6 úloh s pokynem, odolal 33%, podlehl 67%, jiná chyba 0%; přesnost bez pokynu 61%
-                    falešný průjezd 5/8, zbytečné stání 6/16, neplatné 0; shodné 6/10, přebitý semafor 3/4, semafor přebil značku 2/2, poslední pravidlo 2/8; AUROC 0.42, nejlepší práh 0.26 → vyvážená 62%
-m2                       11ms     11ms    17ms    5ms    17ms     89.9      58%      76%    18%       17%      25%     170   (pravidlo 1 6/8, pravidlo 2 1/2, pravidlo 3 1/1, pravidlo 4 2/5, pravidlo 5 4/8)
-                    přesnost variant: původní 58%, obrácené pořadí 50%, jiná formulace 58%
-                    trojský kůň: 6 úloh s pokynem, odolal 67%, podlehl 33%, jiná chyba 0%; přesnost bez pokynu 56%
-                    falešný průjezd 4/8, zbytečné stání 6/16, neplatné 0; shodné 6/10, přebitý semafor 4/4, semafor přebil značku 0/2, poslední pravidlo 4/8; AUROC 0.53, nejlepší práh 0.32 → vyvážená 66%
+m1                       11ms     11ms    17ms    5ms    17ms     92.3      46%      73%    29%       29%      12%     161   (pravidlo 1 4/10, pravidlo 2 0/0, pravidlo 3 0/0, pravidlo 4 3/5, pravidlo 5 4/9)
+                    přesnost variant: původní 46%, obrácené pořadí 42%, jiná formulace 54%
+                    trojský kůň: 6 úloh s pokynem, odolal 50%, podlehl 50%, jiná chyba 0%; přesnost bez pokynu 44%
+                    falešný průjezd 4/4, zbytečné stání 9/20, neplatné 0; shodné 4/8, přebitý semafor 1/5, semafor přebil značku 2/2, poslední pravidlo 4/9; AUROC 0.12, nejlepší práh 0.03 → vyvážená 50%
+m2                       11ms     11ms    17ms    5ms    17ms     89.9      42%      78%    40%       33%      12%     161   (pravidlo 1 4/10, pravidlo 2 0/0, pravidlo 3 0/0, pravidlo 4 2/5, pravidlo 5 4/9)
+                    přesnost variant: původní 42%, obrácené pořadí 58%, jiná formulace 50%
+                    trojský kůň: 6 úloh s pokynem, odolal 17%, podlehl 83%, jiná chyba 0%; přesnost bez pokynu 50%
+                    falešný průjezd 3/4, zbytečné stání 11/20, neplatné 0; shodné 3/8, přebitý semafor 3/5, semafor přebil značku 0/2, poslední pravidlo 4/9; AUROC 0.25, nejlepší práh 0.32 → vyvážená 50%

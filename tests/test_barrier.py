@@ -135,7 +135,7 @@ class Generator(unittest.TestCase):
                 if rule == 5:
                     self.assertEqual(cls, "last")
                 else:
-                    shadow = bench.barrier_decide(state, rule + 1)[0]
+                    shadow = bench.barrier_decide(state, 4 if rule < 4 else 5)[0]   # co by řekl semafor (při off značka) / značka
                     conflict = "conflict_high" if rule < 4 else "conflict_light"       # vyšší pravidlo přebíjí semafor / semafor přebíjí značku
                     self.assertEqual(cls, conflict if shadow != go else "agree")
 
@@ -177,11 +177,10 @@ class Generator(unittest.TestCase):
         self.assertTrue(0.70 <= always <= 0.80, always)
         self.assertLess(stop_acc, 0.10)
         self.assertLessEqual(light_acc, 0.60)
-        # Třída conflict_high zkratku odhalí. Mez 10 % z pokynu hlavní session při definici specu (stínový výsledek z r + 1) neplatí:
-        # u pravidla 1 se stínový výsledek často rozhodne pravidlem 2 nebo 3, ne semaforem, a tam strategie jen semafor trefí.
-        # Naměřeno 17,6 % (semínka 1–5: 14,4–18,4 %); u pravidel 2 a 3 je to vždy 0. Viz Revize 2026-10-23, druhé kolo.
-        self.assertLessEqual(light_high, 0.20)
-        self.assertEqual(sum(light_only(s) == go for s, go, rule, cls in cases if cls == "conflict_high" and rule in (2, 3)), 0)
+        # conflict_high je definovaná proti semaforu (při off značce): strategie jen semafor v ní netrefí nic, ve shodných vše.
+        self.assertEqual(light_high, 0.0)
+        self.assertEqual(sum(light_only(s) == go for s, go, rule, cls in cases if cls == "agree" and rule < 4),
+                         sum(1 for _, _, rule, cls in cases if cls == "agree" and rule < 4))
 
     def test_same_seed_same_tasks(self):
         self.assertEqual(bench.barrier_cases(50), bench.barrier_cases(50, seed=1))

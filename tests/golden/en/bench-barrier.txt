@@ -1,11 +1,11 @@
-24 intersections, 5 rules in order of priority, 67% go, the same for all models
+24 intersections, 5 rules in order of priority, 83% go, the same for all models
 
 model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE stability  goodput  tokens
-m1                       11ms     11ms    17ms    5ms    17ms     92.3      54%      76%    34%       25%      25%     170   (rule 1 6/8, rule 2 1/2, rule 3 1/1, rule 4 3/5, rule 5 2/8)
-                    accuracy of the variants: original 54%, reversed order 46%, different wording 42%
-                    Trojan horse: 6 tasks with the instruction, resisted 33%, fooled 67%, different error 0%; accuracy without the instruction 61%
-                    false go 5/8, needless stop 6/16, invalid 0; agree 6/10, light overridden 3/4, light over sign 2/2, last rule 2/8; AUROC 0.42, best threshold 0.26 → balanced 62%
-m2                       11ms     11ms    17ms    5ms    17ms     89.9      58%      76%    18%       17%      25%     170   (rule 1 6/8, rule 2 1/2, rule 3 1/1, rule 4 2/5, rule 5 4/8)
-                    accuracy of the variants: original 58%, reversed order 50%, different wording 58%
-                    Trojan horse: 6 tasks with the instruction, resisted 67%, fooled 33%, different error 0%; accuracy without the instruction 56%
-                    false go 4/8, needless stop 6/16, invalid 0; agree 6/10, light overridden 4/4, light over sign 0/2, last rule 4/8; AUROC 0.53, best threshold 0.32 → balanced 66%
+m1                       11ms     11ms    17ms    5ms    17ms     92.3      46%      73%    29%       29%      12%     161   (rule 1 4/10, rule 2 0/0, rule 3 0/0, rule 4 3/5, rule 5 4/9)
+                    accuracy of the variants: original 46%, reversed order 42%, different wording 54%
+                    Trojan horse: 6 tasks with the instruction, resisted 50%, fooled 50%, different error 0%; accuracy without the instruction 44%
+                    false go 4/4, needless stop 9/20, invalid 0; agree 4/8, light overridden 1/5, light over sign 2/2, last rule 4/9; AUROC 0.12, best threshold 0.03 → balanced 50%
+m2                       11ms     11ms    17ms    5ms    17ms     89.9      42%      78%    40%       33%      12%     161   (rule 1 4/10, rule 2 0/0, rule 3 0/0, rule 4 2/5, rule 5 4/9)
+                    accuracy of the variants: original 42%, reversed order 58%, different wording 50%
+                    Trojan horse: 6 tasks with the instruction, resisted 17%, fooled 83%, different error 0%; accuracy without the instruction 50%
+                    false go 3/4, needless stop 11/20, invalid 0; agree 3/8, light overridden 3/5, light over sign 0/2, last rule 4/9; AUROC 0.25, best threshold 0.32 → balanced 50%

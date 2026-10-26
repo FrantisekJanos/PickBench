@@ -31,7 +31,7 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             „ano“, jeď je aspoň 0,5, jistota = max(p, 1 − p). Pět pravidel s pořadím je v zadání, takže se měří čtení zadání
             a stavu, ne znalost předpisů. N křižovatek (výchozí 100), tři čtvrtiny z nich jeď. Za řádkem modelu přesnost
             podle rozhodujícího pravidla, pod ním falešný průjezd, zbytečné stání, neplatné odpovědi a přesnost ve čtyřech
-            třídách: shodné (nižší pravidlo říká totéž), přebitý semafor (pravidlo 1–3 ruší opačný semafor nebo značku),
+            třídách: shodné (semafor, při off značka, říká totéž), přebitý semafor (pravidlo 1–3 ruší opačný semafor nebo značku),
             semafor přebil značku, poslední pravidlo; dál AUROC a nejlepší práh s vyváženou přesností (průměr jeď a stůj).
             S --mirror je druhou variantou obrácená otázka „Must the car stop now?“ (pokyn trojského koně je v ní obrácený);
             řádek variant ji vypisuje jako „obrácené pořadí“. S --lanes se nekombinuje.
@@ -93,8 +93,8 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             the answer is the probability of "yes", go is at least 0.5, confidence = max(p, 1 - p). The five rules and their
             priority are in the prompt, so it measures reading the prompt and the state, not knowing the traffic code.
             N intersections (default 100), three quarters of them go. After the model row, the accuracy by deciding rule;
-            below it false go, needless stop, invalid answers and the accuracy in four classes: agree (a lower rule says the
-            same), light overridden (rule 1-3 overrides the opposite light or sign), light over sign, last rule; then AUROC and
+            below it false go, needless stop, invalid answers and the accuracy in four classes: agree (the light, or the sign when
+            it is off, says the same), light overridden (rule 1-3 overrides the opposite light or sign), light over sign, last rule; then AUROC and
             the best threshold with its balanced accuracy (mean of go and stop). With --mirror the second variant is the inverted
             question "Must the car stop now?" (its Trojan horse note is inverted too), listed as "reversed order". Not with --lanes.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
@@ -661,10 +661,11 @@ def barrier_case(rng):
         state[name] = rng.choice([v for v, out in table.items() if out is None])
     name, table = BARRIER_FIELDS[rule - 1]
     state[name] = rng.choice([v for v, out in table.items() if out is go])
+    shadow_from = 4 if rule < 4 else rule + 1       # stín: co by řekl semafor (při off značka), u pravidla 4 značka
     for _ in range(1000):                            # pole pod rozhodujícím pravidlem, dokud stínový výsledek nesedí s třídou
         for name, table in BARRIER_FIELDS[rule:]:
             state[name] = rng.choice(list(table))
-        if rule == 5 or (barrier_decide(state, rule + 1)[0] != go) == (cls == "conflict"):
+        if rule == 5 or (barrier_decide(state, shadow_from)[0] != go) == (cls == "conflict"):
             break
     else:
         raise RuntimeError(f"barrier_case: no {cls} state for rule {rule} after 1000 tries")
