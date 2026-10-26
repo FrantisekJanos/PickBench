@@ -513,6 +513,31 @@ class Barrier(unittest.TestCase):
         got = run_js("(() => { try { barrierCase(() => 0); return null; } catch (e) { return e.message; } })()", None)
         self.assertTrue(str(got).startswith("barrierCase: no conflict state for rule 1 after 1000 tries"), got)
 
+    def test_summary_matches_bench(self):
+        import bench
+        cases, rng = bench.barrier_cases(400, seed=5), random.Random(3)
+        probs = [rng.choice([None, "x", 1.5, True, 0.5, 1, 0, round(rng.random(), 1), round(rng.random(), 3)]) for _ in cases]
+        js = run_js("barrierSummary(arg.cases, arg.probs)",
+                    {"cases": [{"go": go, "rule": rule, "cls": cls} for _, go, rule, cls in cases], "probs": probs})
+        self.assertEqual(json.dumps(js), json.dumps(bench.barrier_summary(cases, probs)))     # i pořadí klíčů
+        self.assertGreater(js["invalid"], 0)
+
+    def test_auroc_and_threshold_match_metrics(self):
+        sets = [([0.9, 0.8, 0.2, 0.1], [True, True, False, False]), ([0.5, 0.5, 0.5], [True, False, True]),
+                ([0.9, None, 0.1, None], [True, True, False, False]), ([0.9, 0.8], [True, True]), ([0.9, None], [True, False]),
+                ([0.25, 0.75, 0.625, 0.125], [True, True, False, False]), ([None, 0.9], [True, True]), ([None, None], [True, False]),
+                ([0.8] * 4, [True, True, True, False]), ([0.9, 0.3, 0.3, 0.6], [True, True, True, False])]      # z tests/test_barrier.py (Quality)
+        rng = random.Random(4)
+        for k in range(40):                                      # náhodné sady se shodami hodnot; každá pátá jen úlohy jeď, každá sedmá jen stůj
+            n = rng.randint(1, 60)
+            truths = [True] * n if k % 5 == 0 else [False] * n if k % 7 == 0 else [rng.random() < 0.75 for _ in range(n)]
+            sets.append(([None if rng.random() < 0.1 else round(rng.random(), rng.choice([1, 2, 3])) for _ in range(n)], truths))
+        got = run_js("arg.map(([p, t]) => [auroc(p, t), bestThreshold(p, t)])", sets)
+        for (probs, truths), (a, th) in zip(sets, got):
+            self.assertEqual(a, metrics.auroc(probs, truths), (probs, truths))
+            self.assertEqual(th, list(metrics.best_threshold(probs, truths)), (probs, truths))   # přesně, ne s tolerancí
+        self.assertIsNone(run_js("bestThreshold([], [])", None))                                # prázdný běh: stránka ukáže „—“
+
 
 # Generátor paměťové stopy stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady memoryRow.
 MEMORY_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "memoryRow(arg.gates, rand)")

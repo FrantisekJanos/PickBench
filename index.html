@@ -1971,6 +1971,48 @@ function barrierCase(rand) {                               // { state, go, rule,
   if (cls === 'conflict') cls = rule < 4 ? 'conflict_high' : 'conflict_light';
   return { state, go, rule, cls };
 }
+// Rozbor podle úloh (port barrier_summary): přesnost podle rozhodujícího pravidla a třídy ({…: [správně, celkem]}), falešný průjezd
+// (rozhodl jeď, správně je stůj) a zbytečné stání (rozhodl stůj, správně je jeď) jako [počet, z úloh], neplatné odpovědi. cases = [{ go, rule, cls }].
+function barrierSummary(cases, probs) {
+  const byRule = Object.fromEntries(BARRIER_RULES.map(r => [r, [0, 0]])), byClass = Object.fromEntries(BARRIER_CLASSES.map(c => [c, [0, 0]]));
+  const falseGo = [0, 0], needless = [0, 0];
+  let invalid = 0;
+  cases.forEach(({ go, rule, cls }, i) => {
+    const pick = noulDecision(probs[i]);
+    for (const counts of [byRule[rule], byClass[cls]]) { counts[0] += pick === go ? 1 : 0; counts[1] += 1; }
+    invalid += pick === null ? 1 : 0;
+    const wrong = go ? needless : falseGo;
+    wrong[0] += pick !== null && pick !== go ? 1 : 0;
+    wrong[1] += 1;
+  });
+  return { by_rule: byRule, by_class: byClass, false_go: falseGo, needless, invalid };
+}
+// AUROC z noul proti pravdě jeď (port metrics.auroc); shody jako polovina, neplatné (null) se vynechají. Bez úloh jedné třídy null.
+function auroc(probs, truths) {
+  const pos = probs.filter((p, i) => truths[i] && p != null), neg = probs.filter((p, i) => !truths[i] && p != null);
+  if (!pos.length || !neg.length) return null;
+  let sum = 0;
+  for (const a of pos) for (const b of neg) sum += (a > b ? 1 : 0) + (a === b ? 0.5 : 0);
+  return sum / (pos.length * neg.length);
+}
+// Nejlepší práh (port metrics.best_threshold) přes společného jmenovatele místo zlomků: vyvážená přesnost prahu t = num(t) / D, D = G · ∏L,
+// num(t) = Σ c_i · ∏(L_j, j ≠ i); L = velikosti skupin jeď / stůj s aspoň jednou úlohou, G jejich počet, c_i správné při noul >= t (neplatná je chyba).
+// Celá čísla se porovnají přesně a num / D dá stejný double jako float(Fraction). Vyhrává největší num, při shodě t nejblíž 0,5, potom nižší. Bez úloh null.
+function bestThreshold(probs, truths) {
+  const groups = [true, false].map(want => ({ want, ps: probs.filter((p, i) => Boolean(truths[i]) === want) })).filter(g => g.ps.length);
+  if (!groups.length) return null;
+  const D = groups.length * groups.reduce((prod, g) => prod * g.ps.length, 1);
+  const num = t => groups.reduce((sum, g, i) => {
+    const right = g.ps.filter(p => p !== null && (p >= t) === g.want).length;      // výslovně: v JS je null >= 0 pravda
+    return sum + right * groups.reduce((prod, h, j) => (j === i ? prod : prod * h.ps.length), 1);
+  }, 0);
+  let best = null;
+  for (const t of new Set([0.5, ...probs.filter(p => p !== null)])) {
+    const n = num(t);
+    if (best === null || n > best.n || (n === best.n && (Math.abs(t - 0.5) < Math.abs(best.t - 0.5) || (Math.abs(t - 0.5) === Math.abs(best.t - 0.5) && t < best.t)))) best = { t, n };
+  }
+  return [best.t, best.n / D];
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
