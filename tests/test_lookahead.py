@@ -202,5 +202,66 @@ class Generator(unittest.TestCase):
             bench.lookahead_case(random.Random(1), 4, "d1")
 
 
+ROWS_TEXT = ("A car drives up a {k}-lane road, lanes numbered 1 to {k} from the left. car_lane is its lane. "
+             "rows_ahead lists the next rows, nearest first; each row has one character per lane, lane 1 first: '.' is free, '#' is blocked. "
+             "Before each row the car may shift one lane left, stay, or shift one lane right, then it enters that row; it cannot leave the road. "
+             "Choose the move for the nearest row that lets the car pass the most rows without hitting a blocked lane.")
+BLOCKED_TEXT = ROWS_TEXT.replace("rows_ahead lists the next rows, nearest first; each row has one character per lane, lane 1 first: "
+                                 "'.' is free, '#' is blocked.",
+                                 "blocked_lanes_ahead lists the next rows, nearest first; each row lists the numbers of its blocked lanes.")
+ALT_ROWS = ("The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. "
+            "rows_ahead holds the coming rows from the nearest one; in each row the first character is lane 1, '.' marks a free lane and '#' a blocked one. "
+            "Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; "
+            "it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows "
+            "without driving into a blocked lane.")
+ALT_BLOCKED = ALT_ROWS.replace("rows_ahead holds the coming rows from the nearest one; in each row the first character is lane 1, "
+                               "'.' marks a free lane and '#' a blocked one.",
+                               "blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it.")
+CRITERIA = {"left": "Shift one lane to the left", "stay": "Stay in the current lane", "right": "Shift one lane to the right"}
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_example_states(self):
+        rows = bench.lookahead_state(EXAMPLE, 1, "rows")
+        blocked = bench.lookahead_state(EXAMPLE, 1, "blocked")
+        self.assertEqual(json.dumps(rows), json.dumps({"car_lane": 2, "rows_ahead": [".#..", "..#.", "###.", "...."]}))
+        self.assertEqual(json.dumps(blocked), json.dumps({"car_lane": 2, "blocked_lanes_ahead": [[2], [3], [1, 2, 3], []]}))
+        self.assertEqual(bench.lookahead_state(EXAMPLE, 1), bench.lookahead_state(EXAMPLE, 1, bench.LOOKAHEAD_FORM))
+        self.assertEqual(solver(4)(rows), "right")
+        self.assertEqual(solver(4)(blocked), "right")
+        with self.assertRaises(ValueError):
+            bench.lookahead_state(EXAMPLE, 1, "grid")
+
+    def test_questions_and_their_alternative_wordings(self):
+        for form, key, text, alt in (("rows", "move", ROWS_TEXT, ALT_ROWS), ("blocked", "move_blocked", BLOCKED_TEXT, ALT_BLOCKED)):
+            for lanes in (3, 4, 7):
+                with self.subTest(form=form, lanes=lanes):
+                    q = bench.lookahead_question(lanes, form)
+                    self.assertEqual(list(q), [key])
+                    self.assertEqual(q[key]["type"], "choice")
+                    self.assertEqual(q[key]["instructions"], text.format(k=lanes))
+                    self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps(CRITERIA))
+                    self.assertEqual(bench.ALT[key], alt)
+                    self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt.format(lanes=lanes))
+                    self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), ["right", "stay", "left"])
+        self.assertEqual(bench.lookahead_question(4), bench.lookahead_question(4, bench.LOOKAHEAD_FORM))
+        with self.assertRaises(ValueError):
+            bench.lookahead_question(4, "grid")
+
+    def test_other_alternative_wordings_are_unchanged(self):                  # variant doplňuje {lanes} jen tam, kde text závorku má
+        for question in (bench.lane_question(3), bench.number_question(3), bench.sign_question(3), bench.memory_question(4)):
+            key = next(iter(question))
+            self.assertEqual(bench.variant(question, 2)[key]["instructions"], bench.ALT[key])
+
+    def test_both_forms_carry_the_same_task(self):
+        for rows, lane, _, _, _ in cases(300, 5):
+            a, b = bench.lookahead_state(rows, lane, "rows"), bench.lookahead_state(rows, lane, "blocked")
+            with self.subTest(rows=rows, lane=lane):
+                self.assertEqual(a["car_lane"], b["car_lane"])
+                self.assertEqual(rows_of(b, 5), rows)
+                self.assertIsInstance(a["rows_ahead"], list)
+                self.assertTrue(all(row == sorted(row) for row in b["blocked_lanes_ahead"]))
+
+
 if __name__ == "__main__":
     unittest.main()

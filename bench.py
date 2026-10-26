@@ -862,6 +862,34 @@ def lookahead_cases(n, lanes=4, seed=1):
     return [lookahead_case(rng, lanes, rng.choice(LOOKAHEAD_CLASSES)) for _ in range(n)]
 
 
+def lookahead_form(form):
+    """Podoba stavu: None = výchozí LOOKAHEAD_FORM, neznámá podoba = ValueError."""
+    form = form or LOOKAHEAD_FORM
+    if form not in LOOKAHEAD_FORMS:
+        raise ValueError(f"unknown lookahead form: {form}")
+    return form
+
+
+def lookahead_state(rows, lane, form=None):
+    """Stav pro model. rows: řady jako řetězce '.'/'#'; blocked: u každé řady čísla zablokovaných pruhů (od 1, vzestupně).
+    car_lane je číslo pruhu od 1. Úloha je v obou podobách stejná."""
+    if lookahead_form(form) == "rows":
+        return {"car_lane": lane + 1, "rows_ahead": list(rows)}
+    return {"car_lane": lane + 1, "blocked_lanes_ahead": [[i + 1 for i, c in enumerate(row) if c == "#"] for row in rows]}
+
+
+def lookahead_question(lanes, form=None):
+    if lookahead_form(form) == "rows":
+        key, text = "move", "rows_ahead lists the next rows, nearest first; each row has one character per lane, lane 1 first: '.' is free, '#' is blocked."
+    else:
+        key, text = "move_blocked", "blocked_lanes_ahead lists the next rows, nearest first; each row lists the numbers of its blocked lanes."
+    instructions = (f"A car drives up a {lanes}-lane road, lanes numbered 1 to {lanes} from the left. car_lane is its lane. {text} "
+                    "Before each row the car may shift one lane left, stay, or shift one lane right, then it enters that row; it cannot leave the road. "
+                    "Choose the move for the nearest row that lets the car pass the most rows without hitting a blocked lane.")
+    criteria = {"left": "Shift one lane to the left", "stay": "Stay in the current lane", "right": "Shift one lane to the right"}
+    return {key: {"type": "choice", "instructions": instructions, "criteria": criteria}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -870,9 +898,12 @@ ALT = {                                              # jinak formulované zadán
     "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",
     "recall": "For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.",
     "recall_count": "The list signs_passed holds every sign the car went past, from the oldest to the newest; its last entry is 1 step back. Pick the gate whose sign was passed exactly steps_back steps ago.",
+    "move": "The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. rows_ahead holds the coming rows from the nearest one; in each row the first character is lane 1, '.' marks a free lane and '#' a blocked one. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.",
+    "move_blocked": "The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.",
     "go": "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
+ALT_LANES = re.compile(r"\ba (\d+)-lane road\b")    # zadání move nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
 
 
 def noul_variant(question, v):
@@ -890,7 +921,10 @@ def variant(question, v):
     if v == 1:
         q["criteria"] = dict(reversed(list(q["criteria"].items())))
     if v == 2:
-        q["instructions"] = ALT[key] + (" " + q["instructions"] if key == "category" else "")   # pravidla sady e-mailů zůstávají
+        alt = ALT[key]
+        if "{lanes}" in alt:                         # dva kroky dopředu: počet pruhů z původního zadání
+            alt = alt.format(lanes=ALT_LANES.search(q["instructions"]).group(1))
+        q["instructions"] = alt + (" " + q["instructions"] if key == "category" else "")   # pravidla sady e-mailů zůstávají
     return {key: q}
 
 
