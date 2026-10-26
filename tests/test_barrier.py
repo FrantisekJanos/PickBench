@@ -626,6 +626,33 @@ class Page(unittest.TestCase):                                         # scéná
                                              {"agree": {"go": [0, 1], "stop": [0, 0]}, "conflict_high": {"go": [1, 2], "stop": [1, 3]},
                                               "conflict_light": {"go": [0, 0], "stop": [0, 0]}, "last": {"go": [0, 0], "stop": [1, 1]}}])     # neplatná (null, 1,5) je chyba
 
+    def test_drawing_shows_every_field_and_writes_only_through_t(self):
+        page = page_source()
+        glyphs = re.findall(r"(\w+): '", re.search(r"\nconst BARRIER_GLYPH = \{(.*?)\};", page).group(1))
+        self.assertEqual(glyphs, ["police", "emergency", "pedestrian"])
+        draw = page_function("drawBarrier")
+        for name in ("police_officer", "emergency_vehicle", "pedestrian_on_crossing", "light", "sign"):
+            self.assertIn("s." + name, draw, name)                                                 # divák vidí všech pět polí stavu
+        self.assertNotIn("fillText('", draw)                                                       # žádný pevný text na plátně (nápis STOP ani písmena)
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for part in ("drawRing(r, y, rad) {", "drawVehicle(g, x, w) {", "t('barrier.decided'", "t('barrier.needless')", "t('answer.invalid')",
+                     "barrierOutcome(r.result, r.truth, r.chosen), x = (r.passLane + 0.5) * LW", "ctx.strokeStyle = BARRIER_COLOR[out]"):
+            self.assertIn(part, body)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_only_a_crash_flashes(self):                    # falešný průjezd a nestihl na řadě stůj blikají; zbytečné stání a neplatná odpověď blik nemění
+        page = page_source()
+        method = lambda src: re.search(r"\n  onStep\(g\) \{.*?\n  \},", src, re.S).group(0)[1:-1]
+        core = method(page.split("\nconst rowBase = {", 1)[1].split("\n};\n", 1)[0])
+        own = method(page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0])
+        code = page_function("barrierOutcome") + "const base = { steer() {}," + core + "}; const b = { __proto__: base," + own + "};" + (
+            "const C = [[0, 1], [undefined, 1], [1, 0], [-1, 1], [-1, 0], [0, 0], [1, 1]];"        # [chosen, truth]
+            "process.stdout.write(JSON.stringify(C.map(([chosen, truth]) => {"
+            " const g = { rows: [{ y: 0, result: null, chosen, truth }, { y: 3, result: null, chosen: 1, truth: 1 }], history: [], flash: 0.3, good: 0, bad: 0, late: 0 };"
+            " b.onStep(g); return [g.rows[0].result, g.flash, g.rows[1].result]; })));")
+        self.assertEqual(run_page_js(code), [["bad", 1, None], ["late", 1, None], ["bad", 0.3, None], ["bad", 0.3, None],
+                                             ["bad", 0.3, None], ["ok", 0.3, None], ["ok", 0.3, None]])
+
 
 if __name__ == "__main__":
     unittest.main()

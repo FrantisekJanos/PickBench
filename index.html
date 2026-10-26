@@ -441,7 +441,7 @@ const TEXTS = {
   'col.stab': { cs: 'stabilita', en: 'stability' },
   'col.stab.tip': { cs: 'Jen se zrcadly: podíl úloh se stejnou odpovědí ve všech třech variantách zadání. Bez zrcadel je „—“.', en: 'With mirrors only: the share of tasks with the same answer in all three prompt variants. Without mirrors it is "—".' },
   'col.errors': { cs: 'chyby', en: 'errors' },
-  'col.errors.tip': { cs: 'U překážek počet nárazů, u e-mailů a číselných duelů počet řad projetých špatně (odpověď přišla včas, ale byla chybná). V benchmarku bez hry je „—“. U zákazů a výjimek jako u číselných duelů: řady projeté špatně. U paměťové stopy také řady projeté špatně. U závory řady s falešným průjezdem nebo zbytečným stáním.', en: 'For obstacles the number of crashes; for e-mails, number duels, bans and exceptions, memory trace and the barrier, the number of rows passed with a wrong answer (the answer arrived in time but was wrong). In the benchmark without the game it is "—".' },
+  'col.errors.tip': { cs: 'U překážek počet nárazů, u e-mailů a číselných duelů počet řad projetých špatně (odpověď přišla včas, ale byla chybná). V benchmarku bez hry je „—“. U zákazů a výjimek jako u číselných duelů: řady projeté špatně. U paměťové stopy také řady projeté špatně. U závory řady s falešným průjezdem, zbytečným stáním nebo neplatnou odpovědí.', en: 'For obstacles the number of crashes; for e-mails, number duels, bans and exceptions, memory trace and the barrier, the number of rows passed with a wrong answer (the answer arrived in time but was wrong; at the barrier, an invalid answer counts too). In the benchmark without the game it is "—".' },
   'col.late': { cs: 'nestihl', en: 'missed' },
   'col.late.tip': { cs: 'Počet řad, ke kterým model nestihl odpovědět dřív, než minuly auto (e-maily a číselné duely ve hře). U překážek a v benchmarku je „—“. Platí to i pro zákazy a výjimky ve hře. Platí to i pro paměťovou stopu ve hře. Platí to i pro závoru ve hře; auto tam bez odpovědi jede.', en: 'The number of rows the model did not manage to answer before they passed the car (e-mails, number duels, bans and exceptions, memory trace and the barrier in the game; at the barrier the car goes without an answer). For obstacles and in the benchmark it is "—".' },
   'col.dist': { cs: 'ujeto', en: 'driven' },
@@ -513,7 +513,7 @@ const TEXTS = {
   'scenario.obstacles.tile.blind': { cs: 'polí ujetých během 1 rozhodnutí', en: 'cells driven during 1 decision' },
   'scenario.obstacles.tip.blind': { cs: 'Rychlost auta × průměrná doba rozhodnutí: o kolik polí auto popojede, než odpověď dorazí. Čím je číslo větší, tím starší je stav, podle kterého model rozhodl; řady jsou od sebe 4 pole. Jen v reálném čase a v žebříku.', en: 'Car speed × mean decision time: how many cells the car moves forward before the answer arrives. The larger the number, the older the state the model based its decision on; the rows are 4 cells apart. In Real time and Ladder modes only.' },
   // scénáře s řadami (e-maily, číselné duely): společné dlaždice Kvality; názvy „špatně“ a „nestihl“ jsou result.bad a result.late
-  'row.tip.bad': { cs: 'Řady, u kterých odpověď přišla včas, ale byla špatná — auto projelo jiným bodem nebo jinou branou. Ve výsledcích sloupec „chyby“. V benchmarku bez hry je „—“. U zákazů a výjimek auto projelo pruhem, kam vozidlo nesmí. U paměťové stopy auto projelo branou s jinou značkou, než se hledala. U závory auto projelo, kde mělo stát, nebo stálo, kde mělo jet.', en: 'Rows where the answer arrived in time but was wrong — the car passed through a different dot, a different gate (in memory trace, a gate with a sign other than the one to find) or, in bans and exceptions, a lane the vehicle may not enter; at the barrier, it went when it should have stopped or stopped when it should have gone. In the results it is the "errors" column. In the benchmark without the game it is "—".' },
+  'row.tip.bad': { cs: 'Řady, u kterých odpověď přišla včas, ale byla špatná — auto projelo jiným bodem nebo jinou branou. Ve výsledcích sloupec „chyby“. V benchmarku bez hry je „—“. U zákazů a výjimek auto projelo pruhem, kam vozidlo nesmí. U paměťové stopy auto projelo branou s jinou značkou, než se hledala. U závory auto projelo, kde mělo stát, stálo, kde mělo jet, nebo odpověď byla neplatná.', en: 'Rows where the answer arrived in time but was wrong — the car passed through a different dot, a different gate (in memory trace, a gate with a sign other than the one to find) or, in bans and exceptions, a lane the vehicle may not enter; at the barrier, it went when it should have stopped, stopped when it should have gone, or the answer was invalid. In the results it is the "errors" column. In the benchmark without the game it is "—".' },
   'row.tip.late': { cs: 'Řady, které minuly auto dřív, než k nim model stihl odpovědět. V reálném čase se model ptá na nejbližší řadu, kterou ještě může stihnout, a ostatní přeskočí; u modelu pomalejšího než rozestup řad je podíl zhruba 1 − interval ÷ latence. V režimu Po tazích nenastává.', en: 'Rows that passed the car before the model managed to answer them. In Real time and Ladder modes the page asks the model about the nearest row it can still answer in time and skips the others; for a model slower than the interval between rows, the share is roughly 1 − interval ÷ latency. This does not happen in Turn-based mode.' },
   'row.tile.acc': { cs: 'přesnost modelu', en: 'model accuracy' },
   'row.tip.acc': { cs: 'Podíl správných odpovědí ze všech odpovědí modelu, včetně těch, které přišly pozdě a auto už neřídily. Na rozdíl od první dlaždice nezávisí na rychlosti. Ve výsledcích sloupec „správně“.', en: 'The share of correct answers among all of the model\'s answers, including those that arrived late and no longer steered the car. Unlike the first tile, it does not depend on speed. In the results it is the "correct" column.' },
@@ -594,6 +594,8 @@ const TEXTS = {
   'barrier.auroc': { cs: 'AUROC {auroc}, nejlepší práh {threshold} → vyvážená {best}', en: 'AUROC {auroc}, best threshold {threshold} → balanced {best}' },
   'barrier.go': { cs: 'jeď', en: 'go' },
   'barrier.stop': { cs: 'stůj', en: 'stop' },
+  'barrier.decided': { cs: 'rozhodlo: pravidlo {n} {name}', en: 'decided by rule {n}: {name}' },
+  'barrier.needless': { cs: 'stál zbytečně', en: 'stopped needlessly' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -1641,10 +1643,48 @@ function barrierOpen(r) {
   return r.result !== null || r.chosen === 0 || r.y < 0.5;
 }
 
-function drawBarrier(r, y) {                               // zatím jen břevno přes celou silnici; zvednuté = krátký sloupek vlevo
+const BARRIER_GLYPH = { police: '👮', emergency: '🚑', pedestrian: '🚶' };      // emoji potřebují barevné písmo jako vozidla u zákazů
+const BARRIER_LAMP = { red: '#f85149', yellow: '#d29922', green: '#3fb950' };
+const BARRIER_COLOR = { go: '#3fb950', stop: '#3fb950', falseGo: '#f85149', lateCrash: '#f85149', needless: '#8b9aa8', late: '#8b9aa8', invalid: '#8b9aa8' };     // kroužek podle barrierOutcome
+
+// Přechod, břevno, semafor, značka a piktogramy jedné řady; divák vidí všech pět polí stavu jako model (bez note). globalAlpha nastaví volající.
+// Vejde se i do dvou pruhů (W = 200): vlevo trojský kůň a sloupek břevna, pak policista a záchranka, vpravo značka a semafor, chodec na přechodu v pruhu auta.
+function drawBarrier(r, y) {
+  const s = r.state, alpha = ctx.globalAlpha;
+  const poly = (pts, fill) => { ctx.fillStyle = fill; ctx.beginPath(); pts.forEach(([px, py], i) => ctx[i ? 'lineTo' : 'moveTo'](px, py)); ctx.closePath(); ctx.fill(); };
+  const ring = (cx, cy, k, rad, a0) => [...Array(k)].map((_, i) => [cx + rad * Math.cos(a0 + i * 2 * Math.PI / k), cy + rad * Math.sin(a0 + i * 2 * Math.PI / k)]);
+  ctx.fillStyle = '#c9d1d9';
+  for (let x = 6; x < W - 6; x += 16) ctx.fillRect(x, y + 6, 9, 14);                         // přechod pod břevnem vždy
   ctx.fillStyle = '#d1242f';
-  if (!barrierOpen(r)) ctx.fillRect(4, y - 4, W - 8, 8);
-  else ctx.fillRect(4, y - 30, 8, 34);
+  if (barrierOpen(r)) ctx.fillRect(20, y - 44, 7, 48);                                         // zvednuté břevno
+  else { ctx.fillRect(4, y - 4, W - 8, 8); ctx.fillStyle = '#ffffff'; for (let x = 16; x < W - 10; x += 24) ctx.fillRect(x, y - 4, 12, 8); }
+  const lx = W - 13;                                                                           // semafor: svítí jen světlo podle light, při off nic
+  ctx.fillStyle = '#0b1016'; ctx.beginPath(); ctx.roundRect(lx - 8, y - 52, 16, 42, 4); ctx.fill();
+  ['red', 'yellow', 'green'].forEach((c, i) => { ctx.fillStyle = s.light === c ? BARRIER_LAMP[c] : '#30363d'; ctx.beginPath(); ctx.arc(lx, y - 45 + i * 13, 5, 0, 7); ctx.fill(); });
+  const sx = W - 40, sy = y - 28;                                                              // značka (stop bez nápisu)
+  if (s.sign === 'priority road') { poly(ring(sx, sy, 4, 13, 0), '#ffffff'); poly(ring(sx, sy, 4, 9, 0), '#f2cc0c'); }
+  else if (s.sign === 'give way') { poly(ring(sx, sy - 2, 3, 14, Math.PI / 2), '#d1242f'); poly(ring(sx, sy - 2, 3, 8, Math.PI / 2), '#ffffff'); }
+  else if (s.sign === 'stop sign') { poly(ring(sx, sy, 8, 13, Math.PI / 8), '#ffffff'); poly(ring(sx, sy, 8, 11, Math.PI / 8), '#d1242f'); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '18px "Segoe UI Emoji", sans-serif';
+  if (s.police_officer !== 'none') {                                                           // policista: zelená tečka pouští, červená zastavuje
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(BARRIER_GLYPH.police, 42, y - 24);
+    ctx.fillStyle = s.police_officer === 'signals the car to go' ? BARRIER_LAMP.green : BARRIER_LAMP.red;
+    ctx.beginPath(); ctx.arc(54, y - 36, 5, 0, 7); ctx.fill();
+  }
+  if (s.emergency_vehicle !== 'none') {                                                        // záchranka: se sirénou maják a šipka odkud jede, zaparkovaná bez sirény poloprůhledná
+    const ex = 76, siren = s.emergency_vehicle !== 'parked at the roadside, siren off';
+    if (!siren) ctx.globalAlpha = alpha * 0.4;
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(BARRIER_GLYPH.emergency, ex, y - 24);
+    ctx.globalAlpha = alpha;
+    if (siren) {
+      ctx.fillStyle = '#58a6ff'; ctx.beginPath(); ctx.arc(ex, y - 38, 4, 0, 7); ctx.fill();
+      const dir = s.emergency_vehicle === 'approaching from the left with siren on' ? 1 : -1, ax = ex - dir * 4;   // zleva šipka doprava, zprava doleva
+      ctx.fillStyle = '#58a6ff'; ctx.fillRect(ax - 6, y - 12, 12, 3);
+      poly([[ax + dir * 10, y - 10.5], [ax + dir * 4, y - 15], [ax + dir * 4, y - 6]], '#58a6ff');
+    }
+  }
+  if (s.pedestrian_on_crossing === 'yes') { ctx.fillStyle = '#e6edf3'; ctx.fillText(BARRIER_GLYPH.pedestrian, (startLane() + 0.5) * LW, y + 13); }     // chodec v pruhu auta
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
 const barrier = {
@@ -1681,15 +1721,37 @@ const barrier = {
     super.onStep(g);
     if (passing.length) g.flash = passing.some(r => ['falseGo', 'lateCrash'].includes(barrierOutcome(r.result, r.truth, r.chosen))) ? 1 : flash;
   },
-  drawItems(g) {
+  drawItems(g) {                                           // po průjezdu pod řadou rozhodující pravidlo (u spodního okraje plátna nad ním)
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
       drawBarrier(r, y);
       ctx.globalAlpha = 1;
       this.drawRing(r, y, 14);
+      if (r.result === null) continue;
+      const ty = Math.min(y + 32, H - 10);
+      ctx.fillStyle = 'rgba(11,16,22,.8)'; ctx.fillRect(2, ty - 9, W - 4, 18);
+      ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#e6edf3';
+      ctx.fillText(t('barrier.decided', { n: r.rule, name: t(BARRIER_RULE_NAME[r.rule - 1]) }), W / 2, ty, W - 8);
     }
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  drawRing(r, y, rad) {                                    // kroužek výsledku podle barrierOutcome (+ značka trojského koně); u zbytečného stání a neplatné odpovědi i slovo
+    if (r.inject !== null) drawTrojan(y, r.result !== null && r.fooled);
+    if (!r.result) return;
+    const out = barrierOutcome(r.result, r.truth, r.chosen), x = (r.passLane + 0.5) * LW;
+    ctx.strokeStyle = BARRIER_COLOR[out]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, rad + 4, 0, 7); ctx.stroke();
+    const word = out === 'needless' ? t('barrier.needless') : out === 'invalid' ? t('answer.invalid') : null;
+    if (!word) return;
+    const gap = rad + 10, right = W - x >= x;                                          // slovo na stranu, kde je víc místa
+    ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = right ? 'left' : 'right'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = BARRIER_COLOR[out]; ctx.fillText(word, right ? x + gap : x - gap, y, (right ? W - x : x) - gap - 4);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  drawVehicle(g, x, w) {                                   // brzdová světla, když model u nejbližší neprojeté řady řekl stůj
+    const r = g.rows.find(r => r.result === null);
+    if (!r || r.chosen !== 1) return;
+    ctx.fillStyle = '#f85149'; ctx.fillRect(x + 3, CAR_Y + 16, w * 0.24, 5); ctx.fillRect(x + w - 3 - w * 0.24, CAR_Y + 16, w * 0.24, 5);
   },
   describeLast(task, res) {                                // stav jedním řádkem, jak ho dostal model (i s note), p(jeď), volba a rozhodující pravidlo
     const word = m => m === 0 ? t('barrier.go') : m === 1 ? t('barrier.stop') : t('answer.invalid');
@@ -3056,7 +3118,7 @@ function draw(g) {
   }
   ctx.fillStyle = '#4cc2ff'; ctx.beginPath(); ctx.roundRect(x, CAR_Y - 22, w, 44, 9); ctx.fill();
   ctx.fillStyle = '#0b2536'; ctx.fillRect(x + w * 0.13, CAR_Y - 13, w * 0.74, 10);
-  SC.drawVehicle?.(g, x, w);                               // zákazy a výjimky: štítek vozidla pod autem; ostatní scénáře nic
+  SC.drawVehicle?.(g, x, w);                               // zákazy a výjimky: štítek vozidla pod autem; závora: brzdová světla; ostatní scénáře nic
   SC.drawTrail?.(g);                                       // paměťová stopa: pás historie pod silnicí; ostatní scénáře nic
   if (g.flash > 0) g.flash = Math.max(0, g.flash - 0.05);
 }
