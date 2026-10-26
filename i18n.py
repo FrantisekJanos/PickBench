@@ -137,6 +137,10 @@ TEXTS = {
     # (semafor přebíjí značku), {last} hotové zlomky („0/17“), {invalid} počet, {auroc} a {threshold} čísla na dvě desetinná
     # místa (AUROC bez úloh jedné třídy „—“), {best} vyvážená přesnost při nejlepším prahu v procentech („95%“).
     "bench.barrier.rule": {"cs": "pravidlo {n}", "en": "rule {n}"},
+    # Dva kroky dopředu (--lookahead): popisek třídy v poznámce za řádkem modelu ({d} = 1, 2, 3+) a řádek chyb pod ním.
+    "bench.lookahead.depth": {"cs": "hloubka {d}", "en": "depth {d}"},
+    "bench.lookahead.errors": {"cs": "chyby: tah hladového řidiče {greedy}, náraz nebo mimo silnici {crash}, jiné {other}, neplatné {invalid}",
+                               "en": "errors: greedy driver's move {greedy}, crash or off the road {crash}, other {other}, invalid {invalid}"},
     "bench.barrier.errors": {"cs": "falešný průjezd {false_go}, zbytečné stání {needless}, neplatné {invalid}; shodné {agree}, "
                                    "přebitý semafor {conflict_high}, semafor přebil značku {conflict_light}, poslední pravidlo {last}; "
                                    "AUROC {auroc}, nejlepší práh {threshold} → vyvážená {best}",

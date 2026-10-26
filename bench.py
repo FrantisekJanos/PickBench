@@ -1501,6 +1501,17 @@ def print_barrier(r):
                             threshold=f"{t:.2f}", best=pct(best)), flush=True)
 
 
+def lookahead_note(r):
+    """Poznámka za řádkem modelu: přesnost podle hloubky pasti."""
+    return class_note(r["by_depth"], {"d1": i18n.t("bench.lookahead.depth", d="1"), "d2": i18n.t("bench.lookahead.depth", d="2"),
+                                      "d3+": i18n.t("bench.lookahead.depth", d="3+")})
+
+
+def print_lookahead(r):
+    """Řádek rozboru chybných tahů, odsazený pod řádek modelu."""
+    print(" " * 20 + i18n.t("bench.lookahead.errors", **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
