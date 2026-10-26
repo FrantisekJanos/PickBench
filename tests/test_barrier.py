@@ -641,6 +641,17 @@ class Page(unittest.TestCase):                                         # scéná
             "process.stdout.write(JSON.stringify([same, c !== a, a.area, c.area, c.sum.false_go, c.split.conflict_high.stop, c.best]));")
         self.assertEqual(run_page_js(code), [True, True, 1, 0.75, [1, 2], [0, 1], [0.5, 0.75]])
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_brake_lights_follow_the_nearest_answered_row(self):     # v reálném čase jádro nejbližší řadu přeskočí a ptá se na další
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        draw = re.search(r"\n  drawVehicle\(g, x, w\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = "const CAR_Y = 540; let lit = 0; const ctx = { fillRect() { lit++; } }; const b = {" + draw + "};" + (
+            "const R = [[{ result: 'ok', chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }, { result: null, chosen: 1 }],"
+            " [{ result: null, chosen: undefined }, { result: null, chosen: 0 }], [{ result: null, chosen: -1 }, { result: null, chosen: 1 }],"
+            " [{ result: null, chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }], []];"
+            "process.stdout.write(JSON.stringify(R.map(rows => { lit = 0; b.drawVehicle({ rows }, 0, 40); return lit > 0; })));")
+        self.assertEqual(run_page_js(code), [True, True, False, False, False, False, False])      # neplatná (−1) bez světel
+
     def test_drawing_shows_every_field_and_writes_only_through_t(self):
         page = page_source()
         glyphs = re.findall(r"(\w+): '", re.search(r"\nconst BARRIER_GLYPH = \{(.*?)\};", page).group(1))

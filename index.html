@@ -1748,8 +1748,8 @@ const barrier = {
     ctx.fillStyle = BARRIER_COLOR[out]; ctx.fillText(word, right ? x + gap : x - gap, y, (right ? W - x : x) - gap - 4);
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   },
-  drawVehicle(g, x, w) {                                   // brzdová světla, když model u nejbližší neprojeté řady řekl stůj
-    const r = g.rows.find(r => r.result === null);
+  drawVehicle(g, x, w) {                                   // brzdová světla, když model u nejbližší neprojeté řady s odpovědí řekl stůj (bližší řadu jádro mohlo přeskočit)
+    const r = g.rows.find(r => r.result === null && r.chosen !== undefined);
     if (!r || r.chosen !== 1) return;
     ctx.fillStyle = '#f85149'; ctx.fillRect(x + 3, CAR_Y + 16, w * 0.24, 5); ctx.fillRect(x + w - 3 - w * 0.24, CAR_Y + 16, w * 0.24, 5);
   },
