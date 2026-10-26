@@ -1000,20 +1000,21 @@ def rule_gates(rng, sample):
             for f in order]
 
 
-def rule_log(rng, n, future=None):
+def rule_log(rng, n, switch=None):
     """Simulovaný deník n pokusů jako [(znak, správně?)]; vrací (deník, pravidlo na konci).
 
     Skript pokusů: po správném pokusu s pravděpodobností RULE_STICK stejný znak, jinak náhodný; po třetím správném v řadě
-    se pravidlo změní na jiný znak. S future (třída switch) je budoucí pravidlo zvolené dopředu: první pravidlo je jiné,
-    dokud pravidlo není future, skript místo náhodného znaku s pravděpodobností RULE_INSERT zvolí future (špatný pokus),
-    a po změně na future ho už nezkouší, takže deník končí přepnutím bez správného pokusu."""
+    se pravidlo změní na jiný znak. switch = (staré, budoucí) pravidlo zvolené dopředu (třída switch): deník začíná starým
+    pravidlem a jediná změna vede na budoucí. Před změnou skript místo náhodného znaku s pravděpodobností RULE_INSERT zvolí
+    budoucí pravidlo (špatný pokus), kromě prvního pokusu, aby znak prvního pokusu nebyl zkratkou. Po změně hráč budoucí
+    pravidlo nezkouší, takže deník končí přepnutím bez správného pokusu."""
+    old, future = switch or (rng.choice(RULE_FEATURES), None)
     others = [f for f in RULE_FEATURES if f != future]
-    rule = rng.choice(others)
-    streak, log = 0, []
+    rule, streak, log = old, 0, []
     for _ in range(n):
         if log and log[-1][1] and rng.random() < RULE_STICK:
             pick = log[-1][0]
-        elif future is None:
+        elif future is None or not log:
             pick = rng.choice(RULE_FEATURES)
         elif rule != future:
             pick = future if rng.random() < RULE_INSERT else rng.choice(RULE_FEATURES)
@@ -1023,8 +1024,23 @@ def rule_log(rng, n, future=None):
         log.append((pick, ok))
         streak = streak + 1 if ok else 0
         if streak == RULE_STREAK:
-            rule, streak = rng.choice([f for f in RULE_FEATURES if f != rule]), 0
+            rule = future if future and rule != future else rng.choice([f for f in RULE_FEATURES if f != rule])
+            streak = 0
     return log, rule
+
+
+def rule_switch_pair(rng, length, hit):
+    """Staré a budoucí pravidlo úlohy switch, losované jednou na úlohu (zamítání je pak nezkreslí).
+
+    Rovnoměrně ze všech dvojic, kromě krátkého deníku, kde nejméně častý znak netrefí: ten má vždy tvar
+    [budoucí špatně, staré ×3 správně, třetí špatně] a budoucí pravidlo nesmí vyhrát shodu s třetím znakem v pořadí
+    RULE_FEATURES. Jde jen budoucí count (staré color nebo shape) nebo budoucí shape se starým count; budoucí se losuje
+    rovnoměrně z count a shape, color tam být nemůže."""
+    if length == "short" and hit is False:
+        future = rng.choice(("count", "shape"))
+        return (rng.choice(("color", "shape")) if future == "count" else "count"), future
+    future = rng.choice(RULE_FEATURES)
+    return rng.choice([f for f in RULE_FEATURES if f != future]), future
 
 
 def rule_case(rng, cls, length):
@@ -1032,12 +1048,17 @@ def rule_case(rng, cls, length):
     pravidla nebo None); deník je [(znak, správně?)].
 
     Deník se simuluje a zamítá, dokud rule_read nedá jediného kandidáta = skutečné pravidlo a třídu cls. Ve třídě switch se
-    předem vylosuje, jestli má zkratka „nejméně častý znak“ trefit (1/3), budoucí pravidlo se volí dopředu (rule_log) a úloha
-    se přijme, jen když se zkratka trefuje podle vylosování. Krátký switch, kde zkratka netrefí, má vždy délku RULE_SHORT:
-    v deníku délky 3 přepnutí nevznikne a v deníku délky 4 (tři správné a jeden špatný) budoucí pravidlo nikdy nepadlo."""
+    předem vylosuje, jestli má zkratka „nejméně častý znak“ trefit (1/3), a staré i budoucí pravidlo (rule_switch_pair);
+    úloha se přijme, jen když se zkratka trefuje podle vylosování. V dlouhém switch se stejně vyvažuje zkratka „znak
+    prvního pokusu“ (1/3); v krátkém, kde nejméně častý znak netrefí, je první pokus z tvaru deníku vždy budoucí pravidlo.
+    Krátký switch, kde zkratka netrefí, má vždy délku
+    RULE_SHORT: v deníku délky 3 přepnutí nevznikne a v deníku délky 4 (tři správné a jeden špatný) budoucí pravidlo
+    nikdy nepadlo."""
     if cls not in RULE_CLASSES or length not in RULE_LENGTHS:
         raise RuntimeError(f"rule_case: no {cls} {length} log")
     hit = rng.random() < 1 / 3 if cls == "switch" else None
+    first = rng.random() < 1 / 3 if cls == "switch" and length == "long" else None   # trefí znak prvního pokusu?
+    pair = rule_switch_pair(rng, length, hit) if cls == "switch" else None
     for _ in range(RULE_TRIES):
         if length == "long":
             n = rng.randint(RULE_SHORT + 1, RULE_LOG[1])
@@ -1045,9 +1066,10 @@ def rule_case(rng, cls, length):
             n = RULE_SHORT
         else:
             n = rng.randint(RULE_LOG[0], RULE_SHORT)
-        log, rule = rule_log(rng, n, rng.choice(RULE_FEATURES) if cls == "switch" else None)
+        log, rule = rule_log(rng, n, pair)
         candidates, old, read_cls = rule_read(log)
-        if candidates == {rule} and read_cls == cls and (hit is None or (rule_least(log) == rule) == hit):
+        if (candidates == {rule} and read_cls == cls and (hit is None or (rule_least(log) == rule) == hit)
+                and (first is None or (log[0][0] == rule) == first)):
             break
     else:
         raise RuntimeError(f"rule_case: no {cls} {length} log after {RULE_TRIES} tries")

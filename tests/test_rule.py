@@ -99,6 +99,7 @@ class Reading(unittest.TestCase):
         self.assertEqual(bench.RULE_VALUES, {"color": ("red", "blue", "green"), "shape": ("circle", "star", "square"), "count": (1, 2, 3)})
         self.assertEqual(bench.RULE_CLASSES, ("repeat", "switch", "eliminate"))
         self.assertEqual((bench.RULE_STREAK, bench.RULE_LOG, bench.RULE_SHORT, bench.RULE_STICK, bench.RULE_TRIES), (3, (3, 10), 5, 0.8, 10000))
+        self.assertEqual(bench.RULE_INSERT, 0.5)
         self.assertEqual(bench.RULE_LENGTHS, ("short", "long"))
         self.assertEqual(bench.RULE_FORMS, ("labeled", "matched_by"))
         self.assertIn(bench.RULE_FORM, bench.RULE_FORMS)
@@ -196,6 +197,31 @@ class Generator(unittest.TestCase):
             return sum(least_frequent(s) == GATES[x[3]] for s, x in sub) / len(sub)
         self.assertTrue(0.2 <= acc("switch") <= 0.45, acc("switch"))
         self.assertEqual(acc("eliminate"), 1)                                      # bez změny je nezkoušený znak totéž co vyloučení
+
+    def test_first_pick_is_not_a_shortcut_in_switch(self):
+        """Zkratka „znak prvního pokusu“: v krátkém switch, kde nejméně častý znak netrefí, je první pokus z definice
+        budoucí pravidlo; v dlouhém deníku se ale zvýhodnit nesmí."""
+        states = [(bench.rule_state(x, "labeled"), x) for x in cases() if x[4] == "switch"]
+
+        def acc(long=None):
+            sub = [(s, x) for s, x in states if long is None or (len(x[0]) > bench.RULE_SHORT) == long]
+            return sum(gate_by(s, s["log"][0]["matched_by"]) == GATES[x[3]] for s, x in sub) / len(sub)
+        self.assertLessEqual(acc(long=True), 0.45)
+        self.assertLessEqual(acc(), 0.6)
+
+    def test_rule_features_are_spread(self):
+        """V podobě labeled brána jmenuje svůj znak: „vždy count“ nesmí ve třídě vycházet."""
+        def shares(sub):
+            rules = Counter(bench.rule_shared(x[1], x[2][x[3]])[0] for x in sub)
+            return {f: rules[f] / len(sub) for f in bench.RULE_FEATURES}
+        c = cases()
+        for cls in ("repeat", "eliminate"):
+            for f, share in shares([x for x in c if x[4] == cls]).items():
+                self.assertTrue(0.25 <= share <= 0.42, (cls, f, share))
+        switch = [x for x in c if x[4] == "switch"]
+        for f, share in shares([x for x in switch if len(x[0]) > bench.RULE_SHORT]).items():
+            self.assertTrue(0.2 <= share <= 0.45, ("switch long", f, share))
+        self.assertLessEqual(max(shares(switch).values()), 0.5, shares(switch))
 
     def test_same_seed_same_tasks(self):
         self.assertEqual(bench.rule_cases(40), bench.rule_cases(40))
