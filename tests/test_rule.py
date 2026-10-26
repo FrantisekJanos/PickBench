@@ -134,5 +134,100 @@ class Reading(unittest.TestCase):
         self.assertEqual(bench.rule_read([(f, ok, "x", "y") for f, ok in SPEC_LOG]), ({"count"}, "color", "switch"))   # položka smí nést víc prvků
 
 
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        for log, sample, gates, top, cls, old in cases():
+            with self.subTest(log=log, sample=sample, gates=gates):
+                lo, hi = bench.RULE_LOG
+                self.assertTrue(lo <= len(log) <= hi)
+                for entry in log:                                                 # položka deníku je jen (znak, správně?), karty se nelosují
+                    feature, ok = entry
+                    self.assertIn(feature, bench.RULE_FEATURES)
+                    self.assertIsInstance(ok, bool)
+                shared = [bench.rule_shared(sample, g) for g in gates]
+                self.assertTrue(all(len(s) == 1 for s in shared))                 # každá brána shoda v právě jednom znaku
+                self.assertEqual(sorted(s[0] for s in shared), sorted(bench.RULE_FEATURES))      # znaky bran jsou permutace
+                for c in (sample, *gates):
+                    self.assertEqual(list(c), list(bench.RULE_FEATURES))
+                    self.assertTrue(all(c[f] in bench.RULE_VALUES[f] for f in bench.RULE_FEATURES))
+                candidates, old_feature, read_cls = bench.rule_read(log)
+                self.assertEqual(candidates, {shared[top][0]})                    # odvozené pravidlo je jediné a je to pravidlo úlohy
+                self.assertEqual(read_cls, cls)
+                if old_feature is None:
+                    self.assertIsNone(old)
+                else:
+                    self.assertEqual(shared[old], [old_feature])
+                    self.assertNotEqual(old, top)
+
+    def test_classes_and_answers_are_spread(self):
+        c = cases()
+        classes, tops = Counter(x[4] for x in c), Counter(x[3] for x in c)
+        for cls in bench.RULE_CLASSES:
+            self.assertTrue(0.25 <= classes[cls] / len(c) <= 0.42, (cls, classes))
+        for top in range(3):
+            self.assertTrue(0.25 <= tops[top] / len(c) <= 0.42, (top, tops))
+        self.assertTrue(all(x[5] is not None for x in c if x[4] == "switch"))
+        self.assertTrue(all(x[5] is None for x in c if x[4] == "eliminate"))
+        for cls in bench.RULE_CLASSES:                                         # délka deníku nezávisí na třídě (Rozpory 9)
+            sub = [x for x in c if x[4] == cls]
+            short = sum(len(x[0]) <= bench.RULE_SHORT for x in sub) / len(sub)
+            self.assertTrue(0.4 <= short <= 0.6, (cls, short))
+
+    def test_control_strategies(self):
+        states = [(bench.rule_state(x, "matched_by"), x) for x in cases()]
+
+        def acc(pick, cls=None):
+            sub = [(s, x) for s, x in states if cls is None or x[4] == cls]
+            return sum(pick(s) == GATES[x[3]] for s, x in sub) / len(sub)
+        self.assertEqual(acc(solve), 1)
+        self.assertEqual(acc(last_correct, "repeat"), 1)
+        self.assertEqual(acc(last_correct, "switch"), 0)
+        self.assertTrue(all(last_correct(s) == GATES[x[5]] for s, x in states if x[4] == "switch"))   # v přepnutí vždy brána starého pravidla
+        self.assertLessEqual(acc(last_correct, "eliminate"), 0.4)
+        self.assertLess(acc(last_correct), 0.5)                                    # Rozpory 2
+        self.assertLess(acc(lambda s: gate_by(s, s["log"][-1]["matched_by"])), 0.45)   # zopakuj znak posledního pokusu
+        self.assertLess(acc(lambda s: "gate_1"), 0.4)
+
+    def test_least_frequent_feature_is_balanced_in_switch(self):
+        states = [(bench.rule_state(x, "labeled"), x) for x in cases()]
+
+        def acc(cls):
+            sub = [(s, x) for s, x in states if x[4] == cls]
+            return sum(least_frequent(s) == GATES[x[3]] for s, x in sub) / len(sub)
+        self.assertTrue(0.2 <= acc("switch") <= 0.45, acc("switch"))
+        self.assertEqual(acc("eliminate"), 1)                                      # bez změny je nezkoušený znak totéž co vyloučení
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.rule_cases(40), bench.rule_cases(40))
+        self.assertEqual(bench.rule_cases(40), bench.rule_cases(40, seed=1))
+        self.assertNotEqual(bench.rule_cases(40), bench.rule_cases(40, seed=2))
+
+    def test_both_forms_carry_the_same_task_and_labeled_has_no_cards(self):
+        for x in cases()[:300]:
+            labeled, matched = bench.rule_state(x, "labeled"), bench.rule_state(x, "matched_by")
+            with self.subTest(case=x):
+                self.assertEqual(list(labeled), ["log", *GATES])
+                self.assertEqual(list(matched), ["log", "sample", *GATES])
+                self.assertEqual(labeled["log"], matched["log"])
+                self.assertEqual(log_of(labeled), x[0])
+                self.assertEqual(solve(labeled), solve(matched))
+                self.assertEqual(solve(labeled), GATES[x[3]])
+                sample = parse_card(matched["sample"])
+                for k in GATES:
+                    self.assertEqual(labeled[k], {"matches_sample_by": bench.rule_shared(sample, parse_card(matched[k]))[0]})
+                self.assertEqual(bench.rule_state(x), bench.rule_state(x, bench.RULE_FORM))
+        with self.assertRaises(ValueError):
+            bench.rule_state(cases()[0], "cards")
+
+    def test_bounded_search_and_broken_guarantee_raise(self):
+        with mock.patch.object(bench, "RULE_TRIES", 0), self.assertRaises(RuntimeError):
+            bench.rule_case(random.Random(1), "repeat", "short")
+        for cls, length in (("guess", "short"), ("repeat", "medium")):
+            with self.subTest(cls=cls, length=length), self.assertRaises(RuntimeError):
+                bench.rule_case(random.Random(1), cls, length)
+        with mock.patch.object(bench, "rule_gates", lambda rng, sample: [dict(sample)] * 3), self.assertRaises(RuntimeError):
+            bench.rule_case(random.Random(1), "repeat", "long")                    # brány shodné se vzorem ve všech znacích
+
+
 if __name__ == "__main__":
     unittest.main()

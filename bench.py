@@ -946,6 +946,7 @@ RULE_STICK = 0.8                                     # skript pokusů: po správ
 RULE_FORMS = ("labeled", "matched_by")
 RULE_FORM = "labeled"                                # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-26
 RULE_TRIES = 10000                                   # mez pokusů na jednu úlohu
+RULE_INSERT = 0.5                                    # skript ve třídě switch: před změnou místo náhodného znaku budoucí pravidlo
 
 
 def card_text(card):
@@ -983,6 +984,109 @@ def rule_read(log):
     if len(candidates) != 1:
         return candidates, old, None
     return candidates, old, "repeat" if any(ok for _, ok, *_ in tail) else "switch" if old else "eliminate"
+
+
+def rule_least(log):
+    """Zkratka „nejméně častý znak“: znak, který se v deníku objevil nejméně často (shoda → pořadí RULE_FEATURES)."""
+    counts = Counter(feature for feature, *_ in log)
+    return min(RULE_FEATURES, key=lambda f: counts[f])
+
+
+def rule_gates(rng, sample):
+    """Tři brány: brána i se se vzorem shoduje právě ve znaku order[i] (náhodná permutace), ostatní znaky jsou jiné."""
+    order = list(RULE_FEATURES)
+    rng.shuffle(order)
+    return [{h: sample[h] if h == f else rng.choice([v for v in RULE_VALUES[h] if v != sample[h]]) for h in RULE_FEATURES}
+            for f in order]
+
+
+def rule_log(rng, n, future=None):
+    """Simulovaný deník n pokusů jako [(znak, správně?)]; vrací (deník, pravidlo na konci).
+
+    Skript pokusů: po správném pokusu s pravděpodobností RULE_STICK stejný znak, jinak náhodný; po třetím správném v řadě
+    se pravidlo změní na jiný znak. S future (třída switch) je budoucí pravidlo zvolené dopředu: první pravidlo je jiné,
+    dokud pravidlo není future, skript místo náhodného znaku s pravděpodobností RULE_INSERT zvolí future (špatný pokus),
+    a po změně na future ho už nezkouší, takže deník končí přepnutím bez správného pokusu."""
+    others = [f for f in RULE_FEATURES if f != future]
+    rule = rng.choice(others)
+    streak, log = 0, []
+    for _ in range(n):
+        if log and log[-1][1] and rng.random() < RULE_STICK:
+            pick = log[-1][0]
+        elif future is None:
+            pick = rng.choice(RULE_FEATURES)
+        elif rule != future:
+            pick = future if rng.random() < RULE_INSERT else rng.choice(RULE_FEATURES)
+        else:
+            pick = rng.choice(others)
+        ok = pick == rule
+        log.append((pick, ok))
+        streak = streak + 1 if ok else 0
+        if streak == RULE_STREAK:
+            rule, streak = rng.choice([f for f in RULE_FEATURES if f != rule]), 0
+    return log, rule
+
+
+def rule_case(rng, cls, length):
+    """Úloha skrytého pravidla dané třídy a pásma délky deníku. Vrací (deník, vzor, brány, správná brána, třída, brána starého
+    pravidla nebo None); deník je [(znak, správně?)].
+
+    Deník se simuluje a zamítá, dokud rule_read nedá jediného kandidáta = skutečné pravidlo a třídu cls. Ve třídě switch se
+    předem vylosuje, jestli má zkratka „nejméně častý znak“ trefit (1/3), budoucí pravidlo se volí dopředu (rule_log) a úloha
+    se přijme, jen když se zkratka trefuje podle vylosování. Krátký switch, kde zkratka netrefí, má vždy délku RULE_SHORT:
+    v deníku délky 3 přepnutí nevznikne a v deníku délky 4 (tři správné a jeden špatný) budoucí pravidlo nikdy nepadlo."""
+    if cls not in RULE_CLASSES or length not in RULE_LENGTHS:
+        raise RuntimeError(f"rule_case: no {cls} {length} log")
+    hit = rng.random() < 1 / 3 if cls == "switch" else None
+    for _ in range(RULE_TRIES):
+        if length == "long":
+            n = rng.randint(RULE_SHORT + 1, RULE_LOG[1])
+        elif hit is False:
+            n = RULE_SHORT
+        else:
+            n = rng.randint(RULE_LOG[0], RULE_SHORT)
+        log, rule = rule_log(rng, n, rng.choice(RULE_FEATURES) if cls == "switch" else None)
+        candidates, old, read_cls = rule_read(log)
+        if candidates == {rule} and read_cls == cls and (hit is None or (rule_least(log) == rule) == hit):
+            break
+    else:
+        raise RuntimeError(f"rule_case: no {cls} {length} log after {RULE_TRIES} tries")
+    sample = {f: rng.choice(RULE_VALUES[f]) for f in RULE_FEATURES}
+    gates = rule_gates(rng, sample)
+    shared = [rule_shared(sample, g) for g in gates]
+    if any(len(s) != 1 for s in shared) or sorted(s[0] for s in shared) != sorted(RULE_FEATURES):   # nic se neopravuje potichu
+        raise RuntimeError(f"rule_case: gates {gates} do not each share one distinct feature with {sample}")
+    return log, sample, gates, shared.index([rule]), cls, None if old is None else shared.index([old])
+
+
+def rule_cases(n, seed=1):
+    rng = random.Random(seed)
+    tasks = []
+    for _ in range(n):
+        cls = rng.choice(RULE_CLASSES)
+        tasks.append(rule_case(rng, cls, rng.choice(RULE_LENGTHS)))
+    return tasks
+
+
+def rule_form(form):
+    """Podoba stavu: None = výchozí RULE_FORM, neznámá podoba = ValueError."""
+    form = form or RULE_FORM
+    if form not in RULE_FORMS:
+        raise ValueError(f"unknown rule form: {form}")
+    return form
+
+
+def rule_state(case, form=None):
+    """Stav pro model. Deník je v obou podobách stejný ({"matched_by": znak, "result": ...}). labeled: brána nese jen znak,
+    ve kterém se shoduje se vzorem, bez karet; matched_by: karty vzoru a bran jako text."""
+    log, sample, gates = case[:3]
+    state = {"log": [{"matched_by": feature, "result": "correct" if ok else "wrong"} for feature, ok in log]}
+    if rule_form(form) == "labeled":
+        state.update((f"gate_{i + 1}", {"matches_sample_by": rule_shared(sample, g)[0]}) for i, g in enumerate(gates))
+    else:
+        state["sample"] = card_text(sample)
+        state.update((f"gate_{i + 1}", card_text(g)) for i, g in enumerate(gates))
+    return state
 
 
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
