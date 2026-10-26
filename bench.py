@@ -714,6 +714,80 @@ def barrier_summary(cases, probs):
     return {"by_rule": by_rule, "by_class": by_class, "false_go": false_go, "needless": needless, "invalid": invalid}
 
 
+# ---------- scénář: dva kroky dopředu ----------
+# Řady jsou řetězce, rows[0] je nejbližší řada, '.' volno, '#' překážka, rows[i][j] je pruh j + 1. Pruh auta je 0-based.
+LOOKAHEAD_MOVES = ("left", "stay", "right")
+LOOKAHEAD_SHIFT = {"left": -1, "stay": 0, "right": 1}
+LOOKAHEAD_ROWS = 4                                   # počet řad před autem (R)
+LOOKAHEAD_DENSITY = 0.4                              # pravděpodobnost překážky v poli
+LOOKAHEAD_CLASSES = ("d1", "d2", "d3+")              # hloubka pasti 1, 2, 3 a víc
+LOOKAHEAD_FORMS = ("rows", "blocked")
+LOOKAHEAD_FORM = "blocked"                           # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-26
+LOOKAHEAD_TRIES = 100000                             # mez pokusů na jednu úlohu
+
+
+def lookahead_survive(rows, lane):
+    """Kolik řad auto projede z pruhu lane (poloha před rows[0]), když před každou řadou smí posun −1/0/+1 v mezích silnice."""
+    alive = {lane}
+    for i, row in enumerate(rows):
+        alive = {m for at in alive for m in (at - 1, at, at + 1) if 0 <= m < len(row) and row[m] == "."}
+        if not alive:
+            return i
+    return len(rows)
+
+
+def lookahead_values(rows, lane, depth=None):
+    """Hodnota každého tahu (v pořadí LOOKAHEAD_MOVES): kolik řad auto po tahu projede. Tah mimo silnici nebo do '#'
+    v nejbližší řadě má 0. depth omezí výpočet na prvních depth řad."""
+    rows = rows if depth is None else rows[:depth]
+    values = {}
+    for move in LOOKAHEAD_MOVES:
+        target = lane + LOOKAHEAD_SHIFT[move]
+        if not 0 <= target < len(rows[0]) or rows[0][target] != ".":
+            values[move] = 0
+        else:
+            values[move] = 1 + lookahead_survive(rows[1:], target)
+    return values
+
+
+def lookahead_greedy(rows, lane):
+    """Hladový řidič: z tahů v silnici (pořadí stay, left, right) ten, jehož cílový pruh má nejdelší volnou dráhu rovně
+    od nejbližší řady; vyhrává první s ostře největší délkou."""
+    best = None
+    for move in ("stay", "left", "right"):
+        target = lane + LOOKAHEAD_SHIFT[move]
+        if not 0 <= target < len(rows[0]):
+            continue
+        run = 0
+        while run < len(rows) and rows[run][target] == ".":
+            run += 1
+        if best is None or run > best[0]:
+            best = (run, move)
+    return best[1]
+
+
+def lookahead_best(values):
+    """Tahy s nejvyšší hodnotou, v pořadí LOOKAHEAD_MOVES."""
+    top = max(values.values())
+    return [move for move, value in values.items() if value == top]
+
+
+def lookahead_depth(rows, lane):
+    """Hloubka pasti: nejmenší d, pro které je jediný nejlepší tah nad prvními d řadami týž jako nad všemi řadami.
+    Vrací (tah, d); když nejlepší tah nad všemi řadami není jediný, (None, None)."""
+    best = lookahead_best(lookahead_values(rows, lane))
+    if len(best) != 1:
+        return None, None
+    for depth in range(1, len(rows) + 1):
+        if lookahead_best(lookahead_values(rows, lane, depth)) == best:
+            return best[0], depth
+    raise RuntimeError(f"lookahead_depth: no depth for {rows}, lane {lane}")      # nad všemi řadami se shoda najde vždy
+
+
+def lookahead_class(depth):
+    return "d1" if depth == 1 else "d2" if depth == 2 else "d3+"
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
