@@ -255,5 +255,64 @@ class Generator(unittest.TestCase):
             bench.rule_case(random.Random(1), "repeat", "long")                    # brány shodné se vzorem ve všech znacích
 
 
+RED_STAR = card(2, "red", "star")
+SPEC_CASE = (SPEC_LOG, RED_STAR, [card(2, "blue", "circle"), card(1, "red", "circle"), card(3, "green", "star")], 0, "switch", 1)
+SPEC_STATE = {"log": [{"matched_by": "color", "result": "correct"}] * 3
+              + [{"matched_by": "color", "result": "wrong"}, {"matched_by": "shape", "result": "wrong"}],
+              "sample": "2 red stars", "gate_1": "2 blue circles", "gate_2": "1 red circle", "gate_3": "3 green stars"}
+SPEC_LABELED = {"log": SPEC_STATE["log"], "gate_1": {"matches_sample_by": "count"},
+                "gate_2": {"matches_sample_by": "color"}, "gate_3": {"matches_sample_by": "shape"}}
+RULE_TEXT = ("A hidden rule decides which gate is right: the gate whose card matches the sample card by color, by shape, or by count. "
+             "Each gate matches the sample in exactly one feature. The rule changes to another feature right after every three correct picks in a row. "
+             "log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. "
+             "Work out the current rule and choose the gate that matches the sample by it.")
+LABELED_TEXT = ("A hidden rule decides which gate is right: the gate that matches the sample card by color, by shape, or by count. "
+                "Each gate says which feature it shares with the sample. The rule changes to another feature right after every three correct picks in a row. "
+                "log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. "
+                "Work out the current rule and choose the gate that shares that feature with the sample.")
+ALT_RULE = ("Which gate is right is set by a hidden rule: the right gate shares the color, the shape or the count with the sample card. "
+            "Every gate shares exactly one feature with the sample. Right after any three correct picks in a row, the rule switches to a different feature. "
+            "log holds the earlier picks from the oldest: the feature the picked gate had in common with the sample, and whether the pick was correct. "
+            "Find the rule in force now and pick the gate that matches the sample by it.")
+ALT_LABELED = ("A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. "
+               "Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. "
+               "log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. "
+               "Find the rule in force now and pick the gate that shares that feature with the sample.")
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_spec_example_states(self):
+        self.assertEqual(json.dumps(bench.rule_state(SPEC_CASE, "matched_by")), json.dumps(SPEC_STATE))
+        self.assertEqual(json.dumps(bench.rule_state(SPEC_CASE, "labeled")), json.dumps(SPEC_LABELED))
+        for state in (SPEC_STATE, SPEC_LABELED):
+            self.assertEqual(solve(state), "gate_1")                                 # počtem (2) se se vzorem shoduje brána 1
+            self.assertEqual(last_correct(state), "gate_2")                          # brána starého pravidla (barva)
+        self.assertEqual(bench.rule_state(SPEC_CASE), bench.rule_state(SPEC_CASE, bench.RULE_FORM))
+        with self.assertRaises(ValueError):
+            bench.rule_state(SPEC_CASE, "full")
+
+    def test_questions_and_their_alternative_wordings(self):
+        criteria = {"gate_1": "Gate 1 (leftmost)", "gate_2": "Gate 2", "gate_3": "Gate 3 (rightmost)"}
+        for form, key, text, alt in (("matched_by", "gate", RULE_TEXT, ALT_RULE), ("labeled", "gate_labeled", LABELED_TEXT, ALT_LABELED)):
+            with self.subTest(form=form):
+                q = bench.rule_question(form)
+                self.assertEqual(list(q), [key])
+                self.assertEqual(q[key]["type"], "choice")
+                self.assertEqual(q[key]["instructions"], text)
+                self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps(criteria))
+                self.assertEqual(bench.ALT[key], alt)
+                self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt)
+                self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), ["gate_3", "gate_2", "gate_1"])
+        self.assertEqual(bench.rule_question(), bench.rule_question(bench.RULE_FORM))
+        with self.assertRaises(ValueError):
+            bench.rule_question("full")
+        with self.assertRaises(ValueError):
+            bench.rule_question("cards")
+
+    def test_state_stays_under_600_tokens(self):                                  # odhad: 4 znaky JSON na token; matched_by je nejdelší
+        longest = max(len(json.dumps(bench.rule_state(c, "matched_by"))) for c in cases(500))
+        self.assertLess(longest / 4, 600)
+
+
 if __name__ == "__main__":
     unittest.main()

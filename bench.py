@@ -1111,6 +1111,23 @@ def rule_state(case, form=None):
     return state
 
 
+def rule_question(form=None):
+    """Otázka podle podoby stavu: labeled → klíč gate_labeled (brána jmenuje svůj znak), matched_by → klíč gate (karty)."""
+    if rule_form(form) == "labeled":
+        key, instructions = "gate_labeled", (
+            "A hidden rule decides which gate is right: the gate that matches the sample card by color, by shape, or by count. "
+            "Each gate says which feature it shares with the sample. The rule changes to another feature right after every three correct picks in a row. "
+            "log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. "
+            "Work out the current rule and choose the gate that shares that feature with the sample.")
+    else:
+        key, instructions = "gate", (
+            "A hidden rule decides which gate is right: the gate whose card matches the sample card by color, by shape, or by count. "
+            "Each gate matches the sample in exactly one feature. The rule changes to another feature right after every three correct picks in a row. "
+            "log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. "
+            "Work out the current rule and choose the gate that matches the sample by it.")
+    return {key: {"type": "choice", "instructions": instructions, "criteria": position_criteria(gate_keys(3), "Gate")}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1121,6 +1138,8 @@ ALT = {                                              # jinak formulované zadán
     "recall_count": "The list signs_passed holds every sign the car went past, from the oldest to the newest; its last entry is 1 step back. Pick the gate whose sign was passed exactly steps_back steps ago.",
     "move": "The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. rows_ahead holds the coming rows from the nearest one; in each row the first character is lane 1, '.' marks a free lane and '#' a blocked one. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.",
     "move_blocked": "The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.",
+    "gate": "Which gate is right is set by a hidden rule: the right gate shares the color, the shape or the count with the sample card. Every gate shares exactly one feature with the sample. Right after any three correct picks in a row, the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate had in common with the sample, and whether the pick was correct. Find the rule in force now and pick the gate that matches the sample by it.",
+    "gate_labeled": "A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.",
     "go": "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
