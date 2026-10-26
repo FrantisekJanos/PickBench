@@ -571,6 +571,61 @@ class Page(unittest.TestCase):                                         # scéná
             " pickWrong([2], 0.99), pickWrong([0], 0)]));")
         self.assertEqual(run_page_js(code), [1, 0, None, 3, 1])                  # bez třetího parametru jako dřív: LANES možností
 
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="barrier" data-i18n="opt.scenario.barrier"></option>'), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier }[v];"), 1)
+        self.assertEqual(page.count("// ---------- scénář: závora ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(BARRIER_WARM, null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, barrierRow(rnd), 2)); },"), 1)
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for call in ("barrierRow(rnd)", "rollInject([d.go ? 0 : 1], 2)", "withNoulNote(", "stateOf(task, v)", "noulDecision(", "barrierQuestion()",
+                     "{ stop: { type: 'noul', instructions: BARRIER_STOP } }", "barrierSummary(", "auroc(", "bestThreshold(", "barrierOutcome("):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_outcome_and_open_barrier(self):                # neplatná odpověď (chosen −1) má vlastní výsledek na řadě jeď i stůj
+        code = page_function("barrierOutcome") + page_function("barrierOpen") + (
+            "process.stdout.write(JSON.stringify([[['ok', 0, 0], ['ok', 1, 1], ['bad', 1, 0], ['bad', 0, 1], ['late', 0, undefined], ['late', 1, undefined],"
+            " ['bad', 0, -1], ['bad', 1, -1]].map(([r, t, c]) => barrierOutcome(r, t, c)),"
+            " [{ result: null, chosen: undefined, y: 3 }, { result: null, chosen: 0, y: 3 }, { result: null, chosen: 1, y: 3 },"
+            "  { result: null, chosen: 1, y: 0.4 }, { result: null, chosen: undefined, y: 0.4 }, { result: 'ok', chosen: 1, y: -0.5 }].map(barrierOpen)]));")
+        self.assertEqual(run_page_js(code), [["go", "stop", "falseGo", "needless", "late", "lateCrash", "invalid", "invalid"],
+                                             [False, True, False, True, True, True]])            # stůj: závora dole, zvedne se těsně před autem
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_parse_reads_only_the_asked_key(self):          # stojí za háčkem parse v askModel: odpověď se čte jen pod klíčem otázky dané varianty
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        parse = re.search(r"\n  parse\(a, task, v = 0\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = page_function("noulDecision") + "const b = {" + parse + "};" + (
+            "const A = [[{ go: { noul: 0.8 } }, 0], [{ go: { noul: 0.2 } }, 0], [{ stop: { noul: 0.2 } }, 1], [{ go: { noul: 0.8 } }, 1],"
+            " [{ go: { noul: '0.8' } }, 0], [{ go: { noul: true } }, 2], [{ go: null }, 0], [{}, 0], [{ go: { noul: 1.5 } }, 2]];"
+            "process.stdout.write(JSON.stringify(A.map(([a, v]) => { const r = b.parse(a, null, v); return [r.move, r.conf ?? null, r.noul]; })));")
+        self.assertEqual(run_page_js(code), [[0, 0.8, 0.8], [1, 0.8, 0.2], [0, 0.8, 0.2], [-1, None, None],
+                                             [-1, None, None], [-1, None, None], [-1, None, None], [-1, None, None], [-1, None, None]])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_takes_noul_or_derives_it(self):          # řidiči Pravidla a Náhodně noul nemají: 1 jeď, 0 stůj; neplatná odpověď null
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        tally = re.search(r"\n  tally\(g, task, move, res\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = "const base = { tally() {} }; const b = { __proto__: base," + tally + "}; const g = { cases: [], probs: [] }, task = { go: true, rule: 4, cls: 'agree' };" + (
+            "[[0, { move: 0, noul: 0.7 }], [1, { move: 1, noul: null }], [0, { move: 0, ms: 1 }], [1, { move: 1, ms: 1 }], [-1, { move: -1, ms: 1 }]]"
+            ".forEach(([m, r]) => b.tally(g, task, m, r)); process.stdout.write(JSON.stringify(g));")
+        self.assertEqual(run_page_js(code), {"cases": [{"go": True, "rule": 4, "cls": "agree"}] * 5, "probs": [0.7, None, 1, 0, None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_class_split_by_go_and_stop(self):              # panel dělí třídy na jeď a stůj: strategie „vždy jeď“ se v přebitém semaforu neschová
+        classes = re.search(r"\nconst BARRIER_CLASSES = \[.*?\];\n", page_source()).group(0)
+        code = classes + page_function("noulDecision") + page_function("barrierClassGo") + (
+            "const cases = [{ go: true, rule: 1, cls: 'conflict_high' }, { go: true, rule: 2, cls: 'conflict_high' }, { go: false, rule: 3, cls: 'conflict_high' },"
+            " { go: false, rule: 1, cls: 'conflict_high' }, { go: false, rule: 2, cls: 'conflict_high' }, { go: true, rule: 4, cls: 'agree' }, { go: false, rule: 5, cls: 'last' }];"
+            "const r = barrierClassGo(cases, [0.9, 0.2, 0.1, null, 0.5, 1.5, 0]);"
+            "process.stdout.write(JSON.stringify([Object.keys(r), r]));")
+        self.assertEqual(run_page_js(code), [["agree", "conflict_high", "conflict_light", "last"],      # pořadí BARRIER_CLASSES
+                                             {"agree": {"go": [0, 1], "stop": [0, 0]}, "conflict_high": {"go": [1, 2], "stop": [1, 3]},
+                                              "conflict_light": {"go": [0, 0], "stop": [0, 0]}, "last": {"go": [0, 0], "stop": [1, 1]}}])     # neplatná (null, 1,5) je chyba
+
 
 if __name__ == "__main__":
     unittest.main()
