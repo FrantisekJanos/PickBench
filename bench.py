@@ -5,6 +5,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -13,6 +14,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --signs --pairs tev1
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
+          python bench.py 100 --lookahead tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -35,6 +37,14 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             semafor přebil značku, poslední pravidlo; dál AUROC a nejlepší práh s vyváženou přesností (průměr jeď a stůj).
             S --mirror je druhou variantou obrácená otázka „Must the car stop now?“ (pokyn trojského koně je v ní obrácený);
             řádek variant ji vypisuje jako „obrácené pořadí“. S --lanes se nekombinuje.
+--lookahead:  dva kroky dopředu: před autem jsou 4 řady s překážkami, před každou řadou se auto smí posunout o pruh vlevo,
+            zůstat, nebo o pruh vpravo, a pak do ní vjede. Model volí tah pro nejbližší řadu tak, aby auto projelo co nejvíc
+            řad; správný tah je vždy jediný. K pruhů (výchozí 4, 3 až 8), N úloh (výchozí 100). Za řádkem modelu přesnost
+            podle hloubky pasti (kolik nejbližších řad musí model zvážit, aby tah vyšel správně: 1, 2, 3+), pod ním chyby:
+            tah hladového řidiče (pruh s nejdelší volnou dráhou rovně), náraz nebo mimo silnici, jiné, neplatné.
+--rows, --blocked:  jen s --lookahead: podoba stavu. rows = každá řada jako řetězec se znakem pro každý pruh
+            („.“ volno, „#“ překážka); blocked = u každé řady seznam čísel zablokovaných pruhů.
+            Bez volby platí blocked.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -67,6 +77,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -75,6 +86,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --signs --pairs tev1
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
+          python bench.py 100 --lookahead tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -97,6 +109,14 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             it is off, says the same), light overridden (rule 1-3 overrides the opposite light or sign), light over sign, last rule; then AUROC and
             the best threshold with its balanced accuracy (mean of go and stop). With --mirror the second variant is the inverted
             question "Must the car stop now?" (its Trojan horse note is inverted too), listed as "reversed order". Not with --lanes.
+--lookahead:  two steps ahead: 4 rows with obstacles lie ahead of the car; before each row the car may shift one lane left,
+            stay, or shift one lane right, and then it enters the row. The model picks the move for the nearest row that lets
+            the car pass the most rows; there is always exactly one right move. K lanes (default 4, 3 to 8), N tasks (default 100).
+            After the model row, the accuracy by trap depth (how many of the nearest rows the model has to weigh to get the move
+            right: 1, 2, 3+); below it the errors: greedy driver's move (the lane with the longest free run straight ahead),
+            crash or off the road, other, invalid.
+--rows, --blocked:  only with --lookahead: the form of the state. rows = every row as a string, one character per lane ("." free,
+            "#" blocked); blocked = for every row, the list of the numbers of its blocked lanes. Without the option: blocked.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -1386,6 +1406,9 @@ def parse_args(argv):
     p.add_argument("--memory", action="store_true")
     p.add_argument("--count", action="store_true")
     p.add_argument("--barrier", action="store_true")
+    p.add_argument("--lookahead", action="store_true")
+    p.add_argument("--rows", action="store_true")
+    p.add_argument("--blocked", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -1397,7 +1420,7 @@ def parse_args(argv):
     a.models = a.rest
     a.lanes_given = a.lanes is not None              # závora pruhy ani brány nemá: --lanes s --barrier končí hláškou
     if a.lanes is None:
-        a.lanes = 4 if a.memory else 3               # paměťová stopa: výchozí 4 brány podle specu
+        a.lanes = 4 if a.memory or a.lookahead else 3      # paměťová stopa: 4 brány, dva kroky dopředu: 4 pruhy (spec)
     return a
 
 
@@ -1534,7 +1557,9 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier))) > 1:
+    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead)
+    if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
+            or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -1544,6 +1569,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.pairsCombo"))
     if args.count and not args.memory:
         sys.exit(i18n.t("bench.err.countMemory"))
+    if (args.rows or args.blocked) and not args.lookahead:
+        sys.exit(i18n.t("bench.err.formLookahead"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -1624,6 +1651,16 @@ def main(argv):
                 r = run_barrier(m, cases, args.mirror, args.inject, args.deadline_ms)
                 print_row(r, barrier_note(r))
                 print_barrier(r)
+    elif args.lookahead:
+        form = "blocked" if args.blocked else "rows" if args.rows else LOOKAHEAD_FORM
+        cases = lookahead_cases(args.n or 100, args.lanes)       # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        print(i18n.t("bench.intro.lookahead", n=len(cases), rows=LOOKAHEAD_ROWS, form=form, lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_lookahead(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, lookahead_note(r))
+                print_lookahead(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

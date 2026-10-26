@@ -361,5 +361,99 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(printed("en", bench.print_lookahead, r)), 1)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--lookahead", "m1"])
+        self.assertEqual((a.n, a.lookahead, a.rows, a.blocked, a.lanes, a.models), (40, True, False, False, 4, ["m1"]))
+        a = bench.parse_args(["--lookahead", "--blocked", "--lanes", "6", "m1"])
+        self.assertEqual((a.lookahead, a.rows, a.blocked, a.lanes), (True, False, True, 6))
+        self.assertEqual((bench.parse_args(["m1"]).lanes, bench.parse_args(["--numbers", "m1"]).lanes), (3, 3))
+
+    def test_first_line_and_rows(self):
+        form = bench.LOOKAHEAD_FORM
+        for argv, cs, en in ((["1", "--lookahead", "m1"], f"1 úloh se 4 řadami před autem (podoba stavu {form}), 4 pruhů",
+                              f"1 task with 4 rows ahead of the car (state form {form}), 4 lanes"),
+                             (["7", "--lookahead", "--blocked", "--lanes", "3", "m1"], "7 úloh se 4 řadami před autem (podoba stavu blocked), 3 pruhů",
+                              "7 tasks with 4 rows ahead of the car (state form blocked), 3 lanes"),
+                             (["7", "--rows", "--lookahead", "m1"], "7 úloh se 4 řadami před autem (podoba stavu rows), 4 pruhů",
+                              "7 tasks with 4 rows ahead of the car (state form rows), 4 lanes")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--lookahead", "m1")[0].startswith("100 úloh se 4 řadami před autem"))      # výchozí počet úloh
+        en = self.cli("6", "--lookahead", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 5)
+        self.assertRegex(en[3], r"^m1 .*   \(depth 1 \d+/\d+, depth 2 \d+/\d+, depth 3\+ \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}errors: greedy driver's move \d+, crash or off the road \d+, other \d+, invalid \d+$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv in (["6", "--rows", "m1"], ["--blocked", "--numbers", "m1"], ["--blocked", "--memory", "m1"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", "Volby --rows a --blocked jdou jen s --lookahead."))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", "The --rows and --blocked options work only with --lookahead."))
+        for argv, cs, en in ((["--lookahead", "--pairs", "m1"], "Volba --pairs jde jen s --signs.", "The --pairs option works only with --signs."),
+                             (["--lookahead", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--lookahead", "--numbers", "m1"], ["--lookahead", "--memory", "m1"], ["--lookahead", "--barrier", "m1"],
+                     ["--lookahead", "--lanes", "2", "m1"], ["--lookahead", "--lanes", "9", "m1"], ["--lookahead", "--rows", "--blocked", "m1"],
+                     ["--rows", "--blocked", "m1"], ["--lookahead"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_tasks(self):
+        self.cli("6", "--lookahead", "--rows", "m1")
+        rows, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--lookahead", "--blocked", "m1")
+        blocked = [json.loads(body) for body in self.sent]
+        self.assertEqual((len(rows), len(blocked)), (7, 7))                     # zahřátí a šest úloh
+        self.assertTrue(all(list(a["questions"]) == ["move"] and list(b["questions"]) == ["move_blocked"] for a, b in zip(rows, blocked)))
+        for a, b in zip((p["state"] for p in rows), (p["state"] for p in blocked)):
+            self.assertEqual(a["car_lane"], b["car_lane"])
+            self.assertEqual(tuple(a["rows_ahead"]), rows_of(b, 4))
+
+    def test_mirror_and_inject_work_with_lookahead(self):
+        out, code = self.cli("8", "--lookahead", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("chyby: tah hladového řidiče "), lines[6])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --lookahead tev1", text)
+            self.assertIn("\n--lookahead:  ", text)
+            self.assertIn("\n--rows, --blocked:  ", text)
+            self.assertIn(bench.LOOKAHEAD_FORM + ".", text)
+
+
 if __name__ == "__main__":
     unittest.main()

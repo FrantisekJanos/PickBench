@@ -103,6 +103,9 @@ TEXTS = {
     "bench.intro.memoryCount": {"cs": "{n} úloh s historií značek (počítání polohy v seznamu), {lanes} bran, stejných pro všechny modely",
                                 "en": "{n} {n|task|tasks} with a history of signs (counting the position in a list), {lanes} gates, the same for all models"},
     # Závora: {go} = podíl úloh se správnou odpovědí jeď, v celých procentech.
+    # Dva kroky dopředu: úvodní věta jmenuje počet řad a podobu stavu ({form} = rows / blocked, nepřekládá se).
+    "bench.intro.lookahead": {"cs": "{n} úloh se {rows} řadami před autem (podoba stavu {form}), {lanes} pruhů, stejných pro všechny modely",
+                              "en": "{n} {n|task|tasks} with {rows} rows ahead of the car (state form {form}), {lanes} lanes, the same for all models"},
     "bench.intro.barrier": {"cs": "{n} křižovatek, 5 pravidel s pořadím, {go} % jeď, stejných pro všechny modely",
                             "en": "{n} {n|intersection|intersections}, 5 rules in order of priority, {go}% go, the same for all models"},
     "bench.intro.emails": {"cs": "{n} e-mailů ze sady „{name}“ ({categories} kategorií), stejných pro všechny modely",
@@ -177,6 +180,8 @@ TEXTS = {
                               "en": "The --mirror and --inject options cannot be combined with --public."},
     "bench.err.pairsSigns": {"cs": "Volba --pairs jde jen s --signs.", "en": "The --pairs option works only with --signs."},
     "bench.err.countMemory": {"cs": "Volba --count jde jen s --memory.", "en": "The --count option works only with --memory."},
+    "bench.err.formLookahead": {"cs": "Volby --rows a --blocked jdou jen s --lookahead.",
+                                "en": "The --rows and --blocked options work only with --lookahead."},
     "bench.err.lanesBarrier": {"cs": "Volba --lanes se s --barrier nekombinuje.", "en": "The --lanes option cannot be combined with --barrier."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},

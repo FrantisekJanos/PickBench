@@ -5,6 +5,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -13,6 +14,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --signs --pairs tev1
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
+          python bench.py 100 --lookahead tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -35,6 +37,14 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             semafor přebil značku, poslední pravidlo; dál AUROC a nejlepší práh s vyváženou přesností (průměr jeď a stůj).
             S --mirror je druhou variantou obrácená otázka „Must the car stop now?“ (pokyn trojského koně je v ní obrácený);
             řádek variant ji vypisuje jako „obrácené pořadí“. S --lanes se nekombinuje.
+--lookahead:  dva kroky dopředu: před autem jsou 4 řady s překážkami, před každou řadou se auto smí posunout o pruh vlevo,
+            zůstat, nebo o pruh vpravo, a pak do ní vjede. Model volí tah pro nejbližší řadu tak, aby auto projelo co nejvíc
+            řad; správný tah je vždy jediný. K pruhů (výchozí 4, 3 až 8), N úloh (výchozí 100). Za řádkem modelu přesnost
+            podle hloubky pasti (kolik nejbližších řad musí model zvážit, aby tah vyšel správně: 1, 2, 3+), pod ním chyby:
+            tah hladového řidiče (pruh s nejdelší volnou dráhou rovně), náraz nebo mimo silnici, jiné, neplatné.
+--rows, --blocked:  jen s --lookahead: podoba stavu. rows = každá řada jako řetězec se znakem pro každý pruh
+            („.“ volno, „#“ překážka); blocked = u každé řady seznam čísel zablokovaných pruhů.
+            Bez volby platí blocked.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.

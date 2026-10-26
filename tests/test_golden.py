@@ -40,6 +40,9 @@ BENCH = {                                            # jméno zlatého souboru �
     "bench-memory-count": ["12", "--memory", "--count", "--lanes", "3", "m1"],
     "bench-barrier": ["24", "--barrier", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],     # 24 úloh: objeví se všech pět pravidel
     "bench-barrier-plain": ["24", "--barrier", "m1"],
+    "bench-lookahead": ["12", "--lookahead", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],     # bez --lanes a bez podoby: výchozí
+    "bench-lookahead-rows": ["12", "--lookahead", "--rows", "--lanes", "3", "m1"],
+    "bench-lookahead-blocked": ["12", "--lookahead", "--blocked", "--lanes", "6", "m1"],
 }
 HWBENCH = {                                          # jméno zlatého souboru → argumenty hwbench.py
     "hwbench-latency": ["latency", "--n", "20", "m1"],
@@ -235,7 +238,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "hwbench-latency", "hwbench-questions", "hwbench-context"):
+        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "hwbench-latency", "hwbench-questions", "hwbench-context"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)
