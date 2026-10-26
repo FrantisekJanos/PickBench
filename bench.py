@@ -1128,6 +1128,16 @@ def rule_question(form=None):
     return {key: {"type": "choice", "instructions": instructions, "criteria": position_criteria(gate_keys(3), "Gate")}}
 
 
+def rule_summary(cases, choices, keys):
+    """Přesnost podle třídy a podle délky deníku ({třída: [správně, celkem]}) a perseverace = [kolikrát model ve třídě
+    switch zvolil bránu starého pravidla, počet úloh switch]. Neplatná odpověď se do perseverace nepočítá."""
+    switch = [(old, choice) for (_, _, _, _, cls, old), choice in zip(cases, choices) if cls == "switch"]
+    return {"by_class": class_tally(RULE_CLASSES, [(top, cls) for _, _, _, top, cls, _ in cases], choices, keys),
+            "by_length": class_tally(RULE_LENGTHS, [(top, "short" if len(log) <= RULE_SHORT else "long") for log, _, _, top, _, _ in cases],
+                                     choices, keys),
+            "persev": [sum(choice == keys[old] for old, choice in switch), len(switch)]}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1561,6 +1571,17 @@ def run_lookahead(model, cases, lanes=4, mirror=False, inject=False, deadline=No
     r["by_depth"] = class_tally(LOOKAHEAD_CLASSES, [(keys.index(answer), lookahead_class(depth)) for _, _, answer, depth, _ in cases],
                                 choices, keys)                   # hloubka pasti → [správně, celkem]
     r["errors"] = lookahead_errors(cases, choices)               # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_rule(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = gate_keys(3), rule_question(form)
+    ask(model, rule_state(cases[0], form), question)             # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[3]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(rule_state(case, form), note), {keys[case[3]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(rule_summary(cases, choices, keys))                 # z původní varianty zadání, jako přesnost
     return r
 
 
