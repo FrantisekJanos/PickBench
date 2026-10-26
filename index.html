@@ -1759,14 +1759,22 @@ const barrier = {
     return t('last.barrier', { state, noul: Number.isFinite(res.noul) ? f(res.noul, 2) : '—', pick: word(res.move), truth: word(task.truth),
                                rule: t('barrier.rule', { n: task.rule, name: t(BARRIER_RULE_NAME[task.rule - 1]) }) });
   },
+  summary(g) {                                             // rozbor jednou na překreslení: quality i renderExtra čtou tentýž, nový až po další odpovědi
+    if (g.summary?.n !== g.cases.length) {
+      const truths = g.cases.map(c => c.go);
+      g.summary = { n: g.cases.length, sum: barrierSummary(g.cases, g.probs), split: barrierClassGo(g.cases, g.probs),
+                    area: auroc(g.probs, truths), best: bestThreshold(g.probs, truths) };
+    }
+    return g.summary;
+  },
   quality(g, s, inGame) {                                  // za první dlaždici falešný průjezd z rozboru (i pozdní odpovědi)
     const tiles = this.matchTiles(g, s, inGame, t('scenario.barrier.tile.match'), t('scenario.barrier.tile.rate'));
-    const [k, n] = barrierSummary(g.cases, g.probs).false_go;
+    const [k, n] = this.summary(g).sum.false_go;
     tiles.splice(1, 0, [n ? `${k} / ${n}` : '—', t('scenario.barrier.tile.falseGo'), t('scenario.barrier.tip.falseGo')]);
     return tiles;
   },
   renderExtra(g) {                                         // přesnost podle pravidla a třídy (přebitý semafor i zvlášť jeď / stůj), pod ní řádek chyb a AUROC jako bench.py
-    const sum = barrierSummary(g.cases, g.probs), split = barrierClassGo(g.cases, g.probs), frac = ([k, n]) => `${k}/${n}`;
+    const { sum, split, area, best } = this.summary(g), frac = ([k, n]) => `${k}/${n}`;
     const line = (name, [ok, total], more = '') => {
       const tr = el('tr');
       tr.append(el('th', '', name), el('td', '', `${ok} / ${total}${more}`), el('td', '', pctText(total ? ok / total : NaN)));
@@ -1777,7 +1785,6 @@ const barrier = {
     const rules = BARRIER_RULES.map(n => line(t('barrier.rule', { n, name: t(BARRIER_RULE_NAME[n - 1]) }), sum.by_rule[n]));
     const classes = BARRIER_CLASSES.map(c => line(t(BARRIER_CLASS_NAME[c]), sum.by_class[c],
       c === 'conflict_high' ? ' ' + t('barrier.split', { go: frac(split[c].go), stop: frac(split[c].stop) }) : ''));
-    const truths = g.cases.map(c => c.go), area = auroc(g.probs, truths), best = bestThreshold(g.probs, truths);
     const errors = t('barrier.errors', { false_go: frac(sum.false_go), needless: frac(sum.needless), invalid: sum.invalid, late: statsView.inGame ? g.late : '—' });
     const quality = t('barrier.auroc', { auroc: area === null ? '—' : f(area, 2), threshold: best ? f(best[0], 2) : '—', best: best ? pctOf(best[1]) : '—' });
     $('conf').replaceChildren(head, ...rules, wide('th', t('barrier.classes')), ...classes, wide('td', errors), wide('td', quality));
@@ -2195,26 +2202,39 @@ function barrierClassGo(cases, probs) {
   return out;
 }
 // AUROC z noul proti pravdě jeď (port metrics.auroc); shody jako polovina, neplatné (null) se vynechají. Bez úloh jedné třídy null.
+// Po seřazení v n log n místo párů: wins2 = 2 · výhry jeď nad stůj + shody, celé číslo; (wins2 / 2) / (pos · neg) je týž double jako Python.
 function auroc(probs, truths) {
-  const pos = probs.filter((p, i) => truths[i] && p != null), neg = probs.filter((p, i) => !truths[i] && p != null);
-  if (!pos.length || !neg.length) return null;
-  let sum = 0;
-  for (const a of pos) for (const b of neg) sum += (a > b ? 1 : 0) + (a === b ? 0.5 : 0);
-  return sum / (pos.length * neg.length);
+  const valid = probs.map((p, i) => [p, Boolean(truths[i])]).filter(([p]) => p != null).sort((a, b) => a[0] - b[0]);
+  const pos = valid.filter(([, go]) => go).length, neg = valid.length - pos;
+  if (!pos || !neg) return null;
+  let wins2 = 0, negBelow = 0;
+  for (let i = 0; i < valid.length;) {                     // skupina stejných hodnot: jeď vyhrává nad stůj pod ní, se stůj ve skupině je shoda
+    let j = i, posHere = 0, negHere = 0;
+    for (; j < valid.length && valid[j][0] === valid[i][0]; j++) valid[j][1] ? posHere++ : negHere++;
+    wins2 += posHere * (2 * negBelow + negHere);
+    negBelow += negHere; i = j;
+  }
+  return wins2 / 2 / (pos * neg);
 }
 // Nejlepší práh (port metrics.best_threshold) přes společného jmenovatele místo zlomků: vyvážená přesnost prahu t = num(t) / D, D = G · ∏L,
 // num(t) = Σ c_i · ∏(L_j, j ≠ i); L = velikosti skupin jeď / stůj s aspoň jednou úlohou, G jejich počet, c_i správné při noul >= t (neplatná je chyba).
 // Celá čísla se porovnají přesně a num / D dá stejný double jako float(Fraction). Vyhrává největší num, při shodě t nejblíž 0,5, potom nižší. Bez úloh null.
+// Prahy jdou vzestupně a u každé skupiny ukazatel počítá platné hodnoty pod prahem, takže n log n místo prahy · úlohy.
 function bestThreshold(probs, truths) {
   const groups = [true, false].map(want => ({ want, ps: probs.filter((p, i) => Boolean(truths[i]) === want) })).filter(g => g.ps.length);
   if (!groups.length) return null;
   const D = groups.length * groups.reduce((prod, g) => prod * g.ps.length, 1);
-  const num = t => groups.reduce((sum, g, i) => {
-    const right = g.ps.filter(p => p !== null && (p >= t) === g.want).length;      // výslovně: v JS je null >= 0 pravda
-    return sum + right * groups.reduce((prod, h, j) => (j === i ? prod : prod * h.ps.length), 1);
+  for (const [i, g] of groups.entries()) {                 // platné hodnoty seřazené (null je chyba při každém prahu: v JS je null >= 0 pravda), váha ∏(L_j, j ≠ i)
+    g.valid = g.ps.filter(p => p != null).sort((a, b) => a - b);
+    g.weight = groups.reduce((prod, h, j) => (j === i ? prod : prod * h.ps.length), 1);
+    g.below = 0;
+  }
+  const num = t => groups.reduce((sum, g) => {             // volá se s rostoucím t
+    while (g.below < g.valid.length && g.valid[g.below] < t) g.below++;
+    return sum + (g.want ? g.valid.length - g.below : g.below) * g.weight;     // jeď správně při noul >= t, stůj při noul < t
   }, 0);
   let best = null;
-  for (const t of new Set([0.5, ...probs.filter(p => p !== null)])) {
+  for (const t of [...new Set([0.5, ...probs.filter(p => p != null)])].sort((a, b) => a - b)) {
     const n = num(t);
     if (best === null || n > best.n || (n === best.n && (Math.abs(t - 0.5) < Math.abs(best.t - 0.5) || (Math.abs(t - 0.5) === Math.abs(best.t - 0.5) && t < best.t)))) best = { t, n };
   }

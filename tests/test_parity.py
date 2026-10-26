@@ -538,6 +538,17 @@ class Barrier(unittest.TestCase):
             self.assertEqual(th, list(metrics.best_threshold(probs, truths)), (probs, truths))   # přesně, ne s tolerancí
         self.assertIsNone(run_js("bestThreshold([], [])", None))                                # prázdný běh: stránka ukáže „—“
 
+    def test_auroc_and_threshold_match_metrics_on_a_large_set(self):     # stránka počítá v n log n, Python po párech: přesná shoda i u tisíců úloh
+        rng = random.Random(11)
+        sets = []
+        for n, share in ((3000, 0.7), (2001, 0.5)):
+            truths = [rng.random() < share for _ in range(n)]
+            sets.append(([None if rng.random() < 0.05 else round(rng.random(), rng.choice([1, 2])) for _ in range(n)], truths))   # mnoho shod hodnot
+        got = run_js("arg.map(([p, t]) => [auroc(p, t), bestThreshold(p, t)])", sets)
+        for (probs, truths), (a, th) in zip(sets, got):
+            self.assertEqual(a, metrics.auroc(probs, truths))
+            self.assertEqual(th, list(metrics.best_threshold(probs, truths)))
+
 
 # Generátor paměťové stopy stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady memoryRow.
 MEMORY_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "memoryRow(arg.gates, rand)")

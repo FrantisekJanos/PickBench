@@ -626,6 +626,21 @@ class Page(unittest.TestCase):                                         # scéná
                                              {"agree": {"go": [0, 1], "stop": [0, 0]}, "conflict_high": {"go": [1, 2], "stop": [1, 3]},
                                               "conflict_light": {"go": [0, 0], "stop": [0, 0]}, "last": {"go": [0, 0], "stop": [1, 1]}}])     # neplatná (null, 1,5) je chyba
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_summary_is_computed_once_per_answer(self):     # překreslení po každém rozhodnutí: quality i renderExtra čtou jeden rozbor, nový až po další odpovědi
+        page = page_source()
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for call in ("barrierSummary(", "barrierClassGo(", "auroc(", "bestThreshold("):
+            self.assertEqual(body.count(call), 1, call)                                            # jen v summary(g)
+        summary = re.search(r"\n  summary\(g\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        consts = "".join(re.search(r"\nconst %s = .*?;\n" % name, page, re.S).group(0) for name in ("BARRIER_RULES", "BARRIER_CLASSES"))
+        code = consts + "".join(page_function(f) for f in ("noulDecision", "barrierSummary", "barrierClassGo", "auroc", "bestThreshold")) + (
+            "const b = {" + summary + "}; const g = { cases: [{ go: true, rule: 4, cls: 'agree' }, { go: false, rule: 5, cls: 'last' }], probs: [0.9, 0.2] };"
+            "const a = b.summary(g), same = b.summary(g) === a;"
+            "g.cases.push({ go: false, rule: 1, cls: 'conflict_high' }); g.probs.push(0.9); const c = b.summary(g);"
+            "process.stdout.write(JSON.stringify([same, c !== a, a.area, c.area, c.sum.false_go, c.split.conflict_high.stop, c.best]));")
+        self.assertEqual(run_page_js(code), [True, True, 1, 0.75, [1, 2], [0, 1], [0.5, 0.75]])
+
     def test_drawing_shows_every_field_and_writes_only_through_t(self):
         page = page_source()
         glyphs = re.findall(r"(\w+): '", re.search(r"\nconst BARRIER_GLYPH = \{(.*?)\};", page).group(1))
