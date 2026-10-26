@@ -105,8 +105,8 @@ async () => {
       if (path !== '/decide' || !r.ok) return r;
       return new Response(JSON.stringify({ ...(await r.json()), answers: { go: { noul: 0.1 } } }), { status: r.status, headers: { 'Content-Type': 'application/json' } });
     };
-    log.push((await run('game', { driver: 'model', model: 'test:echo', scenario: 'barrier', lanes: 2, runlen: 12, inject: true })).why);
-    window.fetch = fetch1;
+    try { log.push((await run('game', { driver: 'model', model: 'test:echo', scenario: 'barrier', lanes: 2, runlen: 12, inject: true })).why); }
+    finally { window.fetch = fetch1; }                     // i když běh spadne, další běhy dostanou odpovědi beze změny
     if (emails.length) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: emails[0], benchn: 6, mirror: true })).why);
     // kvůli otisku dotazů (řádek „asks“): modelem projde každý scénář i volby, které dotaz mění (2. otázka, zrcadla, trojský kůň)
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'numbers', lanes: 4, mirror: true, inject: true })).why);
