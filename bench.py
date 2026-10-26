@@ -890,6 +890,28 @@ def lookahead_question(lanes, form=None):
     return {key: {"type": "choice", "instructions": instructions, "criteria": criteria}}
 
 
+def lookahead_errors(cases, choices):
+    """Rozbor chybných tahů; správný tah se nepočítá nikam.
+
+    greedy: zvolený tah je tah hladového řidiče úlohy.
+    crash: zvolený tah má hodnotu 0 (do '#' v nejbližší řadě nebo mimo silnici); hladový tah nikdy nenarazí.
+    other: ostatní chybné tahy.
+    invalid: volba, která není tahem z LOOKAHEAD_MOVES (None, jiný řetězec, jiný typ)."""
+    counts = {"greedy": 0, "crash": 0, "other": 0, "invalid": 0}
+    for (rows, lane, answer, _, greedy), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in LOOKAHEAD_MOVES):
+            counts["invalid"] += 1
+        elif choice == answer:
+            continue
+        elif choice == greedy:
+            counts["greedy"] += 1
+        elif lookahead_values(rows, lane)[choice] == 0:
+            counts["crash"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1307,6 +1329,20 @@ def run_barrier(model, cases, mirror=False, inject=False, deadline=None):
     r.update(barrier_summary(cases, probs))                      # z původní varianty zadání, jako přesnost
     r["auroc"] = barrier_auroc(probs, truths)
     r["threshold"] = barrier_threshold(probs, truths)
+    return r
+
+
+def run_lookahead(model, cases, lanes=4, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(LOOKAHEAD_MOVES), lookahead_question(lanes, form)
+    ask(model, lookahead_state(*cases[0][:2], form), question)   # zahřátí, nepočítá se
+    targets = inject_plan([{answer} for _, _, answer, _, _ in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(lookahead_state(rows, lane, form), note), {answer}, "")
+             for (rows, lane, answer, _, _), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_depth"] = class_tally(LOOKAHEAD_CLASSES, [(keys.index(answer), lookahead_class(depth)) for _, _, answer, depth, _ in cases],
+                                choices, keys)                   # hloubka pasti → [správně, celkem]
+    r["errors"] = lookahead_errors(cases, choices)               # z původní varianty zadání, jako přesnost
     return r
 
 
