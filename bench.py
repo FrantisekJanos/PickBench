@@ -2271,6 +2271,45 @@ def pattern_cases(n, seed=1):
     return [pattern_case(rng, rng.choice(PATTERN_CLASSES)) for _ in range(n)]
 
 
+PATTERN_KEYS = {"counter": "throw", "predict": "opponent_throw"}               # klíč otázky podle podoby
+PATTERN_INS = {
+    "counter": ("You play rock-paper-scissors against an opponent. Rock beats scissors, scissors beat paper, and paper beats rock. "
+                "opponent_moves lists the opponent's moves so far, oldest first. The opponent opened with a few moves of its own "
+                "and then settled into a fixed cycle of 1 to 4 moves, which it has repeated for at least its last 8 moves. "
+                "Work out the opponent's next move and choose the move that beats it."),
+    "predict": ("You play rock-paper-scissors against an opponent. "
+                "opponent_moves lists the opponent's moves so far, oldest first. The opponent opened with a few moves of its own "
+                "and then settled into a fixed cycle of 1 to 4 moves, which it has repeated for at least its last 8 moves. "
+                "Work out the opponent's next move and choose it."),
+}
+PATTERN_LABELS = {"counter": "Play {move}", "predict": "The opponent plays {move}"}
+
+
+def pattern_form(form):
+    """Podoba otázky: None = výchozí PATTERN_FORM, neznámá podoba = ValueError."""
+    form = form or PATTERN_FORM
+    if form not in PATTERN_FORMS:
+        raise ValueError(f"unknown pattern form: {form}")
+    return form
+
+
+def pattern_state(case):
+    """Stav pro model, v obou podobách stejný: jen tahy soupeře, nejstarší první. Hranice rozehrávky se neoznačuje."""
+    return {"opponent_moves": list(case[0])}
+
+
+def pattern_question(form=None):
+    """Otázka choice: counter → klíč throw (vlastní tah, který porazí další tah soupeře), predict → opponent_throw."""
+    form = pattern_form(form)
+    return {PATTERN_KEYS[form]: {"type": "choice", "instructions": PATTERN_INS[form],
+                                 "criteria": {m: PATTERN_LABELS[form].format(move=m) for m in PATTERN_MOVES}}}
+
+
+def pattern_answer(case, form=None):
+    """Správná odpověď: counter = tah, který porazí další tah soupeře; predict = další tah soupeře."""
+    return PATTERN_BEATS[case[1]] if pattern_form(form) == "counter" else case[1]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2291,6 +2330,8 @@ ALT = {                                              # jinak formulované zadán
     "depot": "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
     "changed": "Two photos show the same row of lanes, before first and after second, with one value per lane. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
     "changed_list": "Two photos show the same row of lanes, before first and after second; each one lists the lane values from left to right, so its first item belongs to lane 1. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
+    "throw": "In this game of rock-paper-scissors, paper wins over rock, rock wins over scissors and scissors win over paper. opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick the move that wins against it.",
+    "opponent_throw": "In this game of rock-paper-scissors, opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick that move.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)

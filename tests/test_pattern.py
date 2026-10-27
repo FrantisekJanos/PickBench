@@ -235,5 +235,49 @@ class Generator(unittest.TestCase):
             bench.pattern_case(random.Random(1), "p2")
 
 
+class StateAndQuestion(unittest.TestCase):
+    COUNTER = ("You play rock-paper-scissors against an opponent. Rock beats scissors, scissors beat paper, and paper beats rock. "
+               "opponent_moves lists the opponent's moves so far, oldest first. The opponent opened with a few moves of its own "
+               "and then settled into a fixed cycle of 1 to 4 moves, which it has repeated for at least its last 8 moves. "
+               "Work out the opponent's next move and choose the move that beats it.")
+    PREDICT = ("You play rock-paper-scissors against an opponent. opponent_moves lists the opponent's moves so far, oldest first. "
+               "The opponent opened with a few moves of its own and then settled into a fixed cycle of 1 to 4 moves, which it has "
+               "repeated for at least its last 8 moves. Work out the opponent's next move and choose it.")
+    ALT_COUNTER = ("In this game of rock-paper-scissors, paper wins over rock, rock wins over scissors and scissors win over paper. "
+                   "opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it "
+                   "keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. "
+                   "Continue the sequence by one move and pick the move that wins against it.")
+    ALT_PREDICT = ("In this game of rock-paper-scissors, opponent_moves holds every move the opponent has made, from the first to the "
+                   "latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or "
+                   "more follow that sequence. Continue the sequence by one move and pick that move.")
+
+    def test_spec_state(self):
+        self.assertEqual(json.dumps(bench.pattern_state(SPEC_CASE)),
+                         '{"opponent_moves": ["rock", "rock", "paper", "scissors", "rock", "paper", "scissors", "rock", "paper"]}')
+        self.assertEqual((bench.pattern_answer(SPEC_CASE, "counter"), bench.pattern_answer(SPEC_CASE, "predict")), ("rock", "scissors"))
+        self.assertEqual(bench.pattern_answer(SPEC_CASE), bench.pattern_answer(SPEC_CASE, FORM))
+        with self.assertRaises(ValueError):
+            bench.pattern_question("guess")
+
+    def test_questions_and_alternative_wording(self):
+        for form, text, alt, label in (("counter", self.COUNTER, self.ALT_COUNTER, "Play {}"),
+                                       ("predict", self.PREDICT, self.ALT_PREDICT, "The opponent plays {}")):
+            q = bench.pattern_question(form)
+            key = KEYS[form]
+            with self.subTest(form=form):
+                self.assertEqual(list(q), [key])
+                self.assertEqual((q[key]["type"], q[key]["instructions"]), ("choice", text))
+                self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps({m: label.format(m) for m in MOVES}))
+                self.assertEqual(bench.ALT[key], alt)
+                self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt)
+                self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), list(MOVES)[::-1])
+        self.assertEqual(bench.pattern_question(), bench.pattern_question(FORM))
+
+    def test_prompt_is_short(self):                          # odhad: 4 znaky JSON na token; zadání spec odhaduje na 200–250 tokenů
+        longest = max(len(json.dumps(bench.with_note(bench.pattern_state(x), "rock"))) for x in cases())
+        for form in bench.PATTERN_FORMS:
+            self.assertLess((longest + len(json.dumps(bench.pattern_question(form)))) / 4, 300)
+
+
 if __name__ == "__main__":
     unittest.main()
