@@ -1,0 +1,5 @@
+12 úloh se dvěma snímky řady (zápis seznamy), 6 pruhů; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     88.2       8%      71%    63%     163   (číslo o 1 1/3, jiné číslo 0/4, slovo o písmeno 0/1, jiné slovo 0/4)
+                    řady bez opakování 1/7, s opakováním 0/5; chyby: stejná hodnota v jiném pruhu 3, sousední pruh 2, jiné 6, neplatné 0

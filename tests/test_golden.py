@@ -56,6 +56,8 @@ BENCH = {                                            # jméno zlatého souboru �
     "bench-cruise-mirror": ["12", "--cruise", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],
     "bench-timetable": ["18", "--timetable", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],      # bez podoby: výchozí
     "bench-timetable-shuffled": ["12", "--timetable", "--shuffled", "m1"],
+    "bench-diff": ["12", "--diff", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],            # bez --lanes a bez podoby: výchozí 8 pruhů, seznamy
+    "bench-diff-lists": ["12", "--diff", "--lists", "--lanes", "6", "m1"],
 }
 HWBENCH = {                                          # jméno zlatého souboru → argumenty hwbench.py
     "hwbench-latency": ["latency", "--n", "20", "m1"],
@@ -251,7 +253,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-hint", "bench-hint-mirror", "bench-lanes-volby","bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-timetable", "bench-timetable-shuffled", "hwbench-latency", "hwbench-questions", "hwbench-context"):
+        for name in ("bench-hint", "bench-hint-mirror", "bench-lanes-volby","bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-timetable", "bench-timetable-shuffled", "bench-diff", "bench-diff-lists", "hwbench-latency", "hwbench-questions", "hwbench-context"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)

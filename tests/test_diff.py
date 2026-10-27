@@ -306,5 +306,87 @@ class Lines(unittest.TestCase):
                          [" " * 20 + "rows without repeats 0/0, with repeats 1/1; errors: same value in another lane 0, next lane 0, other 0, invalid 0"])
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--diff", "m1"])
+        self.assertEqual((a.n, a.diff, a.dicts, a.lists, a.lanes, a.models), (40, True, False, False, 8, ["m1"]))
+        a = bench.parse_args(["--lists", "--diff", "--lanes", "2", "m1"])
+        self.assertEqual((a.diff, a.lists, a.lanes), (True, True, 2))
+        self.assertEqual(bench.parse_args(["m1"]).lanes, 3)
+
+    def test_first_line_and_rows(self):
+        for argv, cs, en in ((["1", "--diff", "m1"], "1 úloha se dvěma snímky řady (zápis seznamy), 8 pruhů",
+                              "1 task with two snapshots of a row (written as lists), 8 lanes"),
+                             (["7", "--diff", "--lists", "--lanes", "2", "m1"], "7 úloh se dvěma snímky řady (zápis seznamy), 2 pruhy",
+                              "7 tasks with two snapshots of a row (written as lists), 2 lanes"),
+                             (["3", "--lanes", "5", "--diff", "--dicts", "m1"], "3 úlohy se dvěma snímky řady (zápis slovníky), 5 pruhů",
+                              "3 tasks with two snapshots of a row (written as objects), 5 lanes")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--diff", "m1")[0].startswith("100 úloh se dvěma snímky řady"))           # výchozí počet úloh
+        en = self.cli("6", "--diff", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 5)
+        self.assertRegex(en[3], r"^m1 .*   \(number off by 1 \d+/\d+, other number \d+/\d+, word off by a letter \d+/\d+, other word \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}rows without repeats \d+/\d+, with repeats \d+/\d+; errors: same value in another lane \d+, "
+                                r"next lane \d+, other \d+, invalid \d+$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv in (["6", "--lists", "m1"], ["--dicts", "--numbers", "m1"], ["--bet", "--lists", "m1"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", "Volby --dicts a --lists jdou jen s --diff."))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", "The --dicts and --lists options work only with --diff."))
+        for argv, cs, en in ((["--diff", "--weighted", "m1"], "Volba --weighted jde jen s --queue.", "The --weighted option works only with --queue."),
+                             (["--diff", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--diff", "--bet", "m1"], ["--diff", "--queue", "m1"], ["--diff", "--numbers", "m1"], ["--diff", "--dicts", "--lists", "m1"],
+                     ["--diff", "--hint", "m1"], ["--diff", "--cruise", "m1"], ["--diff", "--timetable", "m1"],
+                     ["--diff", "--lanes", "1", "m1"], ["--diff", "--lanes", "9", "m1"], ["--diff"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_mirror_and_inject_work_with_diff(self):
+        out, code = self.cli("8", "--diff", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("řady bez opakování "), lines[6])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --diff tev1", text)
+            self.assertIn("\n--diff:     ", text)
+            self.assertIn("\n--dicts, --lists:  ", text)
+
+
 if __name__ == "__main__":
     unittest.main()

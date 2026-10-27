@@ -12,6 +12,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -27,6 +28,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --cruise tev1
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
+          python bench.py 100 --diff tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -106,6 +108,15 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             škoda (bez nápovědy minus konfliktní) a tah (o kolik častěji model zvolí bránu nápovědy než na stejných číslech
             bez ní), chyby v konfliktní podmínce (na nápovědu, jiné, neplatné), převrácené řady (bez nápovědy správně,
             s konfliktní nápovědou za ní) a pod tím konfliktní přesnost podle rozdílu. S --inject se nekombinuje.
+--diff:     co se změnilo: kamera vyfotila řadu K pruhů (výchozí 8, 2 až 8) dvakrát, before a after; každý pruh ukazuje
+            jednu hodnotu a mezi snímky se změnil právě jeden pruh, model ho vybere. N úloh (výchozí 100), rovnoměrně ve čtyřech
+            třídách: číslo o 1 (mění se jen poslední číslice), jiné číslo (všechny čtyři číslice), slovo o písmeno, jiné slovo
+            (všechna čtyři písmena); hodnoty v řadě jsou jednoho typu. Polovina řad je bez opakování, ve druhé se hodnoty opakují
+            a stará nebo nová hodnota často stojí i v jiném pruhu. Za řádkem modelu přesnost podle třídy, pod ním přesnost
+            bez opakování a s opakováním a chyby: stejná hodnota v jiném pruhu, sousední pruh, jiné, neplatné.
+--dicts, --lists:  jen s --diff: podoba stavu, úlohy jsou v obou stejné. dicts = before a after jako objekty
+            {"lane_1": hodnota, …}; lists = before a after jako seznamy hodnot zleva doprava, pruh je poloha v seznamu.
+            Bez volby platí lists.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -145,6 +156,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -160,6 +172,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --cruise tev1
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
+          python bench.py 100 --diff tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -239,6 +252,15 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             points, help (congruent minus no hint), harm (no hint minus incongruent) and pull (how much more often the model
             picks the hinted gate than on the same numbers without it), the incongruent errors (on the hint, other, invalid),
             flipped rows (right without the hint, on the hint when it is wrong) and the incongruent accuracy by gap. Not with --inject.
+--diff:     what changed: a camera took two photos of a row of K lanes (default 8, 2 to 8), before and after; each lane shows
+            one value and exactly one lane changed between the photos, the model picks it. N tasks (default 100), spread evenly
+            over four classes: number off by 1 (only the last digit changes), other number (all four digits), word off by a
+            letter, other word (all four letters); the values in a row are of one type. Half of the rows have no repeats, in the
+            other half values repeat and the old or the new value often stands in another lane too. After the model row, the
+            accuracy by class; below it the accuracy without and with repeats and the errors: same value in another lane, next lane, other, invalid.
+--dicts, --lists:  only with --diff: the form of the state; the tasks are the same in both. dicts = before and after as
+            objects {"lane_1": value, ...}; lists = before and after as lists of values from left to right, the lane is the position in the list.
+            Without the option: lists.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -2713,6 +2735,9 @@ def parse_args(argv):
     p.add_argument("--sorted", action="store_true")
     p.add_argument("--shuffled", action="store_true")
     p.add_argument("--cruise", action="store_true")              # tempomat: pruhy ani brány nemá, --lanes končí hláškou
+    p.add_argument("--diff", action="store_true")
+    p.add_argument("--dicts", action="store_true")
+    p.add_argument("--lists", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -2725,6 +2750,8 @@ def parse_args(argv):
     a.lanes_given = a.lanes is not None              # závora pruhy ani brány nemá: --lanes s --barrier končí hláškou
     if a.lanes is None:
         a.lanes = 4 if a.memory or a.lookahead or a.queue or a.bet else 3      # paměťová stopa a sázka: 4 brány, dva kroky dopředu a fronta: 4 pruhy
+    if a.diff and not a.lanes_given:
+        a.lanes = DIFF_LANES                         # co se změnilo: výchozí počet pruhů (rozhodl pokus nanečisto)
     return a
 
 
@@ -2964,9 +2991,12 @@ def main(argv):
     scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue,
                  args.bet, args.cruise, args.timetable)
     scenarios += (args.hint,)                        # rušivá nápověda
+    scenarios += (args.diff,)                        # co se změnilo
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
             or (args.sorted and args.shuffled)):
+        sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
+    if args.dicts and args.lists:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -2984,6 +3014,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesRule"))
     if args.weighted and not args.queue:
         sys.exit(i18n.t("bench.err.weightedQueue"))
+    if (args.dicts or args.lists) and not args.diff:
+        sys.exit(i18n.t("bench.err.formDiff"))
     if args.hint and args.inject:
         sys.exit(i18n.t("bench.err.hintInject"))
     if (args.sorted or args.shuffled) and not args.timetable:
@@ -3113,6 +3145,19 @@ def main(argv):
                 r = run_hint(m, cases, args.lanes, args.mirror, args.deadline_ms)
                 print_row(r, hint_note(r))
                 print_hint(r)
+    elif args.diff:
+        form = "dicts" if args.dicts else "lists" if args.lists else DIFF_FORM
+        cases = diff_cases(args.n or 100, args.lanes)            # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        if form == "lists":
+            print(i18n.t("bench.intro.diffLists", n=len(cases), lanes=args.lanes) + "\n")
+        else:
+            print(i18n.t("bench.intro.diff", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_diff(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, diff_note(r))
+                print_diff(r)
     elif args.bet:
         cases = bet_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.bet", n=len(cases), lanes=args.lanes) + "\n")

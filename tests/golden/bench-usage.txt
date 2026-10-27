@@ -12,6 +12,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -27,6 +28,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --cruise tev1
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
+          python bench.py 100 --diff tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -106,6 +108,15 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             škoda (bez nápovědy minus konfliktní) a tah (o kolik častěji model zvolí bránu nápovědy než na stejných číslech
             bez ní), chyby v konfliktní podmínce (na nápovědu, jiné, neplatné), převrácené řady (bez nápovědy správně,
             s konfliktní nápovědou za ní) a pod tím konfliktní přesnost podle rozdílu. S --inject se nekombinuje.
+--diff:     co se změnilo: kamera vyfotila řadu K pruhů (výchozí 8, 2 až 8) dvakrát, before a after; každý pruh ukazuje
+            jednu hodnotu a mezi snímky se změnil právě jeden pruh, model ho vybere. N úloh (výchozí 100), rovnoměrně ve čtyřech
+            třídách: číslo o 1 (mění se jen poslední číslice), jiné číslo (všechny čtyři číslice), slovo o písmeno, jiné slovo
+            (všechna čtyři písmena); hodnoty v řadě jsou jednoho typu. Polovina řad je bez opakování, ve druhé se hodnoty opakují
+            a stará nebo nová hodnota často stojí i v jiném pruhu. Za řádkem modelu přesnost podle třídy, pod ním přesnost
+            bez opakování a s opakováním a chyby: stejná hodnota v jiném pruhu, sousední pruh, jiné, neplatné.
+--dicts, --lists:  jen s --diff: podoba stavu, úlohy jsou v obou stejné. dicts = before a after jako objekty
+            {"lane_1": hodnota, …}; lists = before a after jako seznamy hodnot zleva doprava, pruh je poloha v seznamu.
+            Bez volby platí lists.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.

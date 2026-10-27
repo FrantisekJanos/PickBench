@@ -114,6 +114,11 @@ TEXTS = {
     # Sázka na bránu: {lanes} = počet bran (3–8).
     "bench.intro.bet": {"cs": "{n} {n|úloha|úlohy|úloh} se sázkou na bránu, {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                         "en": "{n} {n|task|tasks} with a bet on a gate, {lanes} gates, the same for all models"},
+    # Co se změnilo: úvodní věta jmenuje podobu stavu (slovníky / seznamy); úlohy jsou v obou podobách stejné.
+    "bench.intro.diff": {"cs": "{n} {n|úloha|úlohy|úloh} se dvěma snímky řady (zápis slovníky), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
+                         "en": "{n} {n|task|tasks} with two snapshots of a row (written as objects), {lanes} lanes, the same for all models"},
+    "bench.intro.diffLists": {"cs": "{n} {n|úloha|úlohy|úloh} se dvěma snímky řady (zápis seznamy), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
+                              "en": "{n} {n|task|tasks} with two snapshots of a row (written as lists), {lanes} lanes, the same for all models"},
     # Nejkratší fronta: úvodní věta říká, jestli se fronty počítají bez vah, nebo vážené (--weighted, jiné úlohy).
     "bench.intro.queue": {"cs": "{n} {n|úloha|úlohy|úloh} u mýtné brány (fronty bez vah), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
                           "en": "{n} {n|task|tasks} at a toll gate (unweighted queues), {lanes} lanes, the same for all models"},
@@ -269,6 +274,7 @@ TEXTS = {
     "bench.err.formRule": {"cs": "Volby --matched-by a --labeled jdou jen s --rule.",
                            "en": "The --matched-by and --labeled options work only with --rule."},
     "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
+    "bench.err.formDiff": {"cs": "Volby --dicts a --lists jdou jen s --diff.", "en": "The --dicts and --lists options work only with --diff."},
     "bench.err.hintInject": {"cs": "Volba --inject se s --hint nekombinuje.", "en": "The --inject option cannot be combined with --hint."},
     "bench.err.lanesCruise": {"cs": "Volba --lanes se s --cruise nekombinuje.", "en": "The --lanes option cannot be combined with --cruise."},
     "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
