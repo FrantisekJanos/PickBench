@@ -1,0 +1,7 @@
+12 řad čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), 4 brány; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     93.3      17%      70%    53%        0%      84   (bez nápovědy 3/12, shodná 2/12, konfliktní 1/12)
+                    přesnost variant: původní 17%, obrácené pořadí 19%, jiná formulace 25%
+                    nápověda: pomoc -8 pb, škoda +17 pb, tah -17 pb; konfliktní: chyby na nápovědu 2, jiné 9, neplatné 0; převráceno 0/12
+                    konfliktní podle rozdílu: těsné 0/6, střední 0/3, jasné 1/3

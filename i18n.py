@@ -127,6 +127,9 @@ TEXTS = {
                               "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows sorted by ZIP), the same for all models"},
     "bench.intro.timetableShuffled": {"cs": "{n} {n|úloha|úlohy|úloh} se směrováním zásilek podle tabulky ({rows} řádků, řádky zamíchané); sada je pro všechny modely stejná",
                                       "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows shuffled), the same for all models"},
+    # Rušivá nápověda: {n} = počet řad čísel (každá jde do modelu třikrát), {lanes} = počet bran (2–8).
+    "bench.intro.hint": {"cs": "{n} {n|řada|řady|řad} čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
+                         "en": "{n} {n|row|rows} of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), {lanes} gates, the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -258,6 +261,7 @@ TEXTS = {
     "bench.err.formRule": {"cs": "Volby --matched-by a --labeled jdou jen s --rule.",
                            "en": "The --matched-by and --labeled options work only with --rule."},
     "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
+    "bench.err.hintInject": {"cs": "Volba --inject se s --hint nekombinuje.", "en": "The --inject option cannot be combined with --hint."},
     "bench.err.lanesCruise": {"cs": "Volba --lanes se s --cruise nekombinuje.", "en": "The --lanes option cannot be combined with --cruise."},
     "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
                                 "en": "The --sorted and --shuffled options work only with --timetable."},

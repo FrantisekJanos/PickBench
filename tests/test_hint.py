@@ -226,5 +226,85 @@ class Lines(unittest.TestCase):
                          ["+50", "-100", "+0", "+0", "+0", "+12", "—", "—"])
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--hint", "m1"])
+        self.assertEqual((a.n, a.hint, a.lanes, a.models), (40, True, 3, ["m1"]))
+        self.assertEqual(bench.parse_args(["--hint", "--lanes", "2", "m1"]).lanes, 2)
+
+    def test_first_line_and_rows(self):
+        cs_tail = " čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), "
+        en_tail = " of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), "
+        for argv, cs, en in ((["1", "--hint", "m1"], "1 řada" + cs_tail + "3 brány", "1 row" + en_tail + "3 gates"),
+                             (["7", "--hint", "--lanes", "5", "m1"], "7 řad" + cs_tail + "5 bran", "7 rows" + en_tail + "5 gates"),
+                             (["2", "--lanes", "2", "--hint", "m1"], "2 řady" + cs_tail + "2 brány", "2 rows" + en_tail + "2 gates")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--hint", "m1")[0].startswith("100 řad čísel"))
+        self.sent.clear()
+        en = self.cli("6", "--hint", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(self.sent), 1 + 18)                         # zahřátí a 3 × 6 dotazů
+        self.assertEqual(len(en), 6)
+        self.assertRegex(en[3], r"^m1 .*   \(no hint \d+/6, congruent \d+/6, incongruent \d+/6\)$")
+        self.assertRegex(en[4], r"^ {20}hint: help [+-]\d+ pp, harm [+-]\d+ pp, pull [+-]\d+ pp; incongruent: errors on the hint \d+, "
+                                r"other \d+, invalid \d+; flipped \d+/6$")
+        self.assertRegex(en[5], r"^ {20}incongruent by gap: narrow \d+/\d+, medium \d+/\d+, clear \d+/\d+$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv, cs, en in ((["--hint", "--inject", "m1"], "Volba --inject se s --hint nekombinuje.",
+                              "The --inject option cannot be combined with --hint."),
+                             (["--hint", "--mirror", "--inject", "m1"], "Volba --inject se s --hint nekombinuje.",
+                              "The --inject option cannot be combined with --hint."),
+                             (["--hint", "--weighted", "m1"], "Volba --weighted jde jen s --queue.", "The --weighted option works only with --queue.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--hint", "--numbers", "m1"], ["--hint", "--bet", "m1"], ["--hint", "--cruise", "m1"], ["--hint", "--timetable", "m1"],
+                     ["--hint", "--lanes", "1", "m1"],
+                     ["--hint", "--lanes", "9", "m1"], ["--hint"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_mirror_works_with_hint(self):
+        out, code = self.cli("4", "--hint", "--mirror", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("nápověda: pomoc "), lines[5])
+        self.assertTrue(lines[6].strip().startswith("konfliktní podle rozdílu: "), lines[6])
+        self.assertEqual(len(self.sent), 1 + 3 * 12)                     # zahřátí a 12 úloh ve třech variantách
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --hint tev1", text)
+            self.assertIn("\n--hint:     ", text)
+
+
 if __name__ == "__main__":
     unittest.main()

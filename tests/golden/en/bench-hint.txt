@@ -1,0 +1,9 @@
+12 rows of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), 3 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  goodput  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     89.8      25%      76%    51%       6%      82   (no hint 4/12, congruent 3/12, incongruent 2/12)
+                    hint: help -8 pp, harm +17 pp, pull +42 pp; incongruent: errors on the hint 8, other 2, invalid 0; flipped 4/12
+                    incongruent by gap: narrow 1/4, medium 0/3, clear 1/5
+m2                       11ms     11ms    17ms    5ms    17ms     93.0      56%      74%    27%      28%      82   (no hint 5/12, congruent 6/12, incongruent 9/12)
+                    hint: help +8 pp, harm -33 pp, pull -25 pp; incongruent: errors on the hint 1, other 2, invalid 0; flipped 1/12
+                    incongruent by gap: narrow 3/4, medium 2/3, clear 4/5
