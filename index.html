@@ -718,6 +718,10 @@ const TEXTS = {
   'bet.level.round': { cs: '50 nebo 100 %', en: '50 or 100%' },
   'bet.level.general': { cs: 'obecná', en: 'general' },
   'bet.line': { cs: 'regret {regret}; chyby: nejvyšší odměna {reward}, nejvyšší šance {chance}, jiné {other}, neplatné {invalid}', en: 'regret {regret}; errors: highest reward {reward}, highest chance {chance}, other {other}, invalid {invalid}' },
+  'bet.label.ok': { cs: '✓ brána {n}: nejvyšší výplata {ev}', en: '✓ gate {n}: the highest payout {ev}' },
+  'bet.label.reward': { cs: '✗ návnada nejvyšší odměna: brána {pick} ({pickEv}), nejvyšší výplata brána {n} ({ev})', en: '✗ highest-reward decoy: gate {pick} ({pickEv}), the highest payout is gate {n} ({ev})' },
+  'bet.label.chance': { cs: '✗ návnada nejvyšší šance: brána {pick} ({pickEv}), nejvyšší výplata brána {n} ({ev})', en: '✗ highest-chance decoy: gate {pick} ({pickEv}), the highest payout is gate {n} ({ev})' },
+  'bet.label.bad': { cs: '✗ brána {pick} ({pickEv}), nejvyšší výplata brána {n} ({ev})', en: '✗ gate {pick} ({pickEv}), the highest payout is gate {n} ({ev})' },
   'legend.bet.gate': { cs: 'Brána: nahoře odměna (mince), dole šance, že ji vyplatí (výseč a procenta).', en: 'A gate: the reward at the top (coin), the chance that it pays out at the bottom (pie and percent).' },
   'legend.bet.rule': { cs: 'Výplata = odměna × šance. Správná je brána s nejvyšší výplatou, ne nutně s nejvyšší odměnou nebo šancí.', en: 'Payout = reward × chance. The right gate has the highest payout, not necessarily the highest reward or chance.' },
   'legend.bet.out': { cs: 'Po průjezdu: pod branou výplata, nejvyšší zeleně; modrý obrys = volba modelu.', en: "After the car passes: the payout under every gate, the highest in green; a blue outline = the model's pick." },
@@ -2468,6 +2472,32 @@ const queueWeighted = { __proto__: queue, id: 'queueWeighted', weighted: true, g
 const BET_LEVEL_NAME = { same: 'bet.level.same', round: 'bet.level.round', general: 'bet.level.general' };
 const betPayout = (r, i) => { const ev = betEv(r.rewards[i], r.chances[i]); return f(ev, Number.isInteger(ev) ? 0 : 1); };      // výplata brány i pro diváka: celé číslo, jinak na desetinu
 
+function betLabel(r) {                                     // slovy, co se stalo; počet bran z r.rewards
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const n = r.truth + 1, ev = betPayout(r, r.truth);
+  if (r.result === 'ok') return { text: t('bet.label.ok', { n, ev }), color: RESULT.ok.color };
+  const keys = gateKeys(r.rewards.length);
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < keys.length)) return { text: t('label.invalid'), color: RESULT.late.color };
+  const kind = betErrorKind(r, keys[r.chosen], keys), key = kind === 'reward' ? 'bet.label.reward' : kind === 'chance' ? 'bet.label.chance' : 'bet.label.bad';
+  return { text: t(key, { pick: r.chosen + 1, pickEv: betPayout(r, r.chosen), n, ev }), color: RESULT.bad.color };
+}
+function drawBet(r, y) {                                   // brána v každém pruhu: nahoře mince a odměna, dole výseč šance a procenta; bez písmen
+  const hw = LW * 0.42, gh = 48, n = r.rewards.length;
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) * LW, left = x - hw + 8, tx = x - hw + 17, tw = Math.max(8, 2 * hw - 19);
+    ctx.fillStyle = r.result && i === r.truth ? '#1f4d2b' : '#33414f';
+    ctx.beginPath(); ctx.roundRect(x - hw, y - gh / 2, 2 * hw, gh, 6); ctx.fill();
+    ctx.fillStyle = '#f2cc0c'; ctx.beginPath(); ctx.arc(left, y - 13, 6, 0, 2 * Math.PI); ctx.fill();      // mince a odměna
+    ctx.font = '700 11px "Segoe UI", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(String(r.rewards[i]), tx, y - 13, tw);
+    ctx.fillStyle = '#30363d'; ctx.beginPath(); ctx.arc(left, y + 13, 7, 0, 2 * Math.PI); ctx.fill();         // výseč šance od 12 hodin
+    ctx.fillStyle = '#58a6ff'; ctx.beginPath(); ctx.moveTo(left, y + 13);
+    ctx.arc(left, y + 13, 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * r.chances[i] / 100); ctx.closePath(); ctx.fill();
+    ctx.font = '10px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3'; ctx.fillText(pctOf(r.chances[i] / 100), tx + 1, y + 13, tw - 1);
+  }
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
 const bet = {
   __proto__: rowBase,
   id: 'bet', lanesFree: true, minLanes: 3,                 // brány jsou 3 až 8: volič stojí na 2 (jiný scénář, uložené nastavení), silnice má 3 pruhy
@@ -2500,17 +2530,26 @@ const bet = {
     if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, sum: betSummary(g.cases, g.choices, gateKeys(LANES)) };
     return g.summary.sum;
   },
-  drawItems(g) {                                           // zatím jen podklad bran a kroužek; kresbu odměny, šance a výplaty doplní drawBet
+  drawItems(g) {                                           // brány s odměnou a šancí; před průjezdem obrys volby, po něm výplaty pod branami a štítek
     const hw = LW * 0.42;
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
-      for (let lane = 0; lane < r.rewards.length; lane++) {
-        ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
-        ctx.beginPath(); ctx.roundRect((lane + 0.5) * LW - hw, y - 20, 2 * hw, 40, 6); ctx.fill();
-      }
+      drawBet(r, y);
       ctx.globalAlpha = 1;
+      if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.rewards.length) {      // volba modelu před průjezdem
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 24, 2 * hw, 48);
+      }
+      if (r.result) {
+        ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let i = 0; i < r.rewards.length; i++) {
+          ctx.fillStyle = i === r.truth ? '#3fb950' : '#8b9aa8';
+          ctx.fillText(`= ${betPayout(r, i)}`, (i + 0.5) * LW, y + 34, LW - 4);
+        }
+        const lab = betLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 52, H - 10));
+      }
       this.drawRing(r, y, Math.min(LW * 0.26, 15));
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
     }
   },
   describeLast(task, res) {                                // odměna × šance každé brány, výplaty, volba a správná brána

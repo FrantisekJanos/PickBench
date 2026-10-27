@@ -695,6 +695,11 @@ class PageTexts(unittest.TestCase):
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("sázk", self.texts[key]["cs"], key)
             self.assertIn("bet on a lane", self.texts[key]["en"], key)
+        legend = re.search(r"\blegend: \[(.*?)\],\n", script().split("\nconst bet = {", 1)[1].split("\n};\n", 1)[0]).group(1)
+        self.assertEqual(re.findall(r"'(legend\.bet\.\w+)'", legend), ["legend.bet.gate", "legend.bet.rule", "legend.bet.out"])
+        for key in ("legend.bet.gate", "legend.bet.rule", "legend.bet.out", "bet.label.ok", "bet.label.reward", "bet.label.chance", "bet.label.bad"):
+            self.assertIn(key, self.texts)
+        self.assertIn("×", self.texts["legend.bet.rule"]["cs"])
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],

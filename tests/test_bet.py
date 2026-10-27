@@ -390,6 +390,46 @@ class Page(unittest.TestCase):              # scénář ve stránce; generátor 
                                           "zvoleno: brána 1 (60)  (správně: brána 2 (120))"])
         self.assertEqual(en.split("\n")[0], "gates:   300 × 20%   200 × 60%   110 × 90%")
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):          # štítek: nejvyšší výplata, návnada odměna / šance, jiná, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "betPayout"))
+        code = "(() => {" + consts + page_function("betLabel") + (
+            "const r = (result, chosen) => ({ rewards: [300, 200, 100, 50], chances: [20, 60, 90, 25], answer: 1, truth: 1, level: 'general',"
+            " topReward: 0, topChance: 2, result, chosen });"
+            "return [r('ok', 1), r('bad', 0), r('bad', 2), r('bad', 3), r('bad', -1), r('late', undefined)].map(betLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ brána 2: nejvyšší výplata 120", "✗ návnada nejvyšší odměna: brána 1 (60), nejvyšší výplata brána 2 (120)",
+                                                   "✗ návnada nejvyšší šance: brána 3 (90), nejvyšší výplata brána 2 (120)",
+                                                   "✗ brána 4 (12.5), nejvyšší výplata brána 2 (120)", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ highest-reward decoy: gate 1 (60), the highest payout is gate 2 (120)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_gate_shows_reward_chance_and_payout(self):  # před průjezdem čísla a obrys volby, po něm výplaty a štítek; písmena jen ze štítku
+        from test_parity import run_js
+        page = page_source()
+        method = re.search(r"\n  drawItems\(g\) \{.*?\n  \},", bet_body(), re.S).group(0)[1:-1]
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "betPayout"))
+        code = "(() => { const texts = [], strokes = [], LW = 100, W = 300, H = 600, CAR_Y = 540, CELL = 44;" + consts + (
+            page_function("drawBet") + page_function("betLabel") + page_function("drawRowLabel") +
+            "const ctx = new Proxy({ fillText(s) { texts.push(String(s)); }, strokeRect(x) { strokes.push(Math.round(x)); }, measureText: s => ({ width: s.length * 6 }) },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const o = { drawRing() {}," + method + "};"
+            "const row = extra => ({ y: 3, rewards: [300, 200, 100], chances: [20, 60, 90], answer: 1, truth: 1, level: 'general', topReward: 0, topChance: 2,"
+            " inject: null, passLane: 1, result: null, chosen: undefined, ...extra });"
+            "o.drawItems({ rows: [row({ chosen: 2 }), row({ y: 7 })] }); const before = texts.splice(0), lines = strokes.splice(0);"
+            "o.drawItems({ rows: [row({ y: -0.3, result: 'ok', chosen: 1, passLane: 1 })] });"
+            "return { before, strokes: lines, after: texts }; })()")
+        got = run_js(code, None)
+        self.assertEqual(len(got["strokes"]), 1)                                                   # jen zvolená brána neprojeté řady s odpovědí
+        self.assertTrue(all(not re.search(r"[^\W\d_]", s) for s in got["before"]), got["before"])   # odměny a šance: bez písmen
+        for s in ("300", "20 %", "90 %"):
+            self.assertIn(s, got["before"])
+        for s in ("= 60", "= 120", "= 90", "✓ brána 2: nejvyšší výplata 120"):
+            self.assertIn(s, got["after"])
+
 
 if __name__ == "__main__":
     unittest.main()
