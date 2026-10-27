@@ -641,6 +641,8 @@ class PageTexts(unittest.TestCase):
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("dopředu", self.texts[key]["cs"], key)
             self.assertIn("two steps ahead", self.texts[key]["en"], key)
+        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))"), ["slepá ulička v řadě 1", "slepá ulička v řadě 4"])
+        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))", lang="en"), ["dead end in row 1", "dead end in row 4"])
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],

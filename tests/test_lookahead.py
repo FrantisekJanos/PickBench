@@ -517,6 +517,14 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
             "[2, 0, 1, -1].forEach(m => o.tally(g, task, m)); return g; })()")
         self.assertEqual(run_js(code, None), {"byDepth": {"d1": [0, 0], "d2": [0, 0], "d3+": [1, 4]}, "errs": {"greedy": 1, "crash": 1, "other": 0, "invalid": 1}})
 
+    def test_drawing_writes_only_through_t_and_shows_both_paths(self):
+        for name in ("drawLookahead", "drawLookaheadPath"):
+            self.assertNotIn("fillText(", page_function(name), name)                          # blok a cesty bez textu
+        body = lookahead_body()
+        for part in ("drawRing(r, y, rad) {", "lookaheadPath(r.rows, r.lane, r.answer)", "lookaheadPath(r.rows, r.lane, r.greedy)",
+                     "t('lookahead.deadEnd'", "t('answer.invalid')", "LOOKAHEAD_COLOR[lookaheadOutcome(", "drawLookahead(r, y)"):
+            self.assertIn(part, body)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -615,6 +615,7 @@ const TEXTS = {
   'lookahead.move.left': { cs: 'vlevo', en: 'left' },
   'lookahead.move.stay': { cs: 'zůstat', en: 'stay' },
   'lookahead.move.right': { cs: 'vpravo', en: 'right' },
+  'lookahead.deadEnd': { cs: 'slepá ulička v řadě {n}', en: 'dead end in row {n}' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -1840,6 +1841,18 @@ function drawLookahead(r, y) {
   });
 }
 
+const LOOKAHEAD_COLOR = { ok: '#3fb950', crash: '#f85149', deadEnd: '#8b9aa8', invalid: '#8b9aa8', late: '#8b9aa8' };     // kroužek podle lookaheadOutcome
+
+// Cesta bloku (lookaheadPath): od středu pruhu auta pod blokem středy polí cesty, posunutá o dx px (dvě cesty se na společném úseku nepřekryjí). Bez textu.
+function drawLookaheadPath(r, y, path, color, dx = 0) {
+  if (!path.length) return;
+  const h = LOOKAHEAD_THIN * CELL;
+  ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo((r.lane + 0.5) * LW + dx, y + h);
+  path.forEach((lane, i) => ctx.lineTo((lane + 0.5) * LW + dx, y - i * h));
+  ctx.stroke(); ctx.lineJoin = 'miter';
+}
+
 const lookahead = {
   __proto__: rowBase,
   id: 'lookahead', lanesFree: true, minLanes: 3,
@@ -1872,14 +1885,34 @@ const lookahead = {
     b[1]++; if (move === task.truth) b[0]++;
     if (kind) g.errs[kind]++;
   },
-  drawItems(g) {
+  drawItems(g) {                                           // po průjezdu nad ztlumeným blokem zelená správná cesta, po chybném tahu i oranžová cesta hladového řidiče
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
       drawLookahead(r, y);
       ctx.globalAlpha = 1;
+      if (r.result !== null) {
+        drawLookaheadPath(r, y, lookaheadPath(r.rows, r.lane, r.answer), '#3fb950');
+        if (r.result === 'bad' && r.greedy !== r.answer) drawLookaheadPath(r, y, lookaheadPath(r.rows, r.lane, r.greedy), '#e69f00', 5);
+      }
       this.drawRing(r, y, Math.min(LW * 0.26, 15));
     }
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  drawRing(r, y, rad) {                                    // kroužek výsledku podle lookaheadOutcome (+ značka trojského koně); u slepé uličky a neplatné odpovědi i slovo
+    if (r.inject !== null) drawTrojan(y, r.result !== null && r.fooled);
+    if (!r.result) return;
+    const color = LOOKAHEAD_COLOR[lookaheadOutcome(r.result, r.chosen, r.rows, r.lane)], out = lookaheadOutcome(r.result, r.chosen, r.rows, r.lane);
+    const x = (r.passLane + 0.5) * LW;
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, rad + 4, 0, 7); ctx.stroke();
+    const word = out === 'deadEnd' ? t('lookahead.deadEnd', { n: lookaheadValues(r.rows, r.lane)[LOOKAHEAD_MOVES[r.chosen]] + 1 })
+      : out === 'invalid' ? t('answer.invalid') : null;
+    if (!word) return;
+    const gap = rad + 10, right = W - x >= x, room = (right ? W - x : x) - gap - 4;      // slovo na stranu, kde je víc místa
+    ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = right ? 'left' : 'right'; ctx.textBaseline = 'middle';
+    const wide = Math.min(ctx.measureText(word).width, room), tx = right ? x + gap : x - gap;
+    ctx.fillStyle = 'rgba(11,16,22,.8)'; ctx.fillRect(right ? tx - 3 : tx - wide - 3, y - 9, wide + 6, 18);     // podklad: slovo leží přes blok
+    ctx.fillStyle = color; ctx.fillText(word, tx, y, room);
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   },
   describeLast(task, res) {                                // pruh auta a zablokované pruhy řad, jak je dostal model, pak volba, správný tah a tah hladového řidiče
