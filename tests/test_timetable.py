@@ -155,5 +155,130 @@ class Basics(unittest.TestCase):
             bench.timetable_table(random.Random(1), 5)
 
 
+def position(rows, i, z):
+    """Třída polohy PSČ z ve správném řádku i: vzdálenost od hranic, které mají souseda (okraj 10000 a 99999 se nepočítá)."""
+    a, b, _ = rows[i]
+    edges = [z - a] * (i > 0) + [b - z] * (i < len(rows) - 1)
+    if min(z - a, b - z) >= bench.TIMETABLE_INNER:
+        return "inner"
+    if min(edges) == 0:
+        return "bound"
+    return "near" if 1 <= min(edges) <= bench.TIMETABLE_NEAR else None
+
+
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        for case in cases():
+            rows, order, z, service, exception, answer, size, pos, rule = case
+            with self.subTest(case=case):
+                self.assertTrue(isinstance(rows, tuple) and isinstance(order, tuple))
+                self.assertEqual(sorted(order), list(range(len(rows))))
+                lo, hi = bench.TIMETABLE_SIZES[size]
+                self.assertTrue(lo <= len(rows) <= hi)
+                self.assertEqual((rows[0][0], rows[-1][1]), (10000, 99999))
+                self.assertTrue(all(rows[k][1] + 1 == rows[k + 1][0] and rows[k][2] != rows[k + 1][2] for k in range(len(rows) - 1)))
+                self.assertGreaterEqual(min(b - a + 1 for a, b, _ in rows), 300)
+                i = route_index(rows, z)
+                self.assertEqual(position(rows, i, z), pos)
+                near = {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < len(rows)}
+                self.assertIn(service, bench.TIMETABLE_SERVICES)
+                if rule == "none":
+                    self.assertIsNone(exception)
+                else:
+                    self.assertIn(exception[0], bench.TIMETABLE_EXC_SERVICES)
+                    self.assertNotIn(exception[1], near | {rows[i][2]})               # chyby výjimky a souseda se nepřekrývají
+                    if rule == "applies":
+                        self.assertEqual(service, exception[0])
+                    else:
+                        self.assertIn(service, bench.TIMETABLE_EXC_SERVICES)          # decoy: jiná nestandardní služba
+                        self.assertNotEqual(service, exception[0])
+                self.assertEqual(answer, exception[1] if rule == "applies" else rows[i][2])
+                for form in bench.TIMETABLE_FORMS:
+                    self.assertEqual(solve(bench.timetable_state(case, form)), answer)
+
+    def test_classes_answers_and_sides_are_spread(self):
+        c = cases()
+        for k, order in ((6, bench.TIMETABLE_SIZES), (7, bench.TIMETABLE_POSITIONS), (8, bench.TIMETABLE_RULES)):
+            counts = Counter(x[k] for x in c)
+            for cls in order:
+                self.assertTrue(0.25 <= counts[cls] / 900 <= 0.42, counts)
+        answers = Counter(x[5] for x in c)
+        for depot in DEPOTS:
+            self.assertTrue(0.10 <= answers[depot] / 900 <= 0.25, answers)
+        edge = [x for x in c if x[7] != "inner"]
+        low = sum(x[2] - x[0][route_index(x[0], x[2])][0] <= bench.TIMETABLE_NEAR for x in edge)      # u zip_from, ne u zip_to
+        self.assertTrue(0.4 <= low / len(edge) <= 0.6, low / len(edge))
+
+    def test_table_shortcuts_stay_well_below_the_answer(self):
+        for form in bench.TIMETABLE_FORMS:
+            for pos in bench.TIMETABLE_POSITIONS:
+                sub = [x for x in cases() if x[7] == pos and x[8] != "applies"]
+                first = sum(expected_hit(x[5], {bench.timetable_state(x, form)["routes"][0]["depot"]}) for x in sub) / len(sub)
+                frequent = sum(expected_hit(x[5], most_frequent(x[0])) for x in sub) / len(sub)
+                with self.subTest(form=form, pos=pos):
+                    self.assertLessEqual(first, 0.45)
+                    self.assertLessEqual(frequent, 0.45)
+
+    def test_a_boundary_is_one_of_two_rows(self):           # spec: u hranice je správně jeden ze dvou sousedních řádků, laťka 0,5
+        near = [x for x in cases() if x[7] == "near" and x[8] != "applies"]
+        for x in near:
+            start, end = expected_hit(x[5], nearest(x[0], x[2], 0)), expected_hit(x[5], nearest(x[0], x[2], 1))
+            self.assertEqual(start + end, 1, x)                                         # nejbližší začátek a konec se doplňují
+        for end in (0, 1):
+            share = sum(expected_hit(x[5], nearest(x[0], x[2], end)) for x in near) / len(near)
+            self.assertTrue(0.35 <= share <= 0.65, (end, share))
+        for pos, want in (("inner", 1), ("near", 1), ("bound", 0)):                     # hranice bez rovnosti padá jen na hranici
+            sub = [x for x in cases() if x[7] == pos and x[8] != "applies"]
+            hits = sum(exclusive(bench.timetable_state(x)) == x[5] for x in sub) / len(sub)
+            self.assertEqual(hits, want, pos)
+
+    def test_exception_is_balanced(self):
+        with_exception = [x for x in cases() if x[4] is not None]
+        for model in (always_exception, never_exception):
+            share = sum(model(bench.timetable_state(x)) == x[5] for x in with_exception) / len(with_exception)
+            self.assertTrue(0.4 <= share <= 0.6, (model.__name__, share))
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.timetable_cases(40), bench.timetable_cases(40, seed=1))
+        self.assertNotEqual(bench.timetable_cases(40), bench.timetable_cases(40, seed=2))
+
+    def test_bounded_search_and_broken_guarantee_raise(self):
+        with mock.patch.object(bench, "TIMETABLE_TRIES", 0), self.assertRaises(RuntimeError):
+            bench.timetable_case(random.Random(1), "small", "inner", "none")
+        for size, pos, rule in (("huge", "inner", "none"), ("small", "edge", "none"), ("small", "inner", "maybe")):
+            with self.subTest(size=size, pos=pos, rule=rule), self.assertRaises(RuntimeError):
+                bench.timetable_case(random.Random(1), size, pos, rule)
+        same = lambda rng, n: tuple((a, b, "oak") for a, b, _ in ROWS)                # sousední řádky se stejným depem
+        with mock.patch.object(bench, "timetable_table", same), self.assertRaises(RuntimeError):
+            bench.timetable_case(random.Random(1), "small", "inner", "none")
+
+
+class State(unittest.TestCase):
+    def test_spec_example_state(self):
+        routes = ('"routes": [{"zip_from": 10000, "zip_to": 81333, "depot": "birch"}, {"zip_from": 81334, "zip_to": 87678, "depot": "maple"}, '
+                  '{"zip_from": 87679, "zip_to": 99999, "depot": "pine"}]')
+        self.assertEqual(json.dumps(bench.timetable_state(DECOY, "sorted")),
+                         '{"parcel": {"zip": 81335, "service": "express"}, ' + routes + ', "exceptions": [{"service": "economy", "depot": "cedar"}]}')
+        shuffled = bench.timetable_state(DECOY, "shuffled")
+        self.assertEqual([r["depot"] for r in shuffled["routes"]], ["pine", "birch", "maple"])      # pořadí z order
+        self.assertEqual(bench.timetable_state(DECOY), bench.timetable_state(DECOY, bench.TIMETABLE_FORM))
+        self.assertEqual(bench.timetable_state(DECOY[:4] + (None, "maple", "small", "near", "none"))["exceptions"], [])
+        for state in (bench.timetable_state(DECOY, "sorted"), shuffled):
+            self.assertEqual((solve(state), bench.timetable_solve(state)), ("maple", "maple"))
+        self.assertEqual(bench.timetable_solve(bench.timetable_state(APPLIES)), "cedar")
+        with self.assertRaises(ValueError):
+            bench.timetable_state(DECOY, "random")
+
+    def test_both_forms_carry_the_same_task(self):
+        for x in cases()[:300]:
+            a, b = bench.timetable_state(x, "sorted"), bench.timetable_state(x, "shuffled")
+            with self.subTest(case=x):
+                self.assertEqual(list(a), ["parcel", "routes", "exceptions"])
+                self.assertEqual((a["parcel"], a["exceptions"]), (b["parcel"], b["exceptions"]))
+                self.assertEqual([(r["zip_from"], r["zip_to"], r["depot"]) for r in a["routes"]], list(x[0]))     # sorted = podle PSČ
+                self.assertEqual(sorted_rows(b), list(x[0]))
+                self.assertEqual(bench.timetable_solve(b), x[5])
+
+
 if __name__ == "__main__":
     unittest.main()

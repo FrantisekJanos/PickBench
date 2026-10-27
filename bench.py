@@ -1696,6 +1696,75 @@ def timetable_solve(state):
     return routes[timetable_row([(r["zip_from"], r["zip_to"]) for r in routes], parcel["zip"])]["depot"]
 
 
+def timetable_form(form):
+    """Podoba stavu: None = výchozí TIMETABLE_FORM, neznámá podoba = ValueError."""
+    form = form or TIMETABLE_FORM
+    if form not in TIMETABLE_FORMS:
+        raise ValueError(f"unknown timetable form: {form}")
+    return form
+
+
+def timetable_state(case, form=None):
+    """Stav pro model. Úloha je v obou podobách stejná, podoba mění jen pořadí řádků: sorted = podle PSČ,
+    shuffled = v pořadí order (losuje se u každé úlohy)."""
+    rows, order, z, service, exception = case[:5]
+    if timetable_form(form) == "shuffled":
+        rows = [rows[j] for j in order]
+    return {"parcel": {"zip": z, "service": service},
+            "routes": [{"zip_from": a, "zip_to": b, "depot": d} for a, b, d in rows],
+            "exceptions": [] if exception is None else [{"service": exception[0], "depot": exception[1]}]}
+
+
+def timetable_case(rng, size, pos, rule):
+    """Jedna úloha: (řádky podle PSČ, pořadí řádků pro shuffled, PSČ, služba, výjimka nebo None, správné depo, velikost,
+    poloha, výjimka). Poloha a strana se berou jen u hranice se sousedem (Rozhodnutí 3). Depo výjimky není depo trasy ani
+    sousedů (kategorie chyb se nepřekrývají). decoy má jinou NESTANDARDNÍ službu (zkratka „nestandardní služba a nějaká
+    výjimka → výjimka“ má pak 0,5). Zamíchání se losuje vždy, aby obě podoby měly ze stejného semínka stejné úlohy."""
+    if size not in TIMETABLE_SIZES or pos not in TIMETABLE_POSITIONS or rule not in TIMETABLE_RULES:
+        raise RuntimeError(f"timetable_case: unknown class {size}, {pos}, {rule}")
+    rows = timetable_table(rng, rng.randint(*TIMETABLE_SIZES[size]))
+    n = len(rows)
+    i = rng.randrange(n)
+    a, b, route = rows[i]
+    if pos == "inner":
+        z = rng.randint(a + TIMETABLE_INNER, b - TIMETABLE_INNER)
+    else:
+        side = rng.choice([s for s, ok in (("low", i > 0), ("high", i < n - 1)) if ok])
+        k = 0 if pos == "bound" else rng.randint(1, TIMETABLE_NEAR)
+        z = a + k if side == "low" else b - k
+    near = {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < n}
+    if rule == "none":
+        service, exception = rng.choice(TIMETABLE_SERVICES), None
+    else:
+        es = rng.choice(TIMETABLE_EXC_SERVICES)
+        exception = (es, rng.choice([d for d in TIMETABLE_DEPOTS if d != route and d not in near]))
+        service = es if rule == "applies" else rng.choice([s for s in TIMETABLE_EXC_SERVICES if s != es])
+    order = list(range(n))
+    rng.shuffle(order)
+    answer = exception[1] if rule == "applies" else route
+    case = (rows, tuple(order), z, service, exception, answer, size, pos, rule)
+    # kontrola záruk nad hotovou úlohou; porušení = RuntimeError, nic se neopravuje potichu
+    edges = [z - a] * (i > 0) + [b - z] * (i < n - 1)
+    real = ("inner" if min(z - a, b - z) >= TIMETABLE_INNER else "bound" if min(edges) == 0
+            else "near" if 1 <= min(edges) <= TIMETABLE_NEAR else None)
+    ok = (rows[0][0] == TIMETABLE_ZIP[0] and rows[-1][1] == TIMETABLE_ZIP[1]
+          and all(rows[k][1] + 1 == rows[k + 1][0] and rows[k][2] != rows[k + 1][2] for k in range(n - 1))
+          and min(e - s + 1 for s, e, _ in rows) >= TIMETABLE_MIN_WIDTH
+          and timetable_row([r[:2] for r in rows], z) == i and real == pos
+          and timetable_solve(timetable_state(case, "sorted")) == answer
+          and (exception is None or exception[1] not in near | {route}))
+    if not ok:
+        raise RuntimeError(f"timetable_case: broken guarantee in {case}")
+    return case
+
+
+def timetable_cases(n, seed=1):
+    """n úloh ze semínka; velikost, poloha a výjimka se losují rovnoměrně na každou úlohu, nic se nevyvažuje zamítáním."""
+    rng = random.Random(seed)
+    return [timetable_case(rng, rng.choice(list(TIMETABLE_SIZES)), rng.choice(TIMETABLE_POSITIONS), rng.choice(TIMETABLE_RULES))
+            for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
