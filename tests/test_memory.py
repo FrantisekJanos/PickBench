@@ -389,16 +389,16 @@ class Cli(unittest.TestCase):
         self.assertEqual(bench.parse_args(["--numbers", "m1"]).lanes, 3)
 
     def test_first_line_and_rows(self):
-        table = ((["1", "--memory", "m1"], "1 úloh s historií značek (dohledání podle štítku), 4 bran",
+        table = ((["1", "--memory", "m1"], "1 úloha s historií značek (dohledání podle štítku), 4 brány",
                   "1 task with a history of signs (lookup by label), 4 gates"),
                  (["7", "--memory", "--count", "--lanes", "6", "m1"], "7 úloh s historií značek (počítání polohy v seznamu), 6 bran",
                   "7 tasks with a history of signs (counting the position in a list), 6 gates"))
         for argv, cs, en in table:
             with self.subTest(argv=argv):
-                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
                 self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
         lines = self.cli("--memory", "m1")[0].splitlines()
-        self.assertEqual(lines[0], "100 úloh s historií značek (dohledání podle štítku), 4 bran, stejných pro všechny modely")   # výchozí počet úloh a bran
+        self.assertEqual(lines[0], "100 úloh s historií značek (dohledání podle štítku), 4 brány; sada je pro všechny modely stejná")   # výchozí počet úloh a bran
         en = self.cli("6", "--memory", "m1", "--lang", "en")[0].splitlines()
         self.assertEqual(len(en), 5)
         self.assertRegex(en[3], r"^m1 .*   \(N=1 \d+/\d+, N=2 \d+/\d+, N=3 \d+/\d+, N=4 \d+/\d+, N=5 \d+/\d+, N=6 \d+/\d+, N=7 \d+/\d+, N=8 \d+/\d+\)$")

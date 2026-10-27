@@ -16,7 +16,7 @@ LANGS = ("cs", "en")
 DEFAULT = "cs"
 ENV = "PICKBENCH_LANG"
 HEADER = "X-PickBench-Lang"
-FIELD = re.compile(r"\{(\w+)(?::([^{}|]*)|\|([^{}|]*)\|([^{}|]*))?\}")
+FIELD = re.compile(r"\{(\w+)(?::([^{}|]*)|\|([^{}|]*)\|([^{}|]*)(?:\|([^{}|]*))?)?\}")      # {n}, {x:.2f}, {n|jeden|víc}, {n|1|2–4|5 a víc} (čeština)
 
 TEXTS = {
     "lang.unknown": {"cs": "Neznámý jazyk „{value}“: --lang a PICKBENCH_LANG berou cs nebo en.",
@@ -91,33 +91,33 @@ TEXTS = {
     "bench.col.goodput": {"cs": "goodput", "en": "goodput"},
     "bench.col.tokens": {"cs": "tokenů", "en": "tokens"},
     # Úvodní řádek běhu: {n} = počet úloh, {lanes} = pruhů nebo bran (2–8), {name} = název sady převzatý ze sady.
-    "bench.intro.lanes": {"cs": "{n} situací, {lanes} pruhů, stejných pro všechny modely",
+    "bench.intro.lanes": {"cs": "{n} {n|situace|situace|situací}, {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
                           "en": "{n} {n|situation|situations}, {lanes} lanes, the same for all models"},
-    "bench.intro.numbers": {"cs": "{n} řad čísel, {lanes} bran, stejných pro všechny modely",
+    "bench.intro.numbers": {"cs": "{n} {n|řada|řady|řad} čísel, {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                             "en": "{n} {n|row|rows} of numbers, {lanes} gates, the same for all models"},
-    "bench.intro.signs": {"cs": "{n} úloh se značkami, {lanes} pruhů, stejných pro všechny modely",
+    "bench.intro.signs": {"cs": "{n} {n|úloha|úlohy|úloh} se značkami, {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
                           "en": "{n} {n|task|tasks} with traffic signs, {lanes} lanes, the same for all models"},
     # Paměťová stopa: úvodní věta říká, která podoba stavu se měří (výchozí dohledání podle štítku, --count počítání polohy).
-    "bench.intro.memory": {"cs": "{n} úloh s historií značek (dohledání podle štítku), {lanes} bran, stejných pro všechny modely",
+    "bench.intro.memory": {"cs": "{n} {n|úloha|úlohy|úloh} s historií značek (dohledání podle štítku), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                            "en": "{n} {n|task|tasks} with a history of signs (lookup by label), {lanes} gates, the same for all models"},
-    "bench.intro.memoryCount": {"cs": "{n} úloh s historií značek (počítání polohy v seznamu), {lanes} bran, stejných pro všechny modely",
+    "bench.intro.memoryCount": {"cs": "{n} {n|úloha|úlohy|úloh} s historií značek (počítání polohy v seznamu), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                                 "en": "{n} {n|task|tasks} with a history of signs (counting the position in a list), {lanes} gates, the same for all models"},
     # Závora: {go} = podíl úloh se správnou odpovědí jeď, v celých procentech.
     # Dva kroky dopředu: úvodní věta jmenuje počet řad a podobu stavu ({form} = rows / blocked, nepřekládá se).
-    "bench.intro.lookahead": {"cs": "{n} úloh se {rows} řadami před autem (podoba stavu {form}), {lanes} pruhů, stejných pro všechny modely",
+    "bench.intro.lookahead": {"cs": "{n} {n|úloha|úlohy|úloh} se {rows} řadami před autem (podoba stavu {form}), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
                               "en": "{n} {n|task|tasks} with {rows} rows ahead of the car (state form {form}), {lanes} lanes, the same for all models"},
-    "bench.intro.barrier": {"cs": "{n} křižovatek, 5 pravidel s pořadím, {go} % jeď, stejných pro všechny modely",
+    "bench.intro.barrier": {"cs": "{n} {n|křižovatka|křižovatky|křižovatek}, 5 pravidel s pořadím, {go} % jeď; sada je pro všechny modely stejná",
                             "en": "{n} {n|intersection|intersections}, 5 rules in order of priority, {go}% go, the same for all models"},
     # Skryté pravidlo: úvodní věta jmenuje podobu stavu ({form} = labeled / matched_by, nepřekládá se).
-    "bench.intro.rule": {"cs": "{n} úloh se skrytým pravidlem (podoba stavu {form}), 3 brány, stejných pro všechny modely",
+    "bench.intro.rule": {"cs": "{n} {n|úloha|úlohy|úloh} se skrytým pravidlem (podoba stavu {form}), 3 brány; sada je pro všechny modely stejná",
                          "en": "{n} {n|task|tasks} with a hidden rule (state form {form}), 3 gates, the same for all models"},
-    "bench.intro.emails": {"cs": "{n} e-mailů ze sady „{name}“ ({categories} kategorií), stejných pro všechny modely",
+    "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
-    "bench.intro.public": {"cs": "{n} úloh ze sady „{name}“ ({labels} štítků), stejných pro všechny modely",
+    "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
                            "en": "{n} {n|task|tasks} from the dataset \"{name}\" ({labels} labels), the same for all models"},
-    "bench.intro.publicOos": {"cs": "{n} úloh ze sady „{name}“ ({labels} štítků, mimo rozsah: {oos}), stejných pro všechny modely",
+    "bench.intro.publicOos": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}, mimo rozsah: {oos}); sada je pro všechny modely stejná",
                               "en": "{n} {n|task|tasks} from the dataset \"{name}\" ({labels} labels, out of scope: {oos}), the same for all models"},
-    "bench.intro.publicOwn": {"cs": "{n} úloh ze sady „{name}“ (vlastní štítky u každé úlohy), stejných pro všechny modely",
+    "bench.intro.publicOwn": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ (vlastní štítky u každé úlohy); sada je pro všechny modely stejná",
                               "en": "{n} {n|task|tasks} from the dataset \"{name}\" (every task has its own labels), the same for all models"},
     "bench.source": {"cs": "zdroj: {source} · licence: {license}", "en": "source: {source} · license: {license}"},
     # Řádky pod řádkem modelu; procenta přicházejí hotová ({f1} = „41.7%“).
@@ -539,9 +539,11 @@ def pop_lang(argv, env=None):
 def fill(text, values):
     """Doplní do věty proměnné; chybějící proměnná zůstane vidět jako {jméno}, věta kvůli ní nespadne."""
     def put(m):
-        name, spec, one, other = m.groups()
+        name, spec, one, other, many = m.groups()
         if name not in values:
             return m.group(0)
+        if many is not None:                         # tři tvary: 1, 2–4, ostatní
+            return one if values[name] == 1 else other if values[name] in (2, 3, 4) else many
         if one is not None:
             return one if values[name] == 1 else other
         return format(values[name], spec) if spec else str(values[name])

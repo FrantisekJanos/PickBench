@@ -1,4 +1,4 @@
-12 úloh s historií značek (počítání polohy v seznamu), 3 bran, stejných pro všechny modely
+12 úloh s historií značek (počítání polohy v seznamu), 3 brány; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
 m1                       11ms     12ms    17ms    5ms    17ms     88.2      58%      80%    36%     134   (N=1 1/3, N=2 0/0, N=3 1/3, N=4 1/1, N=5 0/0, N=6 2/3, N=7 1/1, N=8 1/1)

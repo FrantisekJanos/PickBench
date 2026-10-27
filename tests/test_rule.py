@@ -431,14 +431,14 @@ class Cli(unittest.TestCase):
 
     def test_first_line_and_rows(self):
         form = bench.RULE_FORM
-        for argv, cs, en in ((["1", "--rule", "m1"], f"1 úloh se skrytým pravidlem (podoba stavu {form}), 3 brány",
+        for argv, cs, en in ((["1", "--rule", "m1"], f"1 úloha se skrytým pravidlem (podoba stavu {form}), 3 brány",
                               f"1 task with a hidden rule (state form {form}), 3 gates"),
                              (["7", "--rule", "--labeled", "m1"], "7 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány",
                               "7 tasks with a hidden rule (state form labeled), 3 gates"),
                              (["7", "--matched-by", "--rule", "m1"], "7 úloh se skrytým pravidlem (podoba stavu matched_by), 3 brány",
                               "7 tasks with a hidden rule (state form matched_by), 3 gates")):
             with self.subTest(argv=argv):
-                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
                 self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
         self.assertTrue(self.cli("--rule", "m1")[0].startswith("100 úloh se skrytým pravidlem"))      # výchozí počet úloh
         en = self.cli("6", "--rule", "m1", "--lang", "en")[0].splitlines()

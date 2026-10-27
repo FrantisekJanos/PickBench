@@ -361,13 +361,13 @@ class Cli(unittest.TestCase):
         self.assertEqual((a.signs, a.pairs), (False, False))
 
     def test_first_line_and_rows(self):
-        for argv, cs, en in ((["1", "--signs", "m1"], "1 úloh se značkami, 3 pruhů", "1 task with traffic signs, 3 lanes"),
+        for argv, cs, en in ((["1", "--signs", "m1"], "1 úloha se značkami, 3 pruhy", "1 task with traffic signs, 3 lanes"),
                              (["7", "--signs", "--lanes", "5", "m1"], "7 úloh se značkami, 5 pruhů", "7 tasks with traffic signs, 5 lanes")):
             with self.subTest(argv=argv):
-                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
                 self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
         lines = self.cli("--signs", "m1")[0].splitlines()
-        self.assertEqual(lines[0], "100 úloh se značkami, 3 pruhů, stejných pro všechny modely")      # výchozí N a počet pruhů
+        self.assertEqual(lines[0], "100 úloh se značkami, 3 pruhy; sada je pro všechny modely stejná")      # výchozí N a počet pruhů
         en = self.cli("6", "--signs", "--pairs", "m1", "--lang", "en")[0].splitlines()
         self.assertRegex(en[3], r"^m1 .*   \(only \d+/\d+, except-only \d+/\d+, no \d+/\d+, all-except \d+/\d+, limit-no \d+/\d+, limit-up-to \d+/\d+\)$")
         self.assertTrue(en[4].startswith(" " * 20 + "pairs: both correct "), en[4])

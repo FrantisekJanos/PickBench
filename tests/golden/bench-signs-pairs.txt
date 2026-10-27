@@ -1,4 +1,4 @@
-12 úloh se značkami, 3 pruhů, stejných pro všechny modely
+12 úloh se značkami, 3 pruhy; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  goodput  tokenů
 m1                       11ms     12ms    17ms    5ms    17ms     88.2      58%      80%    29%      17%     108   (jen 2/3, jen výjimkou 0/1, zákaz 1/2, vše kromě 2/3, mez zákazem 1/2, mez do 1/1)

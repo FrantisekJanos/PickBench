@@ -1,4 +1,4 @@
-16 úloh s historií značek (dohledání podle štítku), 4 bran, stejných pro všechny modely
+16 úloh s historií značek (dohledání podle štítku), 4 brány; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
 m1                       11ms     11ms    17ms    5ms    17ms     91.4      12%      66%    54%        0%      12%     156   (N=1 1/3, N=2 0/3, N=3 0/2, N=4 0/2, N=5 0/0, N=6 0/3, N=7 1/3, N=8 0/0)

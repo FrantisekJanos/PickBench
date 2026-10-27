@@ -893,7 +893,7 @@ class Hosted(unittest.TestCase):
     def test_hosted_run_prints_the_cost_and_the_network_under_the_row(self):
         lines, code = self.cli("6", "test:echo")
         self.assertIsNone(code)
-        self.assertEqual(lines[0], "6 situací, 3 pruhů, stejných pro všechny modely")
+        self.assertEqual(lines[0], "6 situací, 3 pruhy; sada je pro všechny modely stejná")
         self.assertTrue(lines[3].startswith("test:echo "))
         self.assertRegex(lines[4], r"^ {20}hostovaný model \(Test, zkušební poskytovatel \(nic neodchází\)\): 7 dotazů, \d+ vstupních tokenů, "
                                    r"0\.\d{4} \$ \(\d+\.\d{4} \$ / 1000 rozh\.\), opakování 0; latence včetně sítě$")
@@ -1024,7 +1024,7 @@ class Language(unittest.TestCase):
     def test_lang_option_may_stand_anywhere(self):
         czech, code = self.cli("6", "m1")
         self.assertIsNone(code)
-        self.assertEqual(czech.splitlines()[0], "6 situací, 3 pruhů, stejných pro všechny modely")
+        self.assertEqual(czech.splitlines()[0], "6 situací, 3 pruhy; sada je pro všechny modely stejná")
         english, code = self.cli("--lang", "en", "6", "m1")
         self.assertIsNone(code)
         self.assertEqual(english.splitlines()[0], "6 situations, 3 lanes, the same for all models")
@@ -1111,20 +1111,20 @@ class Language(unittest.TestCase):
             plain = Path(tmp) / "plain.json"                             # společné štítky bez třídy mimo rozsah
             plain.write_text(json.dumps({"name": "Sada", "source": "zdroj X", "license": "licence Y", "labels": [{"key": "a"}, {"key": "b"}],
                                          "items": [{"text": "t", "label": "a"}]}), encoding="utf-8")
-            same = ", stejných pro všechny modely", ", the same for all models"
-            cases = [(["1", "m1"], "1 situací, 3 pruhů", "1 situation, 3 lanes"),
+            same = "; sada je pro všechny modely stejná", ", the same for all models"
+            cases = [(["1", "m1"], "1 situace, 3 pruhy", "1 situation, 3 lanes"),
                      (["7", "--lanes", "5", "m1"], "7 situací, 5 pruhů", "7 situations, 5 lanes"),
-                     (["1", "--numbers", "m1"], "1 řad čísel, 3 bran", "1 row of numbers, 3 gates"),
-                     (["4", "--numbers", "--lanes", "2", "m1"], "4 řad čísel, 2 bran", "4 rows of numbers, 2 gates"),
-                     (["1", "--emails", EMAILS, "m1"], "1 e-mailů ze sady „České firemní e-maily“ (5 kategorií)",
+                     (["1", "--numbers", "m1"], "1 řada čísel, 3 brány", "1 row of numbers, 3 gates"),
+                     (["4", "--numbers", "--lanes", "2", "m1"], "4 řady čísel, 2 brány", "4 rows of numbers, 2 gates"),
+                     (["1", "--emails", EMAILS, "m1"], "1 e-mail ze sady „České firemní e-maily“ (5 kategorií)",
                       '1 e-mail from the dataset "České firemní e-maily" (5 categories)'),
-                     (["3", "--emails", EMAILS, "m1"], "3 e-mailů ze sady „České firemní e-maily“ (5 kategorií)",
+                     (["3", "--emails", EMAILS, "m1"], "3 e-maily ze sady „České firemní e-maily“ (5 kategorií)",
                       '3 e-mails from the dataset "České firemní e-maily" (5 categories)'),
-                     (["1", "--public", MINI, "m1"], "1 úloh ze sady „Zkušební veřejná sada“ (4 štítků, mimo rozsah: oos)",
+                     (["1", "--public", MINI, "m1"], "1 úloha ze sady „Zkušební veřejná sada“ (4 štítky, mimo rozsah: oos)",
                       '1 task from the dataset "Zkušební veřejná sada" (4 labels, out of scope: oos)'),
                      (["--public", OWN, "m1"], "6 úloh ze sady „Zkušební sada s vlastními štítky“ (vlastní štítky u každé úlohy)",
                       '6 tasks from the dataset "Zkušební sada s vlastními štítky" (every task has its own labels)'),
-                     (["--public", str(plain), "m1"], "1 úloh ze sady „Sada“ (2 štítků)", '1 task from the dataset "Sada" (2 labels)')]
+                     (["--public", str(plain), "m1"], "1 úloha ze sady „Sada“ (2 štítky)", '1 task from the dataset "Sada" (2 labels)')]
             for argv, cs, en in cases:
                 with self.subTest(argv=argv):
                     self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + same[0])
@@ -1206,7 +1206,7 @@ class Language(unittest.TestCase):
             path = Path(tmp) / "sada.json"
             path.write_text(json.dumps(DS, ensure_ascii=False), encoding="utf-8")
             cs, en = self.cli("--emails", str(path), "m1")[0].splitlines(), self.cli("--emails", str(path), "m1", "--lang", "en")[0].splitlines()
-        self.assertEqual(cs[0], "3 e-mailů ze sady „Test“ (2 kategorií), stejných pro všechny modely")
+        self.assertEqual(cs[0], "3 e-maily ze sady „Test“ (2 kategorie); sada je pro všechny modely stejná")
         self.assertEqual(en[0], '3 e-mails from the dataset "Test" (2 categories), the same for all models')
         self.assertTrue(cs[3].endswith("   (záměny: žádné)"), cs[3])
         self.assertTrue(en[3].endswith("   (confusions: none)"), en[3])

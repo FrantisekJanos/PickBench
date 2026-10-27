@@ -1,4 +1,4 @@
-24 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány, stejných pro všechny modely
+24 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
 m1                       11ms     11ms    17ms    5ms    17ms     92.3      33%      76%    43%        4%      12%     310   (opakování 5/10, přepnutí 1/8, vyloučení 2/6)

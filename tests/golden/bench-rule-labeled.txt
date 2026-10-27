@@ -1,4 +1,4 @@
-12 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány, stejných pro všechny modely
+12 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
 m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      78%    50%     253   (opakování 2/4, přepnutí 0/2, vyloučení 2/6)

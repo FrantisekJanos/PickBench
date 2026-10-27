@@ -197,6 +197,9 @@ class Fill(unittest.TestCase):
     def test_variables_formats_and_counts(self):
         self.assertEqual(i18n.fill("{n} {n|step|steps}, {usd:.4f} $", {"n": 1, "usd": 0.5}), "1 step, 0.5000 $")
         self.assertEqual(i18n.fill("{n} {n|step|steps}", {"n": 3}), "3 steps")
+        for n, word in ((1, "úloha"), (2, "úlohy"), (4, "úlohy"), (5, "úloh"), (0, "úloh"), (22, "úloh")):     # čeština: tři tvary
+            self.assertEqual(i18n.fill("{n} {n|úloha|úlohy|úloh}", {"n": n}), f"{n} {word}")
+        self.assertEqual(i18n.fields("{n} {n|a|b|c} {lanes|x|y}"), {"n", "lanes"})
         self.assertEqual(i18n.fill("{name:<6}|", {"name": "ab"}), "ab    |")
 
     def test_missing_variable_stays_visible_and_json_braces_are_left_alone(self):

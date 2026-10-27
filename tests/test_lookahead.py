@@ -392,14 +392,14 @@ class Cli(unittest.TestCase):
 
     def test_first_line_and_rows(self):
         form = bench.LOOKAHEAD_FORM
-        for argv, cs, en in ((["1", "--lookahead", "m1"], f"1 úloh se 4 řadami před autem (podoba stavu {form}), 4 pruhů",
+        for argv, cs, en in ((["1", "--lookahead", "m1"], f"1 úloha se 4 řadami před autem (podoba stavu {form}), 4 pruhy",
                               f"1 task with 4 rows ahead of the car (state form {form}), 4 lanes"),
-                             (["7", "--lookahead", "--blocked", "--lanes", "3", "m1"], "7 úloh se 4 řadami před autem (podoba stavu blocked), 3 pruhů",
+                             (["7", "--lookahead", "--blocked", "--lanes", "3", "m1"], "7 úloh se 4 řadami před autem (podoba stavu blocked), 3 pruhy",
                               "7 tasks with 4 rows ahead of the car (state form blocked), 3 lanes"),
-                             (["7", "--rows", "--lookahead", "m1"], "7 úloh se 4 řadami před autem (podoba stavu rows), 4 pruhů",
+                             (["7", "--rows", "--lookahead", "m1"], "7 úloh se 4 řadami před autem (podoba stavu rows), 4 pruhy",
                               "7 tasks with 4 rows ahead of the car (state form rows), 4 lanes")):
             with self.subTest(argv=argv):
-                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + ", stejných pro všechny modely")
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
                 self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
         self.assertTrue(self.cli("--lookahead", "m1")[0].startswith("100 úloh se 4 řadami před autem"))      # výchozí počet úloh
         en = self.cli("6", "--lookahead", "m1", "--lang", "en")[0].splitlines()

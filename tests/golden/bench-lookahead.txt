@@ -1,4 +1,4 @@
-12 úloh se 4 řadami před autem (podoba stavu blocked), 4 pruhů, stejných pro všechny modely
+12 úloh se 4 řadami před autem (podoba stavu blocked), 4 pruhy; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
 m1                       11ms     11ms    17ms    5ms    17ms     94.5      25%      76%    51%       17%       8%     180   (hloubka 1 2/6, hloubka 2 0/1, hloubka 3+ 1/5)

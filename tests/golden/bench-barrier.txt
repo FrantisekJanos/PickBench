@@ -1,4 +1,4 @@
-24 křižovatek, 5 pravidel s pořadím, 83 % jeď, stejných pro všechny modely
+24 křižovatek, 5 pravidel s pořadím, 83 % jeď; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
 m1                       11ms     11ms    17ms    5ms    17ms     92.3      46%      73%    29%       29%      12%     161   (pravidlo 1 4/10, pravidlo 2 0/0, pravidlo 3 0/0, pravidlo 4 3/5, pravidlo 5 4/9)

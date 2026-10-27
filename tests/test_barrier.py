@@ -480,7 +480,7 @@ class Cli(unittest.TestCase):
         cases = bench.barrier_cases(6)
         go = round(100 * sum(g for _, g, _, _ in cases) / 6)
         self.assertEqual(self.cli("6", "--barrier", "m1")[0].splitlines()[0],
-                         f"6 křižovatek, 5 pravidel s pořadím, {go} % jeď, stejných pro všechny modely")
+                         f"6 křižovatek, 5 pravidel s pořadím, {go} % jeď; sada je pro všechny modely stejná")
         en = self.cli("6", "--barrier", "m1", "--lang", "en")[0].splitlines()
         self.assertEqual(en[0], f"6 intersections, 5 rules in order of priority, {go}% go, the same for all models")
         self.assertEqual(len(en), 5)

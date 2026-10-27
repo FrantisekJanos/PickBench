@@ -1,4 +1,4 @@
-12 úloh se 4 řadami před autem (podoba stavu rows), 3 pruhů, stejných pro všechny modely
+12 úloh se 4 řadami před autem (podoba stavu rows), 3 pruhy; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
 m1                       11ms     12ms    17ms    5ms    17ms     88.2      25%      82%    57%     182   (hloubka 1 0/4, hloubka 2 2/7, hloubka 3+ 1/1)
