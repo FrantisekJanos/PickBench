@@ -756,6 +756,17 @@ class Lookahead(unittest.TestCase):
 
 SPEC_RULE_LOG = [["color", True]] * 3 + [["color", False], ["shape", False]]     # příklad z rešerše (SPEC_LOG v tests/test_rule.py): přepnutí na count
 C, W = True, False
+# Generátor Skrytého pravidla stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy ruleRow.
+RULE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "ruleRow(rand)")
+assert RULE_ROWS_JS != ROWS_JS
+RULE_PAGE = {}
+
+
+def rule_page(n=3000, seed=1):
+    """Úlohy generátoru stránky, jednou za běh modulu; deník jako [(znak, správně?)]."""
+    if (n, seed) not in RULE_PAGE:
+        RULE_PAGE[n, seed] = [{**r, "log": [tuple(e) for e in r["log"]]} for r in run_js(RULE_ROWS_JS, {"seed": seed, "n": n})]
+    return RULE_PAGE[n, seed]
 
 
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
@@ -805,6 +816,107 @@ class Rule(unittest.TestCase):
         for log, changes in zip(logs, run_js("arg.map(ruleChanges)", logs)):
             old = bench.rule_read([tuple(e) for e in log])[1]
             self.assertEqual(old, log[changes[-1]][0] if changes else None, log)            # poslední změna je ta, kterou zná rule_read
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        for r in rule_page():
+            log, order = r["log"], r["order"]
+            with self.subTest(case=r):
+                self.assertEqual(list(r), ["log", "order", "truth", "cls", "old"])
+                self.assertTrue(bench.RULE_LOG[0] <= len(log) <= bench.RULE_LOG[1])
+                self.assertTrue(all(f in bench.RULE_FEATURES and isinstance(ok, bool) for f, ok in log))
+                self.assertEqual(sorted(order), sorted(bench.RULE_FEATURES))                       # znaky bran jsou permutace
+                candidates, old, cls = bench.rule_read(log)
+                self.assertEqual(candidates, {order[r["truth"]]})                                   # odvozené pravidlo je jediné a je to pravidlo úlohy
+                self.assertEqual(cls, r["cls"])
+                if old is None:
+                    self.assertIsNone(r["old"])
+                else:
+                    self.assertEqual(order[r["old"]], old)
+                    self.assertNotEqual(r["old"], r["truth"])
+
+    def test_classes_and_answers_are_spread(self):
+        import bench
+        c = rule_page()
+        classes, tops = Counter(r["cls"] for r in c), Counter(r["truth"] for r in c)
+        for cls in bench.RULE_CLASSES:
+            self.assertTrue(0.25 <= classes[cls] / len(c) <= 0.42, (cls, classes))
+        for top in range(3):
+            self.assertTrue(0.25 <= tops[top] / len(c) <= 0.42, (top, tops))
+        self.assertTrue(all(r["old"] is not None for r in c if r["cls"] == "switch"))
+        self.assertTrue(all(r["old"] is None for r in c if r["cls"] == "eliminate"))
+        for cls in bench.RULE_CLASSES:                                                             # délka deníku nezávisí na třídě
+            sub = [r for r in c if r["cls"] == cls]
+            short = sum(len(r["log"]) <= bench.RULE_SHORT for r in sub) / len(sub)
+            self.assertTrue(0.4 <= short <= 0.6, (cls, short))
+
+    def test_control_strategies(self):
+        import bench
+        c = rule_page()
+
+        def acc(pick, cls=None):
+            sub = [r for r in c if cls is None or r["cls"] == cls]
+            return sum(pick(r) == r["truth"] for r in sub) / len(sub)
+
+        def solve(r):
+            return r["order"].index(next(iter(bench.rule_read(r["log"])[0])))
+
+        def last_correct(r):                                       # zopakuj znak posledního správného pokusu; bez něj brána 1
+            hits = [f for f, ok in r["log"] if ok]
+            return r["order"].index(hits[-1]) if hits else 0
+        self.assertEqual(acc(solve), 1)
+        self.assertEqual(acc(last_correct, "repeat"), 1)
+        self.assertEqual(acc(last_correct, "switch"), 0)
+        self.assertTrue(all(last_correct(r) == r["old"] for r in c if r["cls"] == "switch"))      # v přepnutí vždy brána starého pravidla
+        self.assertLessEqual(acc(last_correct, "eliminate"), 0.4)
+        self.assertLess(acc(last_correct), 0.5)
+        self.assertLess(acc(lambda r: r["order"].index(r["log"][-1][0])), 0.45)                 # zopakuj znak posledního pokusu
+        self.assertLess(acc(lambda r: 0), 0.4)
+
+    def test_least_frequent_feature_is_balanced_in_switch(self):
+        import bench
+        c = rule_page()
+
+        def acc(cls):
+            sub = [r for r in c if r["cls"] == cls]
+            return sum(r["order"].index(bench.rule_least(r["log"])) == r["truth"] for r in sub) / len(sub)
+        self.assertTrue(0.2 <= acc("switch") <= 0.45, acc("switch"))
+        self.assertEqual(acc("eliminate"), 1)                     # bez změny je nezkoušený znak totéž co vyloučení
+
+    def test_first_pick_is_not_a_shortcut_in_switch(self):
+        import bench
+        switch = [r for r in rule_page() if r["cls"] == "switch"]
+
+        def acc(long=None):
+            sub = [r for r in switch if long is None or (len(r["log"]) > bench.RULE_SHORT) == long]
+            return sum(r["order"].index(r["log"][0][0]) == r["truth"] for r in sub) / len(sub)
+        self.assertLessEqual(acc(long=True), 0.45)
+        self.assertLessEqual(acc(), 0.6)
+
+    def test_rule_features_are_spread(self):                       # brána jmenuje svůj znak: „vždy count“ nesmí ve třídě vycházet
+        import bench
+        c = rule_page()
+
+        def shares(sub):
+            rules = Counter(r["order"][r["truth"]] for r in sub)
+            return {f: rules[f] / len(sub) for f in bench.RULE_FEATURES}
+        for cls in ("repeat", "eliminate"):
+            for f, share in shares([r for r in c if r["cls"] == cls]).items():
+                self.assertTrue(0.25 <= share <= 0.42, (cls, f, share))
+        switch = [r for r in c if r["cls"] == "switch"]
+        for f, share in shares([r for r in switch if len(r["log"]) > bench.RULE_SHORT]).items():
+            self.assertTrue(0.2 <= share <= 0.45, ("switch long", f, share))
+        self.assertLessEqual(max(shares(switch).values()), 0.5, shares(switch))
+
+    def test_same_seed_same_rows(self):
+        first = run_js(RULE_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(RULE_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(RULE_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_bounded_search_raises(self):                          # rand = 0: samé správné pokusy color, deník končí změnou, žádná třída
+        got = run_js("[[() => 0, 'eliminate', 'short'], [Math.random, 'guess', 'short'], [Math.random, 'repeat', 'medium']]"
+                     ".map(([rand, cls, length]) => { try { ruleCase(rand, cls, length); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["ruleCase: no eliminate short log after 10000 tries", "ruleCase: no guess short log", "ruleCase: no repeat medium log"])
 
 
 if __name__ == "__main__":

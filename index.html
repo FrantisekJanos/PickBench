@@ -2622,6 +2622,69 @@ function ruleQuestion() {                                  // popisky bran jako 
     + 'Work out the current rule and choose the gate that shares that feature with the sample.';
   return { gate_labeled: { type: 'choice', instructions, criteria: memoryQuestion(3).recall.criteria } };
 }
+// Generátor Skrytého pravidla: stejné kroky a pořadí losování jako rule_log, rule_switch_pair, rule_case a rule_cases v bench.py,
+// náhoda z předané funkce rand (stránka dává rnd, test vlastní). Jiné úlohy než bench.py, protože Python má jiný generátor náhody.
+// Simulovaný deník n pokusů [[znak, správně?]]; vrací [deník, pravidlo na konci]. pair = [staré, budoucí] pravidlo (třída switch):
+// deník začíná starým a jediná změna vede na budoucí; před změnou skript místo náhodného znaku s pravděpodobností RULE_INSERT zvolí
+// budoucí pravidlo (kromě prvního pokusu), po změně budoucí nezkouší.
+function ruleLog(rand, n, pair = null) {
+  const [old, future] = pair ?? [pickOf(rand, RULE_FEATURES), null];
+  const others = RULE_FEATURES.filter(f => f !== future);
+  const log = [];
+  let rule = old, streak = 0;
+  for (let i = 0; i < n; i++) {
+    const last = log[log.length - 1];
+    let pick;
+    if (last && last[1] && rand() < RULE_STICK) pick = last[0];
+    else if (future === null || !last) pick = pickOf(rand, RULE_FEATURES);
+    else if (rule !== future) pick = rand() < RULE_INSERT ? future : pickOf(rand, RULE_FEATURES);
+    else pick = pickOf(rand, others);
+    const ok = pick === rule;
+    log.push([pick, ok]);
+    streak = ok ? streak + 1 : 0;
+    if (streak === RULE_STREAK) {
+      rule = future && rule !== future ? future : pickOf(rand, RULE_FEATURES.filter(f => f !== rule));
+      streak = 0;
+    }
+  }
+  return [log, rule];
+}
+// Staré a budoucí pravidlo úlohy switch, losované jednou na úlohu: rovnoměrně ze všech dvojic, kromě krátkého deníku, kde nejméně
+// častý znak netrefí: ten má vždy tvar [budoucí špatně, staré ×3 správně, třetí špatně] a budoucí pravidlo nesmí vyhrát shodu s třetím
+// znakem v pořadí RULE_FEATURES; jde jen budoucí count (staré color nebo shape) nebo budoucí shape se starým count.
+function ruleSwitchPair(rand, length, hit) {
+  if (length === 'short' && hit === false) {
+    const future = pickOf(rand, ['count', 'shape']);
+    return [future === 'count' ? pickOf(rand, ['color', 'shape']) : 'count', future];
+  }
+  const future = pickOf(rand, RULE_FEATURES);
+  return [pickOf(rand, RULE_FEATURES.filter(f => f !== future)), future];
+}
+// Úloha dané třídy a pásma délky deníku: deník se simuluje a zamítá, dokud ruleRead nedá jediného kandidáta = pravidlo a třídu cls.
+// Ve switch se předem losuje, jestli trefí zkratka „nejméně častý znak“ (1/3), v dlouhém switch i „znak prvního pokusu“ (1/3).
+// Místo karet pořadí znaků bran (zamíchané RULE_FEATURES, jako rule_gates). Vrací { log, order, truth, cls, old }; truth a old jsou indexy bran.
+function ruleCase(rand, cls, length) {
+  if (!RULE_CLASSES.includes(cls) || !RULE_LENGTHS.includes(length)) throw new Error(`ruleCase: no ${cls} ${length} log`);
+  const hit = cls === 'switch' ? rand() < 1 / 3 : null;
+  const first = cls === 'switch' && length === 'long' ? rand() < 1 / 3 : null;      // trefí znak prvního pokusu?
+  const pair = cls === 'switch' ? ruleSwitchPair(rand, length, hit) : null;
+  let log, rule, old, found = false;
+  for (let tries = 0; tries < RULE_TRIES && !found; tries++) {
+    const n = length === 'long' ? pickInt(rand, RULE_SHORT + 1, RULE_LOG[1]) : hit === false ? RULE_SHORT : pickInt(rand, RULE_LOG[0], RULE_SHORT);
+    [log, rule] = ruleLog(rand, n, pair);
+    const [candidates, readOld, readCls] = ruleRead(log);
+    old = readOld;
+    found = candidates.length === 1 && candidates[0] === rule && readCls === cls
+      && (hit === null || (ruleLeast(log) === rule) === hit) && (first === null || (log[0][0] === rule) === first);
+  }
+  if (!found) throw new Error(`ruleCase: no ${cls} ${length} log after ${RULE_TRIES} tries`);
+  const order = [...RULE_FEATURES];
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }      // jako rng.shuffle
+  return { log, order, truth: order.indexOf(rule), cls, old: old === null ? null : order.indexOf(old) };
+}
+function ruleRow(rand) {                                   // třída se losuje před délkou, jako rule_cases
+  return ruleCase(rand, pickOf(rand, RULE_CLASSES), pickOf(rand, RULE_LENGTHS));
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
