@@ -637,6 +637,7 @@ const TEXTS = {
   'rule.feature.shape': { cs: 'tvar', en: 'shape' },
   'rule.feature.count': { cs: 'počet', en: 'count' },
   'rule.persev': { cs: 'perseverace', en: 'perseveration' },
+  'rule.logTitle': { cs: 'deník úlohy, nejstarší pokus vlevo', en: 'log of the task, oldest pick on the left' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -1969,6 +1970,26 @@ const lookahead = {
 const RULE_CLASS_NAME = { repeat: 'rule.class.repeat', switch: 'rule.class.switch', eliminate: 'rule.class.eliminate' };
 const RULE_FEATURE_NAME = { color: 'rule.feature.color', shape: 'rule.feature.shape', count: 'rule.feature.count' };
 
+// Znak shody na plátno c (silnice i pás deníku), bez textu: barva = tři barevné skvrny, tvar = obrys hvězdy, počet = tři tečky v řadě.
+function drawRuleFeature(c, feature, x, y, rad) {
+  if (feature === 'color') {
+    ['#f85149', '#58a6ff', '#3fb950'].forEach((color, i) => {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / 3;
+      c.fillStyle = color; c.beginPath(); c.arc(x + rad * 0.5 * Math.cos(a), y + rad * 0.5 * Math.sin(a), rad * 0.4, 0, 7); c.fill();
+    });
+  } else if (feature === 'shape') {
+    c.strokeStyle = '#e6edf3'; c.lineWidth = Math.max(1.5, rad * 0.16); c.lineJoin = 'round'; c.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? 0.42 : 1;
+      c[i ? 'lineTo' : 'moveTo'](x + rad * k * Math.cos(a), y + rad * k * Math.sin(a));
+    }
+    c.closePath(); c.stroke(); c.lineJoin = 'miter';
+  } else {
+    c.fillStyle = '#e6edf3';
+    [-1, 0, 1].forEach(i => { c.beginPath(); c.arc(x + i * rad * 0.7, y, rad * 0.27, 0, 7); c.fill(); });
+  }
+}
+
 const rule = {
   __proto__: rowBase,
   id: 'rule',                                      // brány jsou vždy 3: silnice má 3 pruhy, volič je zamčený jako u závory
@@ -1996,8 +2017,8 @@ const rule = {
     g.cases.push({ log: task.log, truth: task.truth, cls: task.cls, old: task.old });
     g.choices.push(gateKeys(3)[move] ?? null);
   },
-  drawItems(g) {                                           // brána se slovem znaku pod středem; po průjezdu se ukáže správná brána
-    const hw = LW * 0.42, rad = Math.min(LW * 0.2, 12);
+  drawItems(g) {                                           // brána: znak nahoře, pod ním jeho slovo; po průjezdu se ukáže správná brána
+    const hw = LW * 0.42, rad = Math.min(LW * 0.2, 10);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
@@ -2006,13 +2027,51 @@ const rule = {
         const x = (lane + 0.5) * LW;
         ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
         ctx.beginPath(); ctx.roundRect(x - hw, y - 20, 2 * hw, 40, 6); ctx.fill();
+        drawRuleFeature(ctx, f, x, y - 6, rad);
         ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3';
         ctx.fillText(t(RULE_FEATURE_NAME[f]), x, y + 12, 2 * hw - 4);
       });
       ctx.globalAlpha = 1;
-      this.drawRing(r, y, rad);
+      this.drawRing(r, y, Math.min(LW * 0.26, 15));
     }
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  drawRing(r, y, rad) {                                    // kroužek výsledku (+ trojský kůň); u brány starého pravidla ve třídě přepnutí i slovo perseverace
+    super.drawRing(r, y, rad);
+    if (!(r.result === 'bad' && r.cls === 'switch' && r.chosen === r.old)) return;
+    const x = (r.passLane + 0.5) * LW, gap = rad + 10, right = W - x >= x, room = (right ? W - x : x) - gap - 4;      // slovo na stranu, kde je víc místa
+    ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = right ? 'left' : 'right'; ctx.textBaseline = 'middle';
+    const word = t('rule.persev'), wide = Math.min(ctx.measureText(word).width, room), tx = right ? x + gap : x - gap;
+    ctx.fillStyle = 'rgba(11,16,22,.8)'; ctx.fillRect(right ? tx - 3 : tx - wide - 3, y - 9, wide + 6, 18);     // podklad: slovo leží přes sousední bránu
+    ctx.fillStyle = RESULT.bad.color; ctx.fillText(word, tx, y, room);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  drawTrail(g) {                                           // pás deníku pod silnicí: deník nejbližší řady, nejstarší vlevo, pod znakem fajfka nebo křížek, svislá čára po změně pravidla
+    const c = $('trail'), tc = c.getContext('2d');
+    if (c.width !== W) c.width = W;
+    tc.fillStyle = '#20262d'; tc.fillRect(0, 0, c.width, c.height);
+    const r = memoryTrailRow(g);
+    c.hidden = !r;                                        // benchmark bez hry nemá řady: prázdný pás se schová
+    if (!r) return;
+    const n = r.log.length, cell = W / RULE_LOG[1], rad = Math.min(cell * 0.3, 9), x0 = W - n * cell;
+    tc.textAlign = 'center'; tc.textBaseline = 'middle';
+    tc.font = '600 12px "Segoe UI", sans-serif'; tc.fillStyle = '#e6edf3';
+    tc.fillText(t('rule.logTitle'), W / 2, 12, W - 8);
+    tc.lineCap = 'round';
+    r.log.forEach(([f, ok], i) => {
+      const x = x0 + (i + 0.5) * cell, m = 5;
+      drawRuleFeature(tc, f, x, 36, rad);
+      tc.lineWidth = 2.5; tc.beginPath();
+      if (ok) { tc.strokeStyle = '#3fb950'; tc.moveTo(x - m, 58); tc.lineTo(x - 1, 62); tc.lineTo(x + m, 54); }
+      else { tc.strokeStyle = '#f85149'; tc.moveTo(x - m * 0.8, 54); tc.lineTo(x + m * 0.8, 62); tc.moveTo(x + m * 0.8, 54); tc.lineTo(x - m * 0.8, 62); }
+      tc.stroke();
+    });
+    tc.strokeStyle = '#d29922'; tc.lineWidth = 2;
+    for (const i of ruleChanges(r.log)) {                   // čára mezi pokusem, po kterém se pravidlo změnilo, a dalším
+      const x = Math.min(W - 1, x0 + (i + 1) * cell);
+      tc.beginPath(); tc.moveTo(x, 22); tc.lineTo(x, 66); tc.stroke();
+    }
+    tc.lineCap = 'butt'; tc.textAlign = 'start'; tc.textBaseline = 'alphabetic';
   },
   describeLast(task, res) {                                // deník a znaky bran, jak je dostal model, pak volba
     const name = i => i >= 0 ? t('last.gate', { n: i + 1, value: task.order[i] }) : t('answer.invalid');

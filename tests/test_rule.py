@@ -534,6 +534,13 @@ class Page(unittest.TestCase):              # scénář ve stránce; čtení den
         case = {"log": [["color", True]], "truth": 1, "cls": "repeat", "old": None}
         self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["gate_2", "gate_1", None]})
 
+    def test_drawing_writes_only_through_t_and_shows_the_log(self):
+        self.assertNotIn("fillText(", page_function("drawRuleFeature"))                       # znaky bran jen kresbou
+        body = rule_body()
+        for part in ("drawRing(r, y, rad) {", "drawTrail(g) {", "memoryTrailRow(g)", "ruleChanges(r.log)", "t('rule.persev')", "t('rule.logTitle')",
+                     "t(RULE_FEATURE_NAME[", "drawRuleFeature(ctx, ", "drawRuleFeature(tc, ", "r.chosen === r.old"):
+            self.assertIn(part, body)
+
 
 if __name__ == "__main__":
     unittest.main()
