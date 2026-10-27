@@ -9,7 +9,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--as-choice | --as-score] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -91,6 +91,9 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             odpověď = 6), příliš rychle, příliš pomalu a chyby: jen vzdálenost, vynechaná podmínka, každá podmínka
             za 1 stupeň, sousední pásmo, jiné, neplatné. Levné zkratky (stálý stupeň, odhad podle počtu číslic) trefí
             ve třídách povrch, mlha a obojí nejvýš asi třetinu úloh. S --lanes se nekombinuje.
+--as-choice, --as-score:  jen s --cruise: podoba otázky. choice = výběr ze sedmi stupňů; score = odpověď na škále 1 až 7
+            (necelé číslo se pro přesnost zaokrouhlí, MAE ho bere celé). S --mirror je druhou variantou obrácená škála
+            brzdění (řádek variant ji vypisuje jako „obrácené pořadí“). Bez volby platí choice.
 --timetable:  jízdní řád: zásilka má PSČ (10000 až 99999) a službu, tabulka routes má 3 až 12 řádků a každý řádek posílá
             zásilky s PSČ od zip_from do zip_to (oba kraje včetně) do svého depa; výjimka pro službu (exceptions) má přednost.
             Model volí jedno ze šesti dep. N úloh (výchozí 100), rovnoměrně podle velikosti tabulky (3–5, 6–8, 9–12 řádků),
@@ -153,7 +156,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--as-choice | --as-score] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -235,6 +238,9 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             and inside a band, ±1 level, MAE (an invalid answer counts as 6), too fast, too slow and the errors: distance
             only, condition left out, each condition as 1 level, neighboring band, other, invalid. Cheap shortcuts (a fixed
             level, a guess by the number of digits) get at most about a third of the road, fog and both tasks right. Not with --lanes.
+--as-choice, --as-score:  only with --cruise: the form of the question. choice = a pick out of seven levels; score = an answer
+            on a scale from 1 to 7 (a fraction is rounded for the accuracy, MAE takes it as it is). With --mirror the second
+            variant is the inverted braking scale, listed as "reversed order". Without the option: choice.
 --timetable:  timetable: a parcel has a ZIP code (10000 to 99999) and a service; the table routes has 3 to 12 rows, and each
             row sends the parcels with a ZIP code from zip_from to zip_to (both ends included) to its depot; an exception for
             a service (exceptions) comes first. The model picks one of six depots. N tasks (default 100), spread evenly by table
@@ -2854,6 +2860,8 @@ def parse_args(argv):
     p.add_argument("--sorted", action="store_true")
     p.add_argument("--shuffled", action="store_true")
     p.add_argument("--cruise", action="store_true")              # tempomat: pruhy ani brány nemá, --lanes končí hláškou
+    p.add_argument("--as-choice", action="store_true")
+    p.add_argument("--as-score", action="store_true")
     p.add_argument("--diff", action="store_true")
     p.add_argument("--dicts", action="store_true")
     p.add_argument("--lists", action="store_true")
@@ -3113,7 +3121,7 @@ def main(argv):
     scenarios += (args.diff,)                        # co se změnilo
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
-            or (args.sorted and args.shuffled)):
+            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.dicts and args.lists:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
@@ -3143,6 +3151,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesTimetable"))
     if args.cruise and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesCruise"))
+    if (args.as_choice or args.as_score) and not args.cruise:
+        sys.exit(i18n.t("bench.err.formCruise"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -3287,12 +3297,13 @@ def main(argv):
                 print_row(r, bet_note(r))
                 print_bet(r)
     elif args.cruise:
+        form = "score" if args.as_score else "choice" if args.as_choice else CRUISE_FORM
         cases = cruise_cases(args.n or 100)
-        print(i18n.t("bench.intro.cruise", n=len(cases), form=CRUISE_FORM) + "\n")
+        print(i18n.t("bench.intro.cruise", n=len(cases), form=form) + "\n")
         print(head)
         for m in args.models:
             with hosted_model(m):
-                r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms)
+                r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, cruise_note(r))
                 print_cruise(r)
     elif args.timetable:

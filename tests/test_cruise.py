@@ -499,6 +499,30 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--cruise:   ", text)
             self.assertRegex(text, r"python bench\.py \[N\] --cruise .*\[--mirror\] \[--inject\] \[--deadline-ms L\] model1 model2 \.\.\.")
 
+    def test_parse_forms(self):
+        a = bench.parse_args(["--cruise", "--as-score", "m1"])
+        self.assertEqual((a.as_choice, a.as_score), (False, True))
+        self.assertEqual(bench.parse_args(["--as-choice", "--cruise", "m1"]).as_choice, True)
+
+    def test_form_errors_and_first_line(self):
+        for argv in (["--as-score", "m1"], ["--numbers", "--as-choice", "m1"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", "Volby --as-choice a --as-score jdou jen s --cruise."))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", "The --as-choice and --as-score options work only with --cruise."))
+        self.assertEqual(self.cli("--cruise", "--as-choice", "--as-score", "m1"), ("", bench.__doc__))
+        for form in ("choice", "score"):
+            first = self.cli("2", "--cruise", f"--as-{form}", "m1")[0].splitlines()[0]
+            self.assertEqual(first, f"2 úlohy s tempomatem (stupně 1–7, otázka {form}); sada je pro všechny modely stejná")
+
+    def test_score_run_from_the_command_line(self):
+        out, code = self.cli("8", "--cruise", "--as-score", "--mirror", "--inject", "m1", "--lang", "en")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 8)
+        self.assertTrue(all(b'"type": "score"' in body for body in self.sent))
+        self.assertTrue(any(b'"brake"' in body for body in self.sent))
+        self.assertTrue(all(b'"criteria": ["' in body for body in self.sent))              # pole názvů stupňů, jak chce Ollama
+
 
 if __name__ == "__main__":
     unittest.main()

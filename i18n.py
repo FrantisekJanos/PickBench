@@ -276,6 +276,7 @@ TEXTS = {
     "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
     "bench.err.formDiff": {"cs": "Volby --dicts a --lists jdou jen s --diff.", "en": "The --dicts and --lists options work only with --diff."},
     "bench.err.hintInject": {"cs": "Volba --inject se s --hint nekombinuje.", "en": "The --inject option cannot be combined with --hint."},
+    "bench.err.formCruise": {"cs": "Volby --as-choice a --as-score jdou jen s --cruise.", "en": "The --as-choice and --as-score options work only with --cruise."},
     "bench.err.lanesCruise": {"cs": "Volba --lanes se s --cruise nekombinuje.", "en": "The --lanes option cannot be combined with --cruise."},
     "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
                                 "en": "The --sorted and --shuffled options work only with --timetable."},
