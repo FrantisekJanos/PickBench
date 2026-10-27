@@ -534,6 +534,26 @@ class Page(unittest.TestCase):              # scénář ve stránce; čtení den
         case = {"log": [["color", True]], "truth": 1, "cls": "repeat", "old": None}
         self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["gate_2", "gate_1", None]})
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_feature_words_stay_centered_after_a_perseveration_row(self):   # drawRing s perseverací vrací zarovnání; další řada ho musí nastavit znovu
+        body = rule_body()
+        method = lambda name: re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = page_function("drawRuleFeature") + (
+            "const calls = [], LW = 100, W = 300, CAR_Y = 500, CELL = 50, RESULT = { bad: { color: '#f00' } };"
+            "const RULE_FEATURE_NAME = { color: 'rule.feature.color', shape: 'rule.feature.shape', count: 'rule.feature.count' };"
+            "const t = k => k === 'rule.persev' ? 'PERSEV' : k.startsWith('rule.feature.') ? 'F:' + k.slice(13) : k;"
+            "const ctx = new Proxy({ fillText(text) { calls.push([text, this.textAlign, this.textBaseline]); }, measureText: s => ({ width: s.length * 6 }) },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const base = { drawRing() {} }; const o = { __proto__: base," + method("drawItems") + "," + method("drawRing") + "};"
+            "const row = (y, extra) => ({ y, order: ['color', 'shape', 'count'], truth: 0, inject: null, passLane: 1, result: null, cls: 'repeat', chosen: undefined, old: null, ...extra });"
+            "o.drawItems({ rows: [row(1, { result: 'bad', cls: 'switch', chosen: 1, old: 1 }), row(4)] });"
+            "process.stdout.write(JSON.stringify(calls));")
+        calls = run_page_js(code)
+        self.assertIn(["PERSEV", "left", "middle"], calls)
+        words = [c for c in calls if c[0].startswith("F:")]
+        self.assertEqual(len(words), 6)
+        self.assertEqual({(a, b) for _, a, b in words}, {("center", "middle")})
+
     def test_drawing_writes_only_through_t_and_shows_the_log(self):
         self.assertNotIn("fillText(", page_function("drawRuleFeature"))                       # znaky bran jen kresbou
         body = rule_body()

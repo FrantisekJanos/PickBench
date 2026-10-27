@@ -2019,10 +2019,10 @@ const rule = {
   },
   drawItems(g) {                                           // brána: znak nahoře, pod ním jeho slovo; po průjezdu se ukáže správná brána
     const hw = LW * 0.42, rad = Math.min(LW * 0.2, 10);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';     // v každé řadě znovu: drawRing předchozí řady (perseverace) zarovnání vrací
       r.order.forEach((f, lane) => {
         const x = (lane + 0.5) * LW;
         ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
