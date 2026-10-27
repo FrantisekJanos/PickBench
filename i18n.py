@@ -385,6 +385,8 @@ TEXTS = {
                                "en": "Horizon-Labs: no Czech customer support row with 2–10 labels — the source changed its content."},
     "fetch.err.cfpb.missing": {"cs": "CFPB: po {pages} stránkách chybí stížnosti tříd {missing}.",
                                "en": "CFPB: after {pages} {pages|page|pages}, complaints of these classes are missing: {missing}."},
+    "fetch.err.tobi.missing": {"cs": "Tobi-Bueck: fronta {queue} má jen {n} {n|použitelný anglický tiket|použitelné anglické tikety|použitelných anglických tiketů}, chce se {want}.",
+                               "en": "Tobi-Bueck: the queue {queue} has only {n} usable English {n|ticket|tickets}, {want} are needed."},
     # Řádky běhu: {name} = jméno sady z příkazové řádky, {path} = cesta souboru, {error} = věta chyby nebo hláška systému, jak přišla.
     "fetch.err.write": {"cs": "{name}: soubor nejde zapsat ({error})", "en": "{name}: fetch_datasets.py cannot write the file ({error})"},
     "fetch.err.interrupted": {"cs": "Přerušeno.", "en": "Interrupted."},
@@ -453,6 +455,16 @@ TEXTS = {
               "with the characters XXXX. Origin of the texts: a copy of the database on Hugging Face ({mirror}), downloaded from the agency "
               "in February 2024, CC0 according to the card of the copy; the agency itself does not release the complaint texts through its API today. "
               "fetch_datasets.py downloaded the sample from the copy on {today}."},
+    # {max_chars} = nejvyšší délka textu tiketu; {scope}, {today} jako u ostatních veřejných sad.
+    "fetch.about.tobiSupport": {
+        "cs": "Tobi-Bueck/customer-support-tickets (Hugging Face): tikety zákaznické podpory, které podle stránky sady vygeneroval "
+              "jazykový model; anglické tikety deseti nejčastějších front, úkolem je poznat z předmětu a textu tiketu frontu, "
+              "která ho má vyřídit. Text je zkrácený nejvýš na {max_chars} znaků. Licence CC-BY-NC-4.0: jen nekomerční použití, "
+              "soubor se nepřibaluje ani nesdílí. Rozsah: {scope}; staženo {today}.",
+        "en": "Tobi-Bueck/customer-support-tickets (Hugging Face): customer support tickets that, according to the dataset page, "
+              "a language model generated; English tickets of the ten most frequent queues, and the task is to recognize from the subject "
+              "and the text of the ticket the queue that should handle it. The text is shortened to at most {max_chars} characters. "
+              "License CC-BY-NC-4.0: non-commercial use only, so do not ship or share the file. Scope: {scope}; downloaded {today}."},
     # providers.py. Věty chyb hostovaného modelu stojí za popiskem poskytovatele („Jev 401: …“); popisky Jev, Cloudflare a Test jsou vlastní jména
     # a nepřekládají se, prov.label je náhradní popisek modelu bez poskytovatele. Žádná věta nenese klíč: cizí text ({body}, {fault}, {errors})
     # do ní jde až vyčištěný (providers.scrub) a zkrácený. Částka má znak dolaru česky za číslem, anglicky před ním, jako ve stránce;

@@ -177,7 +177,8 @@ class Texts(unittest.TestCase):
                  "cfpb": ("CFPB", "Consumer Complaint Database", "Hugging Face", "XXXX", "CC0"),
                  "clinc150": ("CLINC150", "Larson et al.", "Out-of-Scope Prediction", "oos", "data_full.json", "oos_test"),
                  "horizonCs": ("Horizon-Labs multilingual-zeroshot-synthetic", "Qwen", "Czech", "tax_short"),
-                 "massive": ("MASSIVE 1.1", "Amazon", "FitzGerald et al.", "en-US", "partition test", "SLURP", "Bastianelli et al.", "Nimble")}
+                 "massive": ("MASSIVE 1.1", "Amazon", "FitzGerald et al.", "en-US", "partition test", "SLURP", "Bastianelli et al.", "Nimble"),
+                 "tobiSupport": ("Tobi-Bueck/customer-support-tickets", "Hugging Face", "CC-BY-NC-4.0")}
         self.assertEqual(sorted(key for key in i18n.TEXTS if key.startswith("fetch.about.")), sorted("fetch.about." + name for name in names))
         for name, kept in names.items():
             key = "fetch.about." + name
@@ -188,7 +189,7 @@ class Texts(unittest.TestCase):
                 self.assertTrue(text.endswith(" {today}."), key)              # datum stažení je součást věty, ne slepený dovětek
                 for word in kept:
                     self.assertIn(word, text, key)
-        for name in ("banking77", "clinc150", "horizonCs", "massive"):       # veřejné sady: rozsah (celá testovací část, nebo vzorek) stojí ve větě před datem
+        for name in ("banking77", "clinc150", "horizonCs", "massive", "tobiSupport"):      # veřejné sady: rozsah (celá testovací část, nebo vzorek) stojí ve větě před datem
             self.assertTrue(i18n.TEXTS["fetch.about." + name]["cs"].endswith(" Rozsah: {scope}; staženo {today}."), name)
             self.assertTrue(i18n.TEXTS["fetch.about." + name]["en"].endswith(" Scope: {scope}; downloaded {today}."), name)
 

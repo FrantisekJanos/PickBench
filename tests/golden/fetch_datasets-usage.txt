@@ -14,9 +14,12 @@ Sady:
   cfpb        stížnost → finanční produkt, 6 tříd (CFPB, CC0); vždy vzorek --per-class K z každé třídy (výchozí 50),
               ukládá se jako sada e-mailů do datasets/cfpb-complaints-<počet>.json; --n a --full se ho netýkají;
               texty jsou z kopie databáze na Hugging Face (BEE-spoke-data/consumer-finance-complaints, únor 2024)
-  all         všechny sady výše
+  tobi-support  tiket zákaznické podpory → jedna z 10 front (Tobi-Bueck/customer-support-tickets, CC-BY-NC-4.0: jen
+              nekomerčně), anglické tikety, texty psal jazykový model; vždy vzorek --per-class K z každé fronty (výchozí 50),
+              ukládá se do datasets/public/tobi-support-<počet>.json; --n a --full se ho netýkají; sada se nepřibaluje
+  all         všechny sady výše kromě tobi-support (nekomerční licence, stahuje se jen výslovně)
 
-horizon-cs a cfpb se čtou po stovkách řádků ze služby datasets-server.huggingface.co, která počet dotazů omezuje
+horizon-cs, cfpb a tobi-support se čtou po stovkách řádků ze služby datasets-server.huggingface.co, která počet dotazů omezuje
 (po HTTP 429 se čeká minuty). Když služba zrovna neumí filtrovat podle jazyka, čte horizon-cs náhodné stránky
 celé sady, nejvýš 400 — trvá to až hodinu a úloh je pak jen kolem stovky.
 

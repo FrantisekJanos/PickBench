@@ -14,9 +14,12 @@ Sady:
   cfpb        stížnost → finanční produkt, 6 tříd (CFPB, CC0); vždy vzorek --per-class K z každé třídy (výchozí 50),
               ukládá se jako sada e-mailů do datasets/cfpb-complaints-<počet>.json; --n a --full se ho netýkají;
               texty jsou z kopie databáze na Hugging Face (BEE-spoke-data/consumer-finance-complaints, únor 2024)
-  all         všechny sady výše
+  tobi-support  tiket zákaznické podpory → jedna z 10 front (Tobi-Bueck/customer-support-tickets, CC-BY-NC-4.0: jen
+              nekomerčně), anglické tikety, texty psal jazykový model; vždy vzorek --per-class K z každé fronty (výchozí 50),
+              ukládá se do datasets/public/tobi-support-<počet>.json; --n a --full se ho netýkají; sada se nepřibaluje
+  all         všechny sady výše kromě tobi-support (nekomerční licence, stahuje se jen výslovně)
 
-horizon-cs a cfpb se čtou po stovkách řádků ze služby datasets-server.huggingface.co, která počet dotazů omezuje
+horizon-cs, cfpb a tobi-support se čtou po stovkách řádků ze služby datasets-server.huggingface.co, která počet dotazů omezuje
 (po HTTP 429 se čeká minuty). Když služba zrovna neumí filtrovat podle jazyka, čte horizon-cs náhodné stránky
 celé sady, nejvýš 400 — trvá to až hodinu a úloh je pak jen kolem stovky.
 
@@ -43,9 +46,12 @@ Datasets:
   cfpb        a complaint → a financial product, 6 classes (CFPB, CC0); always a sample of --per-class K from every class (default 50),
               fetch_datasets.py saves it as an e-mail dataset to datasets/cfpb-complaints-<count>.json; --n and --full do not apply to it;
               the texts come from a copy of the database on Hugging Face (BEE-spoke-data/consumer-finance-complaints, February 2024)
-  all         all the datasets above
+  tobi-support  a customer support ticket → one of 10 queues (Tobi-Bueck/customer-support-tickets, CC-BY-NC-4.0: non-commercial
+              use only), English tickets written by a language model; always a sample of --per-class K from every queue (default 50),
+              fetch_datasets.py saves it to datasets/public/tobi-support-<count>.json; --n and --full do not apply to it; it is not shipped
+  all         all the datasets above except tobi-support (non-commercial license, downloaded only when named)
 
-fetch_datasets.py reads horizon-cs and cfpb a hundred rows at a time from the datasets-server.huggingface.co service, which limits the number of requests
+fetch_datasets.py reads horizon-cs, cfpb and tobi-support a hundred rows at a time from the datasets-server.huggingface.co service, which limits the number of requests
 (after HTTP 429 fetch_datasets.py waits several minutes). If the service cannot filter by language at the moment, horizon-cs reads random pages
 of the whole dataset, at most 400 — that takes up to an hour and then gives only about a hundred tasks.
 
@@ -520,7 +526,52 @@ def cfpb(get, a, out, today):
     return f"datasets/cfpb-complaints-{len(emails)}.json", doc
 
 
-SETS = {"banking77": banking77, "clinc150": clinc150, "massive": massive, "horizon-cs": horizon_cs, "cfpb": cfpb}
+# ---------- Tobi-Bueck: tikety zákaznické podpory (CC-BY-NC-4.0: jen nekomerčně, nepřibaluje se) ----------
+TOBI = "Tobi-Bueck/customer-support-tickets"
+TOBI_QUEUES = ("Technical Support", "Product Support", "Customer Service", "IT Support", "Billing and Payments",      # deset nejčastějších front
+               "Returns and Exchanges", "Service Outages and Maintenance", "Sales and Pre-Sales", "Human Resources", "General Inquiry")
+TOBI_MAX_CHARS, TOBI_MIN_CHARS = 1200, 40
+TOBI_PAGES = 2                                       # stránek na frontu: stránka 0 (zjistí počet) a jedna další v pořadí daném semínkem
+
+
+def tobi_support(get, a, out, today):
+    """Anglické tikety deseti front, z každé --per-class K (filtr služby datasets-server). Veřejná sada; --n a --full se jí netýkají.
+
+    Text = předmět a tělo; zdroj nese konce řádků jako doslovné \\n, ty se nahradí mezerou. Kratší než TOBI_MIN_CHARS
+    a opakovaný text se vynechá. Fronta s méně použitelnými tikety než K skončí větou a soubor nevznikne."""
+    rng, items, pool, seen = random.Random(a.seed), [], 0, set()
+    for queue in TOBI_QUEUES:
+        where = f"\"language\"='en' AND \"queue\"='{queue}'"
+        rows, total = hf_page(get, "filter", TOBI, "default", "train", 0, where)
+        pool += total
+        pages = list(range(1, (total + HF_PAGE - 1) // HF_PAGE))
+        rng.shuffle(pages)
+        for page in pages[:TOBI_PAGES - 1]:
+            rows = rows + hf_page(get, "filter", TOBI, "default", "train", page * HF_PAGE, where)[0]
+        found = []
+        for row in rows:
+            subject, body = field(row, "subject", "Tobi-Bueck"), field(row, "body", "Tobi-Bueck")
+            parts = [part.replace("\\n", " ") for part in (subject, body) if isinstance(part, str) and part.strip()]
+            text = clip(" ".join(parts), TOBI_MAX_CHARS)
+            if len(text) < TOBI_MIN_CHARS or text in seen:
+                continue
+            seen.add(text)
+            found.append({"text": text, "label": slug(queue)})
+        if len(found) < a.per_class:
+            raise FetchError(i18n.t("fetch.err.tobi.missing", queue=queue, n=len(found), want=a.per_class))
+        items += rng.sample(found, a.per_class)
+    rng.shuffle(items)
+    sample = argparse.Namespace(**{**vars(a), "full": False})      # --full se sady netýká: rozsah je vždy vzorek
+    about, about_en = in_both(lambda: i18n.t("fetch.about.tobiSupport", max_chars=TOBI_MAX_CHARS, scope=scope(items, pool, sample), today=today))
+    return f"{PUBLIC}/tobi-support-{len(items)}.json", public_doc(
+        "Tobi-Bueck tikety", about, about_en, f"https://huggingface.co/datasets/{TOBI}",
+        "CC-BY-NC-4.0 (Creative Commons Attribution-NonCommercial 4.0)",
+        "Route the customer support ticket to the queue that should handle it. Choose exactly one queue.",
+        items, pool, sample, today, labels=[option(q) for q in TOBI_QUEUES])
+
+
+SETS = {"banking77": banking77, "clinc150": clinc150, "massive": massive, "horizon-cs": horizon_cs, "cfpb": cfpb, "tobi-support": tobi_support}
+ALL = ("banking77", "clinc150", "massive", "horizon-cs", "cfpb")      # „all“: bez tobi-support (nekomerční licence, jen výslovně)
 
 
 # ---------- příkazová řádka ----------
@@ -532,7 +583,7 @@ def parse_args(argv):
     p.add_argument("--per-class", type=int, default=50)
     p.add_argument("rest", nargs="*")
     a = p.parse_intermixed_args(argv)
-    a.names = list(SETS) if "all" in a.rest else a.rest
+    a.names = list(ALL) if "all" in a.rest else a.rest
     return a
 
 

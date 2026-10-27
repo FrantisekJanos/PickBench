@@ -14,9 +14,12 @@ Datasets:
   cfpb        a complaint → a financial product, 6 classes (CFPB, CC0); always a sample of --per-class K from every class (default 50),
               fetch_datasets.py saves it as an e-mail dataset to datasets/cfpb-complaints-<count>.json; --n and --full do not apply to it;
               the texts come from a copy of the database on Hugging Face (BEE-spoke-data/consumer-finance-complaints, February 2024)
-  all         all the datasets above
+  tobi-support  a customer support ticket → one of 10 queues (Tobi-Bueck/customer-support-tickets, CC-BY-NC-4.0: non-commercial
+              use only), English tickets written by a language model; always a sample of --per-class K from every queue (default 50),
+              fetch_datasets.py saves it to datasets/public/tobi-support-<count>.json; --n and --full do not apply to it; it is not shipped
+  all         all the datasets above except tobi-support (non-commercial license, downloaded only when named)
 
-fetch_datasets.py reads horizon-cs and cfpb a hundred rows at a time from the datasets-server.huggingface.co service, which limits the number of requests
+fetch_datasets.py reads horizon-cs, cfpb and tobi-support a hundred rows at a time from the datasets-server.huggingface.co service, which limits the number of requests
 (after HTTP 429 fetch_datasets.py waits several minutes). If the service cannot filter by language at the moment, horizon-cs reads random pages
 of the whole dataset, at most 400 — that takes up to an hour and then gives only about a hundred tasks.
 
