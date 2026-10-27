@@ -3290,6 +3290,21 @@ def print_diff(r):
     print(" " * 20 + i18n.t("bench.diff.line", plain=plain, repeat=repeat, **r["errors"]), flush=True)
 
 
+def pattern_note(r):
+    """Poznámka za řádkem modelu: přesnost podle periody cyklu soupeře."""
+    return class_note(r["by_period"], {cls: i18n.t("bench.pattern.period", p=cls[1]) for cls in PATTERN_CLASSES})
+
+
+def print_pattern(r):
+    """Řádky pod řádkem modelu: v podobě counter výsledek (výhry, remízy, prohry, neplatné), pak druhy chyb."""
+    if "outcome" in r:
+        print(" " * 20 + i18n.t("bench.pattern.outcome", **r["outcome"]), flush=True)
+    if "counter_given" in r["errors"]:
+        print(" " * 20 + i18n.t("bench.pattern.errorsPredict", **r["errors"]), flush=True)
+    else:
+        print(" " * 20 + i18n.t("bench.pattern.errors", **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

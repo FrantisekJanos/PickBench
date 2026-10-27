@@ -381,5 +381,37 @@ class RunPattern(unittest.TestCase):
                     self.assertEqual(r["outcome"]["win"], 30)
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_period(self):
+        r = {"by_period": {"p1": [9, 10], "p2": [5, 11], "p3": [4, 12], "p4": [3, 9]}}
+        for lang, want in (("cs", "(perioda 1 9/10, perioda 2 5/11, perioda 3 4/12, perioda 4 3/9)"),
+                           ("en", "(period 1 9/10, period 2 5/11, period 3 4/12, period 4 3/9)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.pattern_note(r), want)
+
+    def test_lines_in_both_languages(self):
+        pad = " " * 20
+        r = {"outcome": {"win": 20, "draw": 9, "loss": 10, "invalid": 1},
+             "errors": {"last": 4, "frequent": 3, "period": 5, "transition": 1, "other": 6, "invalid": 1}}
+        self.assertEqual(printed("cs", bench.print_pattern, r),
+                         [pad + "výsledek: výhra 20, remíza 9, prohra 10, neplatné 1",
+                          pad + "chyby: opakuje poslední 4, nejčastější tah 3, špatná perioda 5, přechod 1, jiné 6, neplatné 1"])
+        self.assertEqual(printed("en", bench.print_pattern, r),
+                         [pad + "outcome: win 20, draw 9, loss 10, invalid 1",
+                          pad + "errors: repeats the last move 4, most frequent move 3, wrong period 5, transition 1, other 6, invalid 1"])
+        r = {"errors": {"counter_given": 2, "last": 4, "frequent": 3, "period": 5, "transition": 1, "other": 6, "invalid": 1}}
+        self.assertEqual(printed("cs", bench.print_pattern, r),
+                         [pad + "chyby: protitah místo předpovědi 2, opakuje poslední 4, nejčastější tah 3, špatná perioda 5, přechod 1, jiné 6, neplatné 1"])
+        self.assertEqual(printed("en", bench.print_pattern, r),
+                         [pad + "errors: counter instead of prediction 2, repeats the last move 4, most frequent move 3, wrong period 5, transition 1, other 6, invalid 1"])
+
+    def test_lines_with_empty_classes(self):
+        r = {"by_period": {"p1": [1, 1], "p2": [0, 0], "p3": [0, 0], "p4": [0, 0]}, "outcome": {"win": 1, "draw": 0, "loss": 0, "invalid": 0},
+             "errors": {"last": 0, "frequent": 0, "period": 0, "transition": 0, "other": 0, "invalid": 0}}
+        with i18n.process("en"):
+            self.assertEqual(bench.pattern_note(r), "(period 1 1/1, period 2 0/0, period 3 0/0, period 4 0/0)")
+        self.assertEqual(len(printed("en", bench.print_pattern, r)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

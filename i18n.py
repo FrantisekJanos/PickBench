@@ -237,6 +237,15 @@ TEXTS = {
     "bench.diff.wordnew": {"cs": "jiné slovo", "en": "other word"},
     "bench.diff.line": {"cs": "řady bez opakování {plain}, s opakováním {repeat}; chyby: stejná hodnota v jiném pruhu {twin}, sousední pruh {neighbor}, jiné {other}, neplatné {invalid}",
                         "en": "rows without repeats {plain}, with repeats {repeat}; errors: same value in another lane {twin}, next lane {neighbor}, other {other}, invalid {invalid}"},
+    # Vzor soupeře (--pattern): perioda v poznámce za řádkem modelu ({p} = 1 až 4), pod ním výsledek (jen podoba counter)
+    # a řádek chyb (počty); v podobě predict má řádek chyb navíc protitah místo předpovědi.
+    "bench.pattern.period": {"cs": "perioda {p}", "en": "period {p}"},
+    "bench.pattern.outcome": {"cs": "výsledek: výhra {win}, remíza {draw}, prohra {loss}, neplatné {invalid}",
+                              "en": "outcome: win {win}, draw {draw}, loss {loss}, invalid {invalid}"},
+    "bench.pattern.errors": {"cs": "chyby: opakuje poslední {last}, nejčastější tah {frequent}, špatná perioda {period}, přechod {transition}, jiné {other}, neplatné {invalid}",
+                             "en": "errors: repeats the last move {last}, most frequent move {frequent}, wrong period {period}, transition {transition}, other {other}, invalid {invalid}"},
+    "bench.pattern.errorsPredict": {"cs": "chyby: protitah místo předpovědi {counter_given}, opakuje poslední {last}, nejčastější tah {frequent}, špatná perioda {period}, přechod {transition}, jiné {other}, neplatné {invalid}",
+                                    "en": "errors: counter instead of prediction {counter_given}, repeats the last move {last}, most frequent move {frequent}, wrong period {period}, transition {transition}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
