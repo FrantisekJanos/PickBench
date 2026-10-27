@@ -1311,6 +1311,81 @@ def queue_errors(cases, choices, keys, weighted=False):
     return counts
 
 
+# ---------- scénář: sázka na bránu ----------
+# Očekaná výplata brány je ev = odměna * šance v procentech, počítá se v celých číslech (bez dělení stem).
+BET_LEVELS = ("same", "round", "general")
+BET_REWARDS = range(20, 400, 10)
+BET_SAME_CHANCES = range(20, 100, 10)
+BET_CHANCES = range(10, 100, 5)
+BET_MARGIN = 105                                     # správná brána má mít aspoň o 5 % vyšší ev než druhá
+BET_SHORTCUT_SHARE = 1 / 3
+BET_TRIES = 10000
+
+
+def bet_top(values):
+    """Index jediného maxima, při shodě na maximu None."""
+    best = max(values)
+    return values.index(best) if values.count(best) == 1 else None
+
+
+def bet_second(rewards):
+    """Brána s druhou nejvyšší odměnou; shoda → dřívější brána (řazení je stabilní)."""
+    return sorted(range(len(rewards)), key=lambda i: -rewards[i])[1]
+
+
+def bet_case(rng, gates, level):
+    """Vrací (odměny, šance, správná brána, úroveň, jediná brána s nejvyšší odměnou nebo None, totéž pro šanci).
+
+    Úrovně same a round podle specu, round se staví přímo (jedna brána 100 %, ostatní 50 %). V general se předem losuje,
+    jestli má být správná brána s nejvyšší odměnou (BET_SHORTCUT_SHARE), totéž pro nejvyšší šanci a při K >= 4 pro druhou
+    nejvyšší odměnu (polovina ze zbylých, celkem 1/3); úloha se přijme, jen když se zkratky trefují přesně tak (vzor lookahead_case).
+    Při K = 3 se druhá odměna nehlídá: „nejvyšší odměna i druhá netrefí“ tam znamená nejnižší odměnu, ta vyhraje jen s nejvyšší šancí."""
+    if not 3 <= gates <= 8 or level not in BET_LEVELS:
+        raise RuntimeError(f"bet_case: unsupported task for {gates} gates and level {level}")
+    want = None
+    if level == "general":
+        top = rng.random() < BET_SHORTCUT_SHARE
+        chance = rng.random() < BET_SHORTCUT_SHARE
+        second = (not top and rng.random() < 1 / 2) if gates >= 4 else None
+        want = (top, chance, second)
+    for _ in range(BET_TRIES):
+        if level == "same":
+            chances = [rng.choice(BET_SAME_CHANCES)] * gates
+        elif level == "round":
+            chances = [50] * gates
+            chances[rng.randrange(gates)] = 100
+        else:
+            chances = [rng.choice(BET_CHANCES) for _ in range(gates)]
+        rewards = [rng.choice(BET_REWARDS) for _ in range(gates)]
+        ev = [r * c for r, c in zip(rewards, chances)]
+        order = sorted(range(gates), key=ev.__getitem__, reverse=True)
+        answer = order[0]
+        if 100 * ev[answer] < BET_MARGIN * ev[order[1]]:
+            continue
+        top_reward, top_chance = bet_top(rewards), bet_top(chances)
+        if level == "round" and top_chance == answer:
+            continue
+        if level == "general":
+            if top_reward is None or top_chance is None:
+                continue
+            if (top_reward == answer) != want[0] or (top_chance == answer) != want[1]:
+                continue
+            if want[2] is not None and (bet_second(rewards) == answer) != want[2]:
+                continue
+        break
+    else:
+        raise RuntimeError(f"bet_case: no {level} task for {gates} gates after {BET_TRIES} tries")
+    if level in ("same", "round") and top_reward != answer:
+        raise RuntimeError("bet_case: generated task breaks its guarantees")
+    return tuple(rewards), tuple(chances), answer, level, top_reward, top_chance
+
+
+def bet_cases(n, gates=4, seed=1):
+    """n úloh ze semínka; úroveň se losuje rovnoměrně na každou úlohu."""
+    rng = random.Random(seed)
+    return [bet_case(rng, gates, rng.choice(BET_LEVELS)) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
