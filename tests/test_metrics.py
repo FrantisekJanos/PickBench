@@ -91,6 +91,7 @@ class Barrier(unittest.TestCase):                   # AUROC a nejlepší práh o
         self.assertEqual(metrics.best_threshold([0.9, 0.6, 0.4, 0.2], [True, True, True, False]), (0.4, 1))
         self.assertEqual(metrics.best_threshold([0.7, 0.3], [True, False]), (0.5, 1))                  # shoda: nejblíž 0,5
         self.assertEqual(metrics.best_threshold([0.8, 0.6], [True, False]), (0.8, 1))
+        self.assertIsNone(metrics.best_threshold([], []))                                     # bez úloh: jako bestThreshold ve stránce (null)
         self.assertEqual(metrics.best_threshold([0.25, 0.75, 0.625, 0.125], [True, True, False, False]), (0.25, 0.75))   # stejně daleko: nižší
         self.assertEqual(metrics.best_threshold([None, 0.9], [True, True]), (0.5, 0.5))                 # neplatná je chyba; jen úlohy jeď
         self.assertEqual(metrics.best_threshold([None, None], [True, False]), (0.5, 0))

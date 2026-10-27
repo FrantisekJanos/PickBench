@@ -71,9 +71,11 @@ def auroc(probs, truths):
 def best_threshold(probs, truths):
     """Nejlepší práh t z vrácených hodnot noul a 0,5 podle vyvážené přesnosti rozhodnutí noul >= t: průměr podílu
     správných na úlohách jeď a na úlohách stůj (neplatná = chyba; chybí-li úlohy jedné třídy, jen podíl té druhé).
-    Při shodě vyhrává práh nejblíž 0,5, potom nižší. Vrací (t, vyvážená přesnost). Zlomky, aby shoda byla přesná."""
+    Při shodě vyhrává práh nejblíž 0,5, potom nižší. Vrací (t, vyvážená přesnost), bez úloh None. Zlomky, aby shoda byla přesná."""
     groups = [(want, [p for p, go in zip(probs, truths) if go == want]) for want in (True, False)]
     groups = [(want, ps) for want, ps in groups if ps]
+    if not groups:                                   # bez úloh není co hledat (stránka vrací null)
+        return None
 
     def balanced(t):
         return sum(Fraction(sum(p is not None and (p >= t) == want for p in ps), len(ps)) for want, ps in groups) / len(groups)
