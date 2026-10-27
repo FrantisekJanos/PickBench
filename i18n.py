@@ -114,6 +114,11 @@ TEXTS = {
     # Sázka na bránu: {lanes} = počet bran (3–8).
     "bench.intro.bet": {"cs": "{n} {n|úloha|úlohy|úloh} se sázkou na bránu, {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                         "en": "{n} {n|task|tasks} with a bet on a gate, {lanes} gates, the same for all models"},
+    # Co se změnilo: úvodní věta jmenuje podobu stavu (slovníky / seznamy); úlohy jsou v obou podobách stejné.
+    "bench.intro.diff": {"cs": "{n} {n|úloha|úlohy|úloh} se dvěma snímky řady (zápis slovníky), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
+                         "en": "{n} {n|task|tasks} with two snapshots of a row (written as objects), {lanes} lanes, the same for all models"},
+    "bench.intro.diffLists": {"cs": "{n} {n|úloha|úlohy|úloh} se dvěma snímky řady (zápis seznamy), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
+                              "en": "{n} {n|task|tasks} with two snapshots of a row (written as lists), {lanes} lanes, the same for all models"},
     # Nejkratší fronta: úvodní věta říká, jestli se fronty počítají bez vah, nebo vážené (--weighted, jiné úlohy).
     "bench.intro.queue": {"cs": "{n} {n|úloha|úlohy|úloh} u mýtné brány (fronty bez vah), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
                           "en": "{n} {n|task|tasks} at a toll gate (unweighted queues), {lanes} lanes, the same for all models"},
@@ -127,6 +132,9 @@ TEXTS = {
                               "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows sorted by ZIP), the same for all models"},
     "bench.intro.timetableShuffled": {"cs": "{n} {n|úloha|úlohy|úloh} se směrováním zásilek podle tabulky ({rows} řádků, řádky zamíchané); sada je pro všechny modely stejná",
                                       "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows shuffled), the same for all models"},
+    # Rušivá nápověda: {n} = počet řad čísel (každá jde do modelu třikrát), {lanes} = počet bran (2–8).
+    "bench.intro.hint": {"cs": "{n} {n|řada|řady|řad} čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
+                         "en": "{n} {n|row|rows} of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), {lanes} gates, the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -211,6 +219,24 @@ TEXTS = {
                              "en": "position: inside {inner}, near a boundary {near}, on a boundary {bound}; exception: none {none}, applies {applies}, does not apply {decoy}"},
     "bench.timetable.errors": {"cs": "chyby: sousední řádek {neighbor}, výjimka přehlédnutá {missed}, výjimka navíc {misapplied}, jiné {other}, neplatné {invalid}",
                                "en": "errors: neighboring row {neighbor}, exception missed {missed}, exception wrongly applied {misapplied}, other {other}, invalid {invalid}"},
+    # Rušivá nápověda (--hint): jména podmínek v poznámce za řádkem modelu a dva řádky pod ním ({help}, {hurt}, {pull} = hotové
+    # procentní body se znaménkem „+12“, ostatní = počty; {list} = „těsné 3/30, …“ se jmény tříd z bench.gap.*).
+    "bench.hint.none": {"cs": "bez nápovědy", "en": "no hint"},
+    "bench.hint.congruent": {"cs": "shodná", "en": "congruent"},
+    "bench.hint.incongruent": {"cs": "konfliktní", "en": "incongruent"},
+    "bench.hint.line": {"cs": "nápověda: pomoc {help} pb, škoda {hurt} pb, tah {pull} pb; konfliktní: chyby na nápovědu {hint}, jiné {other}, "
+                              "neplatné {invalid}; převráceno {flipped}/{pairs}",
+                        "en": "hint: help {help} pp, harm {hurt} pp, pull {pull} pp; incongruent: errors on the hint {hint}, other {other}, "
+                              "invalid {invalid}; flipped {flipped}/{pairs}"},
+    "bench.hint.byGap": {"cs": "konfliktní podle rozdílu: {list}", "en": "incongruent by gap: {list}"},
+    # Co se změnilo (--diff): jména tříd v poznámce za řádkem modelu a řádek pod ním ({plain}, {repeat} = „správně/celkem“,
+    # ostatní = počty chybných odpovědí).
+    "bench.diff.num1": {"cs": "číslo o 1", "en": "number off by 1"},
+    "bench.diff.numnew": {"cs": "jiné číslo", "en": "other number"},
+    "bench.diff.word1": {"cs": "slovo o písmeno", "en": "word off by a letter"},
+    "bench.diff.wordnew": {"cs": "jiné slovo", "en": "other word"},
+    "bench.diff.line": {"cs": "řady bez opakování {plain}, s opakováním {repeat}; chyby: stejná hodnota v jiném pruhu {twin}, sousední pruh {neighbor}, jiné {other}, neplatné {invalid}",
+                        "en": "rows without repeats {plain}, with repeats {repeat}; errors: same value in another lane {twin}, next lane {neighbor}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -248,6 +274,9 @@ TEXTS = {
     "bench.err.formRule": {"cs": "Volby --matched-by a --labeled jdou jen s --rule.",
                            "en": "The --matched-by and --labeled options work only with --rule."},
     "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
+    "bench.err.formDiff": {"cs": "Volby --dicts a --lists jdou jen s --diff.", "en": "The --dicts and --lists options work only with --diff."},
+    "bench.err.hintInject": {"cs": "Volba --inject se s --hint nekombinuje.", "en": "The --inject option cannot be combined with --hint."},
+    "bench.err.formCruise": {"cs": "Volby --as-choice a --as-score jdou jen s --cruise.", "en": "The --as-choice and --as-score options work only with --cruise."},
     "bench.err.lanesCruise": {"cs": "Volba --lanes se s --cruise nekombinuje.", "en": "The --lanes option cannot be combined with --cruise."},
     "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
                                 "en": "The --sorted and --shuffled options work only with --timetable."},

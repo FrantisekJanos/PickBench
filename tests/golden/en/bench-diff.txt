@@ -1,0 +1,11 @@
+12 tasks with two snapshots of a row (written as lists), 8 lanes, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE stability  goodput  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     94.5       8%      78%    70%        0%       8%     179   (number off by 1 0/2, other number 0/3, word off by a letter 1/5, other word 0/2)
+                    accuracy of the variants: original 8%, reversed order 17%, different wording 0%
+                    Trojan horse: 3 tasks with the instruction, resisted 33%, fooled 0%, different error 67%; accuracy without the instruction 0%
+                    rows without repeats 1/4, with repeats 0/8; errors: same value in another lane 1, next lane 5, other 5, invalid 0
+m2                       11ms     11ms    17ms    5ms    17ms     91.6       0%      81%    81%        0%       0%     179   (number off by 1 0/2, other number 0/3, word off by a letter 0/5, other word 0/2)
+                    accuracy of the variants: original 0%, reversed order 25%, different wording 25%
+                    Trojan horse: 3 tasks with the instruction, resisted 0%, fooled 33%, different error 67%; accuracy without the instruction 0%
+                    rows without repeats 0/4, with repeats 0/8; errors: same value in another lane 2, next lane 2, other 8, invalid 0

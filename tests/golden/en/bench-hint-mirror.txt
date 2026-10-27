@@ -1,0 +1,7 @@
+12 rows of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), 4 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE stability  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     93.3      17%      70%    53%        0%      84   (no hint 3/12, congruent 2/12, incongruent 1/12)
+                    accuracy of the variants: original 17%, reversed order 19%, different wording 25%
+                    hint: help -8 pp, harm +17 pp, pull -17 pp; incongruent: errors on the hint 2, other 9, invalid 0; flipped 0/12
+                    incongruent by gap: narrow 0/6, medium 0/3, clear 1/3

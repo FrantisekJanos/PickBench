@@ -1,0 +1,9 @@
+12 řad čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), 3 brány; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     89.8      25%      76%    51%       6%      82   (bez nápovědy 4/12, shodná 3/12, konfliktní 2/12)
+                    nápověda: pomoc -8 pb, škoda +17 pb, tah +42 pb; konfliktní: chyby na nápovědu 8, jiné 2, neplatné 0; převráceno 4/12
+                    konfliktní podle rozdílu: těsné 1/4, střední 0/3, jasné 1/5
+m2                       11ms     11ms    17ms    5ms    17ms     93.0      56%      74%    27%      28%      82   (bez nápovědy 5/12, shodná 6/12, konfliktní 9/12)
+                    nápověda: pomoc +8 pb, škoda -33 pb, tah -25 pb; konfliktní: chyby na nápovědu 1, jiné 2, neplatné 0; převráceno 1/12
+                    konfliktní podle rozdílu: těsné 3/4, střední 2/3, jasné 4/5
