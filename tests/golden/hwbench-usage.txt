@@ -23,6 +23,8 @@ Testy:
                (výchozí 1000). Stupeň, který limit nesplní nebo nedoběhne, je poslední.
   cache        stejný stav N× po sobě (výchozí 10) proti N pokaždé jiným stavům, 3 kola: medián prvního dotazu,
                p50 opakování, p50 jiných stavů a poměr stejný ÷ jiný (pod 1 = opakovaný stav je rychlejší)
+  repeat       20 stavů, každý N× (výchozí 10), po kolech: u kolika stavů byla volba pokaždé stejná, u kolika i jistota,
+               a největší rozptyl jistoty (opakovatelnost odpovědí)
 
 Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
 server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.

@@ -372,6 +372,47 @@ class Cache(unittest.TestCase):
         self.assertEqual(len(hwbench.measure(hwbench.parse_args(["cache", "m"]), "m", FakePost())[1][0]), 6)      # bez --n: 10 opakování
 
 
+def replying(replies):
+    """Náhrada post: odpovědi (volba, jistota) po řadě, i pro zahřívací dotaz; jistota None = pole chybí."""
+    it = iter(replies)
+
+    def post(model, payload):
+        choice, conf = next(it)
+        a = {"choice": choice} if conf is None else {"choice": choice, "confidence": conf}
+        return {"answers": {"target": a}}, 10.0
+    return post
+
+
+class Repeat(unittest.TestCase):
+    def test_every_state_is_asked_n_times_in_rounds(self):
+        post = FakePost()
+        r = hwbench.run_repeat("m", n=3, states=5, post=post)
+        states = [str(sorted(p["state"].items())) for p in post.calls[1:]]
+        self.assertEqual(len(states), 15)
+        self.assertEqual(states[:5], states[5:10])                     # kolo = každý stav jednou, pořád ve stejném pořadí
+        self.assertEqual(states[:5], states[10:])
+        self.assertEqual(len(set(states[:5])), 5)                      # stejný dotaz nikdy dvakrát po sobě
+        self.assertEqual((r["states"], r["n"], r["same_choice"], r["same_conf"], r["spread"]), (5, 3, 5, 5, 0.0))
+
+    def test_counts_states_with_a_different_answer(self):
+        post = replying([("lane_1", 0.5),                              # zahřátí
+                         ("lane_1", 0.9), ("lane_2", 0.8),             # kolo 1: stav 1, stav 2
+                         ("lane_1", 0.9), ("lane_3", 0.6)])            # kolo 2
+        r = hwbench.run_repeat("m", n=2, states=2, post=post)
+        self.assertEqual((r["same_choice"], r["same_conf"]), (1, 1))
+        self.assertAlmostEqual(r["spread"], 0.2)
+
+    def test_answers_without_a_confidence(self):
+        post = replying([("lane_1", None)] + [("lane_1", None)] * 4)
+        r = hwbench.run_repeat("m", n=2, states=2, post=post)
+        self.assertEqual((r["same_choice"], r["same_conf"]), (2, 0))   # stejná volba bez jistoty: jistota se za shodnou nepočítá
+        self.assertTrue(r["spread"] != r["spread"])                    # NaN
+
+    def test_row(self):
+        head, rows, csv_head, csv_rows, notes = hwbench.measure(hwbench.parse_args(["repeat", "m"]), "m", FakePost())
+        self.assertEqual((rows, csv_rows, notes), ([["m", 20, 10, "20/20", "20/20", "0.000"]], rows, []))
+
+
 class Cli(unittest.TestCase):
     def test_parse_args(self):
         a = hwbench.parse_args(["latency", "--n", "200", "tev1", "nimble"])
@@ -879,6 +920,8 @@ class Language(unittest.TestCase):
         "soak": (["model", "minuta", "N", "p50 ms", "p95 ms", "°C", "W", "MHz"], ["model", "minute", "N", "p50 ms", "p95 ms", "°C", "W", "MHz"]),
         "server": (["model", "tempo/s", "dosaženo/s", "p50 ms", "p99 ms", "včas"], ["model", "rate/s", "achieved/s", "p50 ms", "p99 ms", "in time"]),
         "cache": (["model", "N", "první ms", "stejný p50 ms", "jiný p50 ms", "poměr"], ["model", "N", "first ms", "same p50 ms", "fresh p50 ms", "ratio"]),
+        "repeat": (["model", "stavů", "N", "stejná volba", "stejná jistota", "rozptyl jistoty"],
+                   ["model", "states", "N", "same choice", "same confidence", "confidence spread"]),
     }
     SOAK_CSV = (["model", "čas s", "ms", "°C", "W", "MHz"], ["model", "time s", "ms", "°C", "W", "MHz"])
     SAMPLES = [(float(t), 50, 40.0, 1500) for t in range(0, 81, 5)]      # vzorky GPU přes celý běh testu soak s hodinami FakeClock(20.0)

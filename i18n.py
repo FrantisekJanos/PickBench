@@ -291,6 +291,11 @@ TEXTS = {
     "hw.col.sameP50": {"cs": "stejný p50 ms", "en": "same p50 ms"},
     "hw.col.freshP50": {"cs": "jiný p50 ms", "en": "fresh p50 ms"},
     "hw.col.ratio": {"cs": "poměr", "en": "ratio"},
+    # Test repeat: stavů, opakování N, stavy se stejnou volbou a se stejnou jistotou (k/stavů), největší rozptyl jistoty.
+    "hw.col.states": {"cs": "stavů", "en": "states"},
+    "hw.col.sameChoice": {"cs": "stejná volba", "en": "same choice"},
+    "hw.col.sameConf": {"cs": "stejná jistota", "en": "same confidence"},
+    "hw.col.confSpread": {"cs": "rozptyl jistoty", "en": "confidence spread"},
     # Buňky tabulky: stupeň, který server odmítl; podíl dotazů včas (česky s mezerou jako dosud, anglicky bez ní jako ve stránce).
     "hw.didNotFit": {"cs": "nevešlo se", "en": "did not fit"},
     "hw.pct": {"cs": "{value:.0f} %", "en": "{value:.0f}%"},

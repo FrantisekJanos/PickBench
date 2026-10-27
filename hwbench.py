@@ -23,6 +23,8 @@ Testy:
                (výchozí 1000). Stupeň, který limit nesplní nebo nedoběhne, je poslední.
   cache        stejný stav N× po sobě (výchozí 10) proti N pokaždé jiným stavům, 3 kola: medián prvního dotazu,
                p50 opakování, p50 jiných stavů a poměr stejný ÷ jiný (pod 1 = opakovaný stav je rychlejší)
+  repeat       20 stavů, každý N× (výchozí 10), po kolech: u kolika stavů byla volba pokaždé stejná, u kolika i jistota,
+               a největší rozptyl jistoty (opakovatelnost odpovědí)
 
 Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
 server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.
@@ -60,6 +62,8 @@ Tests:
                (default 1000). A level that misses the limit or does not finish is the last one.
   cache        the same state N times in a row (default 10) against N different states, 3 rounds: the median of the first request,
                p50 of the repeats, p50 of the different states and the ratio same ÷ different (below 1 = the repeated state is faster)
+  repeat       20 states, each N times (default 10), in rounds: for how many states the choice was the same every time, for how many
+               also the confidence, and the largest spread of the confidence (repeatability of the answers)
 
 The names follow MLPerf: latency = SingleStream (reports p90), concurrency = Offline (the highest throughput),
 server = Server. This is a measurement in the style of MLPerf, not a result submitted under the MLCommons rules.
@@ -89,10 +93,11 @@ import gpu
 import i18n
 import providers
 
-TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server", "cache")
+TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server", "cache", "repeat")
 SERVER_SHARES = (0.25, 0.5, 0.7, 0.85, 1.0, 1.25, 1.5, 2.0)      # stupně tempa testu server jako podíl sériové rychlosti (1000 ÷ medián latence)
 SERVER_SLACK, SERVER_DRAIN = 30.0, 120.0                         # s: rezerva stupně nad poslední příchod; čekání na dotazy, které po stupni ještě běží
 CACHE_ROUNDS = 3                                                 # test cache: kola (nový stav N× po sobě, pak N jiných stavů)
+REPEAT_STATES = 20                                               # test repeat: počet stavů, každý se ptá N× po kolech
 NAN = float("nan")
 KEYS = bench.lane_keys(3)
 QUESTION = bench.lane_question(3)
@@ -343,6 +348,29 @@ def run_cache(model, n=10, rounds=CACHE_ROUNDS, post=None):
             "ratio": s / f if s == s and f == f and f > 0 else NAN}
 
 
+def run_repeat(model, n=10, states=REPEAT_STATES, post=None):
+    """Opakovatelnost: states stavů, každý n× po kolech (kolo = každý stav jednou, ve stejném pořadí), takže stejný dotaz
+    nejde dvakrát po sobě. Vrací same_choice = počet stavů se stejnou volbou ve všech n odpovědích (i neplatná None je hodnota),
+    same_conf = počet stavů s číselnou jistotou, všechny n hodnoty přesně stejné, a spread = největší (max − min) jistoty
+    přes stavy (bez číselné jistoty NaN)."""
+    post = post or bench.post
+    warm(model, post)
+    work = payloads(states)
+    seen = [[] for _ in work]
+    for _ in range(n):
+        for i, p in enumerate(work):
+            out = post(model, p)[0]
+            answers = out.get("answers") if isinstance(out, dict) else None
+            a = answers.get("target") if isinstance(answers, dict) else None
+            a = a if isinstance(a, dict) else {}
+            c, choice = a.get("confidence"), a.get("choice")
+            seen[i].append((choice if isinstance(choice, str) else None, c if type(c) in (int, float) and c == c else None))
+    confs = [[c for _, c in s] for s in seen]
+    spreads = [max(v) - min(v) for v in ([c for c in cs if c is not None] for cs in confs) if v]
+    return {"states": states, "n": n, "same_choice": sum(len({ch for ch, _ in s}) == 1 for s in seen),
+            "same_conf": sum(None not in cs and len(set(cs)) == 1 for cs in confs), "spread": max(spreads) if spreads else NAN}
+
+
 class GpuSampler:
     """Vlákno, které po dobu měření čte stav GPU. Vzorek = (čas od startu v s, teplota, příkon, takt)."""
 
@@ -472,6 +500,8 @@ def heads(test):
         head = [model, i18n.t("hw.col.target"), i18n.t("hw.col.inputTokens"), i18n.t("hw.col.ms")]
     elif test == "cache":
         head = [model, n, i18n.t("hw.col.first"), i18n.t("hw.col.sameP50"), i18n.t("hw.col.freshP50"), i18n.t("hw.col.ratio")]
+    elif test == "repeat":
+        head = [model, i18n.t("hw.col.states"), n, i18n.t("hw.col.sameChoice"), i18n.t("hw.col.sameConf"), i18n.t("hw.col.confSpread")]
     else:                                            # soak
         card = [i18n.t("hw.col.temp"), i18n.t("hw.col.power"), i18n.t("hw.col.clock")]
         return ([model, i18n.t("hw.col.minute"), n, i18n.t("hw.col.p50"), i18n.t("hw.col.p95"), *card],
@@ -545,6 +575,10 @@ def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf
     if a.test == "cache":
         r = run_cache(model, a.n or 10, post=post)
         rows = [[model, r["n"], num(r["first"], 1), num(r["same"], 1), num(r["fresh"], 1), num(r["ratio"], 2)]]
+        return head, rows, csv_head, rows, []
+    if a.test == "repeat":
+        r = run_repeat(model, a.n or 10, post=post)
+        rows = [[model, r["states"], r["n"], f"{r['same_choice']}/{r['states']}", f"{r['same_conf']}/{r['states']}", num(r["spread"], 3)]]
         return head, rows, csv_head, rows, []
     if not local and not a.hosted_soak:
         return head, [], csv_head, [], [i18n.t("hw.skip.soak", model=model)]
