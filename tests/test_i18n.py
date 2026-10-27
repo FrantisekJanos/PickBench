@@ -645,8 +645,10 @@ class PageTexts(unittest.TestCase):
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("dopředu", self.texts[key]["cs"], key)
             self.assertIn("two steps ahead", self.texts[key]["en"], key)
-        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))"), ["slepá ulička v řadě 1", "slepá ulička v řadě 4"])
-        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))", lang="en"), ["dead end in row 1", "dead end in row 4"])
+        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))"), ["✗ slepá ulička v řadě 1", "✗ slepá ulička v řadě 4"])
+        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))", lang="en"), ["✗ dead end in row 1", "✗ dead end in row 4"])
+        for key in ("tip.speed", "row.tip.rate"):                                                          # dva kroky dopředu: bloky po 6 polích
+            self.assertTrue(self.texts[key]["cs"].endswith("rychlost ÷ 6."), key)
 
     def test_rule_texts_match_bench_and_name_the_scenario(self):              # třídy a řádek pod tabulkou jako bench.py, popisek voliče, popisky se scénáři s řadami
         names = dict(re.findall(r"(\w+): '(rule\.class\.\w+)'", piece(r"^const RULE_CLASS_NAME = \{.*?\};$")))

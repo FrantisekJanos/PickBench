@@ -374,7 +374,7 @@ const TEXTS = {
   'tip.driver': { cs: 'Kdo rozhoduje. Model: každé rozhodnutí je dotaz na vybraný model přes Ollamu. Pravidla: ideální řidič, který zná správnou odpověď — měřítko „správně“ a kontrola hry bez modelu. Náhodně: náhodná volba, ukazuje výsledek bez jakéhokoli úsudku.', en: 'Who decides. Model: every decision is a request to the selected model through Ollama. Rules: the ideal driver, which knows the correct answer — the yardstick for "correct" and a check of the game without a model. Random: a random choice, which shows what a driver with no judgment scores.' },
   'tip.model': { cs: 'Rozhodovací model, který se použije u řidiče Model. Lokální modely jsou z Ollamy; nabídka se načítá při otevření stránky a když Ollama neběží, je prázdná. První dotaz po výběru jiného modelu trvá déle (načtení do paměti) a do měření se nepočítá. Skupina „Hostované“ se ukáže, jen když má server klíč poskytovatele: model pak běží u něj, texty úloh odcházejí mimo tento počítač, každý dotaz stojí peníze a latence obsahuje síť. Při latenci stovek milisekund až sekundy model ve hře v reálném čase většinu řad nestihne — to je měřený výsledek, ne chyba.', en: 'The decision model that the Model driver uses. Local models come from Ollama; the page loads the list when it opens, and the list is empty when Ollama is not running. The first request after selecting a different model takes longer (loading into memory) and does not count in the measurement. The "Hosted" group appears only when the server has a provider key: the model then runs at the provider, the task texts leave this computer, every request costs money and the latency includes the network. With a latency of hundreds of milliseconds up to a second, the model misses most rows in the game in Real time and Ladder modes — that is a measured result, not an error.' },
   'tip.mode': { cs: 'Reálný čas: auto jede zvolenou rychlostí a pomalé rozhodnutí znamená náraz nebo „nestihl“. Po tazích: hra na každé rozhodnutí počká, měří se kvalita bez vlivu rychlosti. Žebřík: reálný čas, rychlost stoupá po úrovních dlouhých 60 polí, dokud model udrží nejvýš 1 chybu na úroveň; výsledek je nejvyšší zvládnutá rychlost.', en: 'Real time: the car moves at the selected speed and a slow decision means a crash or "missed". Turn-based: the game waits for every decision and measures quality without the effect of speed. Ladder: real time, with the speed rising level by level (each level is 60 cells long) as long as the model makes at most 1 error per level; the result is the highest speed it managed.' },
-  'tip.speed': { cs: 'Rychlost auta v polích za sekundu; platí v reálném čase. Řady přijíždějí po 4 polích, takže rychlost ÷ 4 je počet řad za sekundu, které musí model stihnout. V žebříku rychlost řídí hra a posuvník je zamčený.', en: 'Car speed in cells per second; it applies in Real time mode. Rows arrive every 4 cells, so speed ÷ 4 is the number of rows per second the model has to keep up with. In Ladder mode the game controls the speed and the slider is locked.' },
+  'tip.speed': { cs: 'Rychlost auta v polích za sekundu; platí v reálném čase. Řady přijíždějí po 4 polích, takže rychlost ÷ 4 je počet řad za sekundu, které musí model stihnout. V žebříku rychlost řídí hra a posuvník je zamčený. U dvou kroků dopředu přijíždějí bloky po 6 polích, rychlost ÷ 6.', en: 'Car speed in cells per second; it applies in Real time mode. Rows arrive every 4 cells, so speed ÷ 4 is the number of rows per second the model has to keep up with. In Ladder mode the game controls the speed and the slider is locked. For two steps ahead the blocks arrive every 6 cells, speed ÷ 6.' },
   'tip.runlen': { cs: 'Po kolika ujetých polích hra sama skončí a zapíše výsledek; 0 = bez limitu, do stisku Stop. Stejná délka dělá průjezdy různých modelů srovnatelné. Žebřík má vlastní konec a limit ignoruje, benchmark bez hry má svůj počet úloh.', en: 'How many cells the car drives before the game ends by itself and records the result; 0 = no limit, until you press Stop. The same length makes the runs of different models comparable. Ladder mode has its own end and ignores the limit, and the benchmark without the game has its own number of tasks.' },
   'tip.seed': { cs: 'Libovolný text nebo číslo. Stejné semínko se stejným nastavením dá pokaždé stejné řady ve stejném pořadí (i stejné úlohy benchmarku a stejné úlohy s pokynem), takže každý model dostane totéž. Prázdné = pokaždé jinak. V reálném čase se dál liší, na které řady se model stihne zeptat — to je měřený jev, ne náhoda. Se semínkem nástroje bench.py nesouvisí: stejné číslo tam dá jiné úlohy.', en: 'Any text or number. The same seed with the same settings gives the same rows in the same order every time (also the same benchmark tasks and the same tasks with the instruction), so every model gets the same thing. Empty = different every time. In Real time and Ladder modes, which rows the page manages to ask the model about still varies — that is a measured effect, not chance. The seed is unrelated to the seed of the bench.py tool: the same number gives different tasks there.' },
   'tip.extra': { cs: 'Jen u překážek: ke každému dotazu přidá druhou otázku typu ano/ne (je do 2 polí před autem překážka?). Odpověď hru neřídí; volba ukazuje, o kolik další otázka prodlouží rozhodnutí.', en: 'Obstacles only: adds a second, yes/no question to every request (is there an obstacle within 2 cells ahead of the car?). The answer does not steer the game; the option shows how much one more question lengthens the decision.' },
@@ -524,7 +524,7 @@ const TEXTS = {
   'row.tip.late': { cs: 'Řady, které minuly auto dřív, než k nim model stihl odpovědět. V reálném čase se model ptá na nejbližší řadu, kterou ještě může stihnout, a ostatní přeskočí; u modelu pomalejšího než rozestup řad je podíl zhruba 1 − interval ÷ latence. V režimu Po tazích nenastává.', en: 'Rows that passed the car before the model managed to answer them. In Real time and Ladder modes the page asks the model about the nearest row it can still answer in time and skips the others; for a model slower than the interval between rows, the share is roughly 1 − interval ÷ latency. This does not happen in Turn-based mode.' },
   'row.tile.acc': { cs: 'přesnost modelu', en: 'model accuracy' },
   'row.tip.acc': { cs: 'Podíl správných odpovědí ze všech odpovědí modelu, včetně těch, které přišly pozdě a auto už neřídily. Na rozdíl od první dlaždice nezávisí na rychlosti. Ve výsledcích sloupec „správně“.', en: 'The share of correct answers among all of the model\'s answers, including those that arrived late and no longer steered the car. Unlike the first tile, it does not depend on speed. In the results it is the "correct" column.' },
-  'row.tip.rate': { cs: 'Požadováno = rychlost auta ÷ 4 (řady jsou po 4 polích), tedy kolik řad za sekundu přijíždí; jen v reálném čase. Rozhodnuto = počet rozhodnutí ÷ doba běhu. Když je rozhodnuto méně než požadováno, model nestíhá a přibývá „nestihl“.', en: 'Required = car speed ÷ 4 (the rows are 4 cells apart), that is, how many rows arrive per second; in Real time and Ladder modes only. Decided = number of decisions ÷ run duration. When decided is lower than required, the model does not keep up and the "missed" count grows.' },
+  'row.tip.rate': { cs: 'Požadováno = rychlost auta ÷ 4 (řady jsou po 4 polích), tedy kolik řad za sekundu přijíždí; jen v reálném čase. Rozhodnuto = počet rozhodnutí ÷ doba běhu. Když je rozhodnuto méně než požadováno, model nestíhá a přibývá „nestihl“. U dvou kroků dopředu jsou bloky po 6 polích, požadováno = rychlost ÷ 6.', en: 'Required = car speed ÷ 4 (the rows are 4 cells apart), that is, how many rows arrive per second; in Real time and Ladder modes only. Decided = number of decisions ÷ run duration. When decided is lower than required, the model does not keep up and the "missed" count grows. For two steps ahead the blocks are 6 cells apart, required = speed ÷ 6.' },
   // scénář e-maily: karty fronty vedle silnice (přípony za názvem kategorie a za výsledkem řady), popis, tabulka záměn, dlaždice
   'card.inject': { cs: ' ⚠ s pokynem', en: ' ⚠ with the instruction' },
   'card.model': { cs: ' — model: {label}', en: ' — model: {label}' },
@@ -616,7 +616,7 @@ const TEXTS = {
   'legend.barrier.scene': { cs: '🚶 chodec na přechodu; vpravo semafor a značka (hlavní silnice, dej přednost, stop)', en: '🚶 pedestrian on the crossing; on the right a traffic light and a sign (priority road, give way, stop)' },
   'legend.barrier.order': { cs: 'pořadí pravidel: policista › záchranka › chodec › semafor › značka', en: 'order of the rules: police officer › emergency vehicle › pedestrian › traffic light › sign' },
   // scénář dva kroky dopředu: popis, tabulka přesnosti podle hloubky pasti s řádkem chyb (lookahead.depth a lookahead.errors znak po znaku jako bench.lookahead.* v i18n.py), dlaždice
-  'scenario.lookahead.about': { cs: 'Dva kroky dopředu: každá řada je blok 4 tenkých řad přes celou silnici s kostkami překážek. Auto stojí v pruhu, který patří úloze, a model volí tah pro nejbližší řadu: o pruh vlevo, zůstat, nebo o pruh vpravo. Před každou další řadou se auto smí posunout nejvýš o pruh a ze silnice nesmí. Správný tah je v každé úloze jediný a auto s ním projede všechny 4 řady. Model dostane číslo pruhu auta a u každé řady čísla zablokovaných pruhů. Hladový řidič jede do pruhu s nejdelší volnou dráhou rovně a v části úloh tím vjede do slepé uličky. Po průjezdu ukáže zelená čára v bloku správnou cestu a po chybném tahu oranžová cestu hladového řidiče, když se liší. Správně = zelený kroužek; tah do překážky nebo mimo silnici = červený kroužek; tah, po kterém auto uvízne dál v bloku = šedý kroužek s řadou slepé uličky; nestihl = odpověď nepřišla včas. Tabulka „Přesnost podle hloubky pasti“ dělí výsledek podle toho, kolik nejbližších řad musí model zvážit (1, 2, 3 a víc). Pruhů je 3 až 8.', en: 'Two steps ahead: every row is a block of 4 thin rows across the whole road with obstacles in it. The car starts in the lane that belongs to the task, and the model picks the move for the nearest row: one lane to the left, stay, or one lane to the right. Before every further row the car may shift by at most one lane, and it must stay on the road. Every task has exactly one right move, and with it the car gets through all 4 rows. The model gets the number of the lane the car is in and, for every row, the numbers of the blocked lanes. A greedy driver heads for the lane with the longest free run straight ahead, and in part of the tasks that leads into a dead end. After the car passes, a green line in the block shows the right path and, after a wrong move, an orange line the path of the greedy driver when it differs. Correct = a green ring; a move into an obstacle or off the road = a red ring; a move after which the car gets stuck further in the block = a grey ring with the row of the dead end; missed = the answer did not arrive in time. The "Accuracy by trap depth" table splits the result by how many of the nearest rows the model has to weigh (1, 2, 3 or more). There are 3 to 8 lanes.' },
+  'scenario.lookahead.about': { cs: 'Dva kroky dopředu: každá řada je blok 4 řad s mezerami přes celou silnici s kostkami překážek. Auto stojí v pruhu, který patří úloze, a model volí tah pro nejbližší řadu: o pruh vlevo, zůstat, nebo o pruh vpravo. Před každou další řadou se auto smí posunout nejvýš o pruh a ze silnice nesmí. Správný tah je v každé úloze jediný a auto s ním projede všechny 4 řady. Model dostane číslo pruhu auta a u každé řady čísla zablokovaných pruhů. Hladový řidič jede do pruhu s nejdelší volnou dráhou rovně a v části úloh tím vjede do slepé uličky. Před blokem ukáže modrá šipka zvolený tah; auto jede po tahu a mezi řadami mění pruh v mezeře. Po průjezdu ukáže zelená čára v bloku správnou cestu a po chybném tahu oranžová cestu hladového řidiče, když se liší. Náraz nebo slepá ulička = červený křížek u kostky a auto projede zbytek bloku poloprůhledně. Štítek pod autem jmenuje výsledek: správný tah, náraz v řadě N, mimo silnici, slepá ulička v řadě N, neplatná odpověď, nestihl (odpověď nepřišla včas, auto zůstane v pruhu a projede blok poloprůhledně). Bloky přijíždějí po 6 polích. Tabulka „Přesnost podle hloubky pasti“ dělí výsledek podle toho, kolik nejbližších řad musí model zvážit (1, 2, 3 a víc). Pruhů je 3 až 8.', en: 'Two steps ahead: every row is a block of 4 rows with gaps between them across the whole road with obstacles in it. The car starts in the lane that belongs to the task, and the model picks the move for the nearest row: one lane to the left, stay, or one lane to the right. Before every further row the car may shift by at most one lane, and it must stay on the road. Every task has exactly one right move, and with it the car gets through all 4 rows. The model gets the number of the lane the car is in and, for every row, the numbers of the blocked lanes. A greedy driver heads for the lane with the longest free run straight ahead, and in part of the tasks that leads into a dead end. Before the block a blue arrow shows the chosen move; the car follows the move and changes lanes in the gaps between the rows. After the car passes, a green line in the block shows the right path and, after a wrong move, an orange line the path of the greedy driver when it differs. A crash or a dead end = a red cross at the cube, and the car drives through the rest of the block see-through. A label under the car names the result: right move, crash in row N, off the road, dead end in row N, invalid answer, missed (the answer did not arrive in time, the car stays in its lane and drives through the block see-through). The blocks arrive every 6 cells. The "Accuracy by trap depth" table splits the result by how many of the nearest rows the model has to weigh (1, 2, 3 or more). There are 3 to 8 lanes.' },
   'scenario.lookahead.extraTitle': { cs: 'Přesnost podle hloubky pasti', en: 'Accuracy by trap depth' },
   'scenario.lookahead.extraTip': { cs: 'Přesnost modelu podle hloubky pasti jako v bench.py --lookahead: hloubka 1 = stačí nenarazit hned v nejbližší řadě, hloubka 2 = správný tah ukáže až druhá řada, hloubka 3+ = až třetí nebo čtvrtá. Pod tabulkou rozbor chybných tahů jako v bench.py: tah hladového řidiče (pruh s nejdelší volnou dráhou rovně), náraz nebo mimo silnici, jiné, neplatné. V hloubce 2 a 3+ generátor hlídá, aby tah hladového řidiče, tah k pruhu s nejvíc volnými poli kolem (od 4 pruhů) a tah ke středu silnice (od 5 pruhů) trefily správný tah jen asi v třetině úloh; při 3 pruzích to u dvou posledních nejde. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy by trap depth as in bench.py --lookahead: depth 1 = it is enough not to crash in the nearest row, depth 2 = the second row shows the right move, depth 3+ = only the third or fourth row does. Below the table are the wrong moves as in bench.py: the move of the greedy driver (the lane with the longest free run straight ahead), a crash or a move off the road, other, invalid. At depths 2 and 3+ the generator keeps the greedy move, the move towards the lane with the most free cells around it (from 4 lanes) and the move towards the middle of the road (from 5 lanes) right in only about a third of the tasks; with 3 lanes this is not possible for the last two. All answers count, including the late ones.' },
   'scenario.lookahead.col.depth': { cs: 'hloubka pasti', en: 'trap depth' },
@@ -631,7 +631,14 @@ const TEXTS = {
   'lookahead.move.left': { cs: 'vlevo', en: 'left' },
   'lookahead.move.stay': { cs: 'zůstat', en: 'stay' },
   'lookahead.move.right': { cs: 'vpravo', en: 'right' },
-  'lookahead.deadEnd': { cs: 'slepá ulička v řadě {n}', en: 'dead end in row {n}' },
+  'lookahead.deadEnd': { cs: '✗ slepá ulička v řadě {n}', en: '✗ dead end in row {n}' },
+  'lookahead.label.ok': { cs: '✓ správný tah', en: '✓ right move' },
+  'lookahead.label.crash': { cs: '✗ náraz v řadě {n}', en: '✗ crash in row {n}' },
+  'lookahead.label.offRoad': { cs: '✗ mimo silnici', en: '✗ off the road' },
+  'legend.lookahead.cube': { cs: 'kostka = zablokované pole', en: 'cube = blocked cell' },
+  'legend.lookahead.move': { cs: 'před každou řadou smí auto o pruh vlevo, zůstat, nebo o pruh vpravo', en: 'ahead of every row the car may move one lane left, stay, or move one lane right' },
+  'legend.lookahead.first': { cs: 'model volí jen první tah (šipka), zbytek cesty auto dojede nejlepší možnou cestou', en: 'the model picks only the first move (the arrow); the car drives the rest along the best possible path' },
+  'legend.lookahead.paths': { cs: 'po průjezdu: zelená = správná cesta, oranžová = cesta hladového řidiče, křížek = náraz', en: 'after the car passes: green = the right path, orange = the path of the greedy driver, cross = crash' },
   // scénář skryté pravidlo: popis, tabulka přesnosti podle třídy s řádkem pod ní (rule.class.* a rule.line znak po znaku jako bench.rule.* v i18n.py), znaky bran, pás deníku, dlaždice
   'scenario.rule.about': { cs: 'Skryté pravidlo: každá řada má 3 brány a každá ukazuje jen znak, ve kterém se shoduje se vzorem: barvu (barevná skvrna), tvar (obrys) nebo počet (tečky). Skryté pravidlo říká, který znak je správný, a po každých 3 správných pokusech v řadě se mění na jiný znak. Každá řada nese vlastní deník dřívějších pokusů (u každého znak zvolené brány a jestli byl pokus správný); pás pod silnicí ukazuje deník nejbližší řady s nejstarším pokusem vlevo a svislou čarou tam, kde se pravidlo změnilo. Model dostane deník a znaky bran, tedy totéž co divák, a volí bránu podle pravidla, které platí teď. Třídy úloh jako v bench.py --rule: opakování (od poslední změny byl správný pokus), přepnutí (pravidlo se změnilo a nové zbývá vyloučením) a vyloučení (bez změny, dva různé špatné pokusy). Správně = auto projelo branou podle pravidla (po průjezdu zezelená a dostane zelený kroužek); špatně = jinou branou, a když je to ve třídě přepnutí brána starého pravidla, stojí u kroužku „perseverace“; nestihl = odpověď nepřišla včas. Tabulka „Přesnost podle třídy“ dělí výsledek podle třídy úlohy.', en: 'Hidden rule: every row has 3 gates, and every gate shows only the feature it shares with the sample: the color (a colored spot), the shape (an outline) or the count (dots). A hidden rule says which feature is right, and after every 3 correct picks in a row it changes to another feature. Every row carries its own log of earlier picks (for each, the feature of the picked gate and whether the pick was correct); the strip under the road shows the log of the nearest row with the oldest pick on the left and a vertical line where the rule changed. The model gets the log and the features of the gates, the same as the viewer, and picks the gate by the rule in force now. The classes of the tasks are as in bench.py --rule: repeat (a correct pick since the last change), switch (the rule has changed and ruling out leaves the new one) and eliminate (no change, two different wrong picks). Correct = the car passed through the gate the rule asks for (after the car passes, the gate turns green and gets a green ring); wrong = through another gate, and when it is the gate of the old rule in the switch class, the ring is marked "perseveration"; missed = the answer did not arrive in time. The "Accuracy by class" table splits the result by the class of the task.' },
   'scenario.rule.extraTitle': { cs: 'Přesnost podle třídy', en: 'Accuracy by class' },
@@ -1948,7 +1955,35 @@ function drawLookahead(r, y) {
   });
 }
 
-const LOOKAHEAD_COLOR = { ok: '#3fb950', crash: '#f85149', deadEnd: '#8b9aa8', invalid: '#8b9aa8', late: '#8b9aa8' };     // kroužek podle lookaheadOutcome
+function lookaheadLabel(r) {                               // štítek projetého bloku: výsledek slovem a barva (zelená správně, červená chyba, šedá neplatná a nestihl)
+  const out = lookaheadOutcome(r.result, r.chosen, r.rows, r.lane);
+  if (out === 'ok') return { text: t('lookahead.label.ok'), color: RESULT.ok.color };
+  if (out === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  if (out === 'invalid') return { text: t('label.invalid'), color: RESULT.late.color };
+  const stop = lookaheadRouteOf(r).stop;
+  const text = stop.kind === 'offRoad' ? t('lookahead.label.offRoad') : stop.kind === 'crash' ? t('lookahead.label.crash', { n: 1 })
+    : t('lookahead.deadEnd', { n: stop.row + 1 });
+  return { text, color: RESULT.bad.color };
+}
+// Šipka zvoleného tahu před neprojetým blokem: od pruhu úlohy pod blokem k pruhu tahu (mimo silnici k okraji plátna). Pozdní a neplatná odpověď šipku nemá.
+function drawLookaheadArrow(r, y) {
+  if (r.result !== null || !(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 3)) return;
+  const x0 = (r.lane + 0.5) * LW, y0 = y + (LOOKAHEAD_CLEAR + LOOKAHEAD_TURN + 0.3) * CELL, ty = y + (LOOKAHEAD_CLEAR + 0.15) * CELL;
+  const tx = Math.min(W - 6, Math.max(6, (r.lane + LOOKAHEAD_SHIFT[LOOKAHEAD_MOVES[r.chosen]] + 0.5) * LW)), a = Math.atan2(ty - y0, tx - x0);
+  ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(tx, ty);
+  for (const d of [-0.5, 0.5]) { ctx.moveTo(tx, ty); ctx.lineTo(tx - 10 * Math.cos(a + d), ty - 10 * Math.sin(a + d)); }
+  ctx.stroke(); ctx.lineCap = 'butt';
+}
+// Křížek v místě srážky: střed kostky, o kterou auto narazilo (stop.row, stop.lane), u tahu mimo silnici okraj silnice u první řady.
+// Bílý obrys pod červenou čarou, aby byl vidět i na červené kostce.
+function drawLookaheadCross(r, y, stop) {
+  const x = stop.kind === 'offRoad' ? (stop.lane < 0 ? 6 : W - 6) : (stop.lane + 0.5) * LW, cy = y - stop.row * LOOKAHEAD_PITCH * CELL, a = 9;
+  for (const [color, width] of [['#e6edf3', 5], ['#f85149', 3]]) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x - a, cy - a); ctx.lineTo(x + a, cy + a); ctx.moveTo(x + a, cy - a); ctx.lineTo(x - a, cy + a); ctx.stroke();
+  }
+}
 
 // Trasa bloku (lookaheadRoute) jako lomená čára po uzlech, posunutá o dx px (dvě cesty se na společném úseku nepřekryjí); končí v místě srážky. Bez textu.
 function drawLookaheadPath(r, y, route, color, dx = 0) {
@@ -1965,7 +2000,8 @@ const lookahead = {
   id: 'lookahead', lanesFree: true, minLanes: 3,
   gap: LOOKAHEAD_GAP, passAt: LOOKAHEAD_CLEAR, keep: LOOKAHEAD_SPAN + 1.6, carH: LOOKAHEAD_CAR * CELL,      // bloky po 6 polích, vyhodnocení při dotyku, nižší auto
   get about() { return t('scenario.lookahead.about'); },
-  panels: ['confPanel'], get extraTitle() { return t('scenario.lookahead.extraTitle'); },
+  panels: ['confPanel', 'legend'], get extraTitle() { return t('scenario.lookahead.extraTitle'); },
+  legend: [['#f85149', 'legend.lookahead.cube'], [null, 'legend.lookahead.move'], [null, 'legend.lookahead.first'], ['#3fb950', 'legend.lookahead.paths']],
   get extraTip() { return t('scenario.lookahead.extraTip'); },
   get matchTip() { return t('scenario.lookahead.tip.match'); },
   lanes: () => Math.max(3, +$('lanes').value),
@@ -2008,35 +2044,22 @@ const lookahead = {
     b[1]++; if (move === task.truth) b[0]++;
     if (kind) g.errs[kind]++;
   },
-  drawItems(g) {                                           // po průjezdu nad ztlumeným blokem zelená správná cesta, po chybném tahu i oranžová cesta hladového řidiče
+  // Před blokem šipka tahu; po průjezdu nad ztlumeným blokem zelená správná cesta, po chybném tahu i oranžová cesta hladového řidiče, křížek srážky
+  // a štítek výsledku pod autem, dokud blok kryje auto. Vrak (poloprůhledné auto) kreslí jádro přes carPose. Kroužek tu není: zakrýval by auto i kostky.
+  drawItems(g) {
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
       drawLookahead(r, y);
       ctx.globalAlpha = 1;
-      if (r.result !== null) {
-        drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.answer), '#3fb950');
-        if (r.result === 'bad' && r.greedy !== r.answer) drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.greedy), '#e69f00', 5);
-      }
-      this.drawRing(r, y, Math.min(LW * 0.26, 15));
+      if (r.inject !== null) drawTrojan(y, r.result !== null && r.fooled);
+      if (r.result === null) { drawLookaheadArrow(r, y); continue; }
+      drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.answer), '#3fb950');
+      if (r.result === 'bad' && r.greedy !== r.answer) drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.greedy), '#e69f00', 5);
+      const stop = lookaheadRouteOf(r).stop;
+      if (stop && stop.kind !== 'none') drawLookaheadCross(r, y, stop);
+      if (-r.y <= LOOKAHEAD_SPAN) { const lab = lookaheadLabel(r); drawRowLabel(lab.text, lab.color, H - 10); }
     }
-    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
-  },
-  drawRing(r, y, rad) {                                    // kroužek výsledku podle lookaheadOutcome (+ značka trojského koně); u slepé uličky a neplatné odpovědi i slovo
-    if (r.inject !== null) drawTrojan(y, r.result !== null && r.fooled);
-    if (!r.result) return;
-    const color = LOOKAHEAD_COLOR[lookaheadOutcome(r.result, r.chosen, r.rows, r.lane)], out = lookaheadOutcome(r.result, r.chosen, r.rows, r.lane);
-    const x = (r.passLane + 0.5) * LW;
-    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, rad + 4, 0, 7); ctx.stroke();
-    const word = out === 'deadEnd' ? t('lookahead.deadEnd', { n: lookaheadValues(r.rows, r.lane)[LOOKAHEAD_MOVES[r.chosen]] + 1 })
-      : out === 'invalid' ? t('answer.invalid') : null;
-    if (!word) return;
-    const gap = rad + 10, right = W - x >= x, room = (right ? W - x : x) - gap - 4;      // slovo na stranu, kde je víc místa
-    ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = right ? 'left' : 'right'; ctx.textBaseline = 'middle';
-    const wide = Math.min(ctx.measureText(word).width, room), tx = right ? x + gap : x - gap;
-    ctx.fillStyle = 'rgba(11,16,22,.8)'; ctx.fillRect(right ? tx - 3 : tx - wide - 3, y - 9, wide + 6, 18);     // podklad: slovo leží přes blok
-    ctx.fillStyle = color; ctx.fillText(word, tx, y, room);
-    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   },
   describeLast(task, res) {                                // pruh auta a zablokované pruhy řad, jak je dostal model, pak volba, správný tah a tah hladového řidiče
     const name = m => m >= 0 ? t(LOOKAHEAD_MOVE_NAME[LOOKAHEAD_MOVES[m]]) : t('answer.invalid');

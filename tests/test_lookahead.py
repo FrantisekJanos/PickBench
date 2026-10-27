@@ -534,8 +534,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         for name in ("drawLookahead", "drawLookaheadPath"):
             self.assertNotIn("fillText(", page_function(name), name)                          # blok a cesty bez textu
         body = lookahead_body()
-        for part in ("drawRing(r, y, rad) {", "lookaheadRoute(r.rows, r.lane, r.answer)", "lookaheadRoute(r.rows, r.lane, r.greedy)",
-                     "t('lookahead.deadEnd'", "t('answer.invalid')", "LOOKAHEAD_COLOR[lookaheadOutcome(", "drawLookahead(r, y)"):
+        for part in ("lookaheadRoute(r.rows, r.lane, r.answer)", "lookaheadRoute(r.rows, r.lane, r.greedy)", "drawLookahead(r, y)", "lookaheadLabel(r)"):
             self.assertIn(part, body)
 
     def test_row_gap_of_the_scenario(self):              # všechna místa s GAP: definice, překážky, výchozí rowBase, spawn a odhad kroku berou rozestup scénáře
@@ -643,6 +642,44 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
             self.assertIn(part, body)
         self.assertNotIn("LOOKAHEAD_THIN", page)
         self.assertNotIn("lookaheadCarLane", page)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek: správný tah, náraz v řadě 1, mimo silnici, slepá ulička v řadě N, neplatná, nestihl
+        from test_parity import run_js
+        rows = list(EXAMPLE)                                       # příklad z rešerše: left = slepá ulička (2 řady), stay = náraz, right = správně
+        result = re.search(r"\nconst RESULT = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + result + route_js() + page_function("lookaheadLabel") + (
+            "const r = (result, chosen, lane = 1) => ({ rows: arg, lane, result, chosen, answer: 'right' });"
+            "return [r('ok', 2), r('bad', 1), r('bad', 0), r('bad', 0, 0), r('bad', -1), r('late', undefined)].map(lookaheadLabel); })()")
+        cs, en = run_js(code, rows), run_js(code, rows, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ správný tah", "✗ náraz v řadě 1", "✗ slepá ulička v řadě 3", "✗ mimo silnici", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual([x["text"] for x in en], ["✓ right move", "✗ crash in row 1", "✗ dead end in row 3", "✗ off the road", "✗ invalid answer", "⏱ missed"])
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_arrow_shows_the_move_before_the_block(self):  # šipka jen u neprojetého bloku s platnou odpovědí; pozdní ani neplatná šipku nemá
+        body = lookahead_body()
+        self.assertIn("drawLookaheadArrow(r, y)", body)
+        code = "const LW = 100, W = 300, CELL = 44, LOOKAHEAD_CLEAR = 0.4, LOOKAHEAD_TURN = 0.6, LOOKAHEAD_SHIFT = { left: -1, stay: 0, right: 1 }, LOOKAHEAD_MOVES = ['left', 'stay', 'right'];" + (
+            "const lines = []; const ctx = new Proxy({ moveTo(x, y) { lines.push(['M', Math.round(x)]); }, lineTo(x, y) { lines.push(['L', Math.round(x)]); } },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });" + page_function("drawLookaheadArrow") +
+            "const out = [{ lane: 1, chosen: 2, result: null }, { lane: 0, chosen: 0, result: null }, { lane: 1, chosen: undefined, result: null },"
+            " { lane: 1, chosen: -1, result: null }, { lane: 1, chosen: 2, result: 'ok' }].map(r => { lines.length = 0; drawLookaheadArrow(r, 300); return lines.slice(0, 2); });"
+            "process.stdout.write(JSON.stringify(out));")
+        got = run_page_js(code)
+        self.assertEqual(got[0], [["M", 150], ["L", 250]])           # z pruhu 2 do pruhu 3
+        self.assertEqual(got[1][1][1] <= 6, True)                    # mimo silnici: šipka k levému okraji, ne mimo plátno
+        self.assertEqual(got[2:], [[], [], []])
+
+    def test_legend_label_cross_and_wreck_are_wired(self):
+        body = lookahead_body()
+        for part in ("panels: ['confPanel', 'legend']", "'legend.lookahead.cube'", "'legend.lookahead.move'", "'legend.lookahead.first'",
+                     "'legend.lookahead.paths'", "lookaheadLabel(r)", "drawRowLabel(", "drawLookaheadCross(r, y, "):
+            self.assertIn(part, body)
+        for name in ("drawLookahead", "drawLookaheadPath", "drawLookaheadArrow", "drawLookaheadCross"):
+            self.assertNotIn("fillText(", page_function(name), name)
+        self.assertNotIn("drawRing(r, y, rad) {", body)                  # kroužek u Dvou kroků není
+        self.assertNotIn("LOOKAHEAD_COLOR", page_source())
 
 
 if __name__ == "__main__":
