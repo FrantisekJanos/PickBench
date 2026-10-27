@@ -3444,6 +3444,38 @@ function betQuestion(gates) {                              // otázka choice: br
   const instructions = 'Each gate pays its reward with the given chance in percent, otherwise nothing. Choose the gate with the highest expected payout (reward times chance).';
   return { bet: { type: 'choice', instructions, criteria: memoryQuestion(gates).recall.criteria } };
 }
+function betEv(reward, chance) {                           // jen pro stránku, bench.py ji nemá: očekávaná výplata pro diváka (kresba, štítek)
+  return reward * chance / 100;
+}
+// Druh chyby jednoho kroku bet_summary: neplatná volba (není řetězec z keys) = invalid, správná = null, jediná brána s nejvyšší odměnou = reward,
+// jinak jediná brána s nejvyšší šancí = chance, jinak other. Úloha c = { rewards, chances, answer, level, topReward, topChance }.
+function betErrorKind(c, choice, keys) {
+  if (typeof choice !== 'string' || !keys.includes(choice)) return 'invalid';
+  if (choice === keys[c.answer]) return null;
+  if (c.topReward !== null && choice === keys[c.topReward]) return 'reward';
+  if (c.topChance !== null && choice === keys[c.topChance]) return 'chance';
+  return 'other';
+}
+// Stejný jako bet_summary (s class_tally) v bench.py; úloha c = { rewards, chances, answer, level, topReward, topChance }. Neplatná volba: regret 1.
+// Bez úloh je regret NaN (Python by dělil nulou), stránka ukáže „—“.
+function betSummary(cases, choices, keys) {
+  const by_level = classTally(BET_LEVELS, cases.map(c => [c.answer, c.level]), choices, keys);
+  const errors = { reward: 0, chance: 0, other: 0, invalid: 0 };
+  let regret = 0;
+  cases.forEach((c, i) => {
+    const kind = betErrorKind(c, choices[i], keys);
+    if (kind === 'invalid') { errors.invalid++; regret += 1; return; }
+    const ev = c.rewards.map((r, j) => r * c.chances[j]);
+    regret += (ev[c.answer] - ev[keys.indexOf(choices[i])]) / ev[c.answer];
+    if (kind) errors[kind]++;
+  });
+  return { by_level, regret: regret / cases.length, errors };
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. Brána 1 vyplatí 390 × 100 % = 39 000, ostatní 390 × 95 % = 37 050 (o 5,3 % méně,
+// marže BET_MARGIN platí). Stav je nejdelší možný: odměny mají tři číslice, šance 100 je nejvýš jednou, ostatní dvě číslice.
+function betWarm(gates) {
+  return { rewards: Array(gates).fill(390), chances: [100, ...Array(gates - 1).fill(95)], answer: 0, level: 'general', topReward: null, topChance: 0, truth: 0 };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------

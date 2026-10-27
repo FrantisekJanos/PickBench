@@ -1230,6 +1230,46 @@ class Bet(unittest.TestCase):
         self.assertEqual(got, ["betCase: no same task for 3 gates after 10000 tries", "betCase: unsupported task for 2 gates and level same",
                                "betCase: unsupported task for 9 gates and level same", "betCase: unsupported task for 3 gates and level odd"])
 
+    def test_summary_matches_bench(self):                          # i neplatné volby: regret 1, do chyb jako neplatné
+        import bench
+        cases = bench.bet_cases(300, 4, seed=4) + bench.bet_cases(120, 3, seed=3)
+        rng = random.Random(6)
+        keys4, keys3 = bench.gate_keys(4), bench.gate_keys(3)
+        choices = [rng.choice((keys4 if len(c[0]) == 4 else keys3) * 2 + [None, "gate_9", 2, ["gate_1"]]) for c in cases]
+        js_cases = [{"rewards": list(r), "chances": list(ch), "answer": a, "level": lv, "topReward": tr, "topChance": tc}
+                    for r, ch, a, lv, tr, tc in cases]
+        for part, keys in ((slice(0, 300), keys4), (slice(300, None), keys3)):
+            got = run_js("betSummary(arg.cases, arg.choices, arg.keys)", {"cases": js_cases[part], "choices": choices[part], "keys": keys})
+            py = bench.bet_summary(cases[part], choices[part], keys)
+            self.assertEqual(list(got), list(py))                                                   # pořadí klíčů
+            self.assertEqual(json.dumps(got["by_level"]), json.dumps(py["by_level"]))
+            self.assertEqual(json.dumps(got["errors"]), json.dumps(py["errors"]))
+            same(self, py["regret"], got["regret"], "regret")
+            self.assertTrue(all(got["errors"][k] > 0 for k in ("reward", "chance", "invalid")), got)
+        self.assertIsNone(run_js("betSummary([], [], arg).regret", keys4))                          # NaN → null v JSON: stránka ukáže „—“
+
+    def test_error_kind_follows_the_summary_order(self):           # odměna před šancí, správná volba nikam, neplatná
+        case = {"rewards": [300, 200, 100], "chances": [20, 60, 90], "answer": 1, "level": "general", "topReward": 0, "topChance": 2}
+        got = run_js("['gate_2', 'gate_1', 'gate_3', null, 'gate_4', 1].map(c => betErrorKind(arg, c, gateKeys(3)))"
+                     ".concat([betErrorKind({ ...arg, rewards: [100, 200, 300], topReward: 2, topChance: 2 }, 'gate_3', gateKeys(3)),"
+                     " betErrorKind({ ...arg, chances: [50, 60, 50], topChance: 1, answer: 2 }, 'gate_1', gateKeys(3))])", case)
+        self.assertEqual(got, [None, "reward", "chance", "invalid", "invalid", "invalid", "reward", "reward"])
+        self.assertEqual(run_js("[betEv(120, 70), betEv(390, 95), betEv(30, 15)]", None), [84, 370.5, 4.5])
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for gates, warm in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => betWarm(k))", None)):
+            rewards, chances = tuple(warm["rewards"]), tuple(warm["chances"])
+            with self.subTest(gates=gates):
+                self.assertEqual(list(warm), ["rewards", "chances", "answer", "level", "topReward", "topChance", "truth"])
+                self.assertEqual((len(rewards), len(chances)), (gates, gates))
+                ev = [r * c for r, c in zip(rewards, chances)]
+                self.assertGreaterEqual(100 * ev[0], bench.BET_MARGIN * max(ev[1:]))                 # správně brána 1 s marží
+                self.assertEqual((warm["answer"], warm["truth"]), (0, 0))
+                self.assertEqual((warm["topReward"], warm["topChance"]), (bench.bet_top(rewards), bench.bet_top(chances)))
+                longest = max(len(json.dumps(bench.bet_state(r, c))) for r, c, *_ in bench.bet_cases(200, gates, seed=gates))
+                self.assertGreaterEqual(len(json.dumps(bench.bet_state(rewards, chances))), longest)      # horní odhad délky dotazu
+
 
 if __name__ == "__main__":
     unittest.main()
