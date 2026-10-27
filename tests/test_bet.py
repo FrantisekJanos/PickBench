@@ -228,5 +228,28 @@ class RunBet(unittest.TestCase):
         self.assertEqual((e["reward"] + e["chance"] + e["other"], e["invalid"]), (10, 0))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_level(self):
+        r = {"by_level": {"same": [10, 10], "round": [9, 10], "general": [3, 10]}}
+        for lang, want in (("cs", "(stejná šance 10/10, 50 nebo 100 % 9/10, obecná 3/10)"),
+                           ("en", "(same chance 10/10, 50 or 100% 9/10, general 3/10)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.bet_note(r), want)
+
+    def test_line_in_both_languages(self):
+        r = {"regret": 0.1234, "errors": {"reward": 9, "chance": 1, "other": 0, "invalid": 2}}
+        self.assertEqual(printed("cs", bench.print_bet, r),
+                         [" " * 20 + "regret 12.3%; chyby: nejvyšší odměna 9, nejvyšší šance 1, jiné 0, neplatné 2"])
+        self.assertEqual(printed("en", bench.print_bet, r),
+                         [" " * 20 + "regret 12.3%; errors: highest reward 9, highest chance 1, other 0, invalid 2"])
+
+    def test_line_with_empty_levels(self):
+        r = {"by_level": {"same": [1, 1], "round": [0, 0], "general": [0, 0]}, "regret": 0.0,
+             "errors": {"reward": 0, "chance": 0, "other": 0, "invalid": 0}}
+        with i18n.process("en"):
+            self.assertEqual(bench.bet_note(r), "(same chance 1/1, 50 or 100% 0/0, general 0/0)")
+        self.assertEqual(printed("en", bench.print_bet, r), [" " * 20 + "regret 0.0%; errors: highest reward 0, highest chance 0, other 0, invalid 0"])
+
+
 if __name__ == "__main__":
     unittest.main()

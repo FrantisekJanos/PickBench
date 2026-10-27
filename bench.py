@@ -2104,6 +2104,17 @@ def print_queue(r):
         print(" " * 20 + i18n.t("bench.queue.errors", **e), flush=True)
 
 
+def bet_note(r):
+    """Poznámka za řádkem modelu: přesnost podle úrovně sázky."""
+    return class_note(r["by_level"], {"same": i18n.t("bench.bet.same"), "round": i18n.t("bench.bet.round"),
+                                      "general": i18n.t("bench.bet.general")})
+
+
+def print_bet(r):
+    """Řádek pod řádkem modelu: regret a chyby na návnady."""
+    print(" " * 20 + i18n.t("bench.bet.line", regret=pct1(r["regret"]), **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

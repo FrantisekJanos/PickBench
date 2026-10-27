@@ -171,6 +171,13 @@ TEXTS = {
                            "en": "errors: shortest text {text}, other {other}, invalid {invalid}"},
     "bench.queue.errorsWeighted": {"cs": "chyby: nejkratší podle počtu (bez vah) {count}, nejkratší text {text}, jiné {other}, neplatné {invalid}",
                                    "en": "errors: shortest by count (unweighted) {count}, shortest text {text}, other {other}, invalid {invalid}"},
+    # Sázka na bránu (--bet): jména úrovní v poznámce za řádkem modelu a řádek pod ním ({regret} = hotová procenta „12.3%“,
+    # ostatní = počty chybných odpovědí).
+    "bench.bet.same": {"cs": "stejná šance", "en": "same chance"},
+    "bench.bet.round": {"cs": "50 nebo 100 %", "en": "50 or 100%"},
+    "bench.bet.general": {"cs": "obecná", "en": "general"},
+    "bench.bet.line": {"cs": "regret {regret}; chyby: nejvyšší odměna {reward}, nejvyšší šance {chance}, jiné {other}, neplatné {invalid}",
+                       "en": "regret {regret}; errors: highest reward {reward}, highest chance {chance}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
