@@ -183,5 +183,44 @@ class Generator(unittest.TestCase):
                 bench.diff_case(random.Random(1), lanes, cls, mode)
 
 
+CHANGED = ("A camera took two photos of the same row of lanes, first before and then after. Each lane shows one value, "
+           "a number or a word. Exactly one lane shows a different value in after than in before. Choose that lane.")
+CHANGED_LIST = ("A camera took two photos of the same row of lanes, first before and then after. Each lane shows one value, "
+                "a number or a word. The lists before and after hold the lane values from left to right; the first item is lane 1. "
+                "Exactly one lane shows a different value in after than in before. Choose that lane.")
+ALT_CHANGED = ("Two photos show the same row of lanes, before first and after second, with one value per lane. "
+               "In after, the value of exactly one lane differs from its value in before. Pick that lane.")
+ALT_CHANGED_LIST = ("Two photos show the same row of lanes, before first and after second; each one lists the lane values from left "
+                    "to right, so its first item belongs to lane 1. In after, the value of exactly one lane differs from its value "
+                    "in before. Pick that lane.")
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_example_state_in_both_forms(self):
+        self.assertEqual(json.dumps(bench.diff_state(*NUMBERS, "dicts")),
+                         '{"before": {"lane_1": 2408, "lane_2": 2144, "lane_3": 4943, "lane_4": 2486}, '
+                         '"after": {"lane_1": 2409, "lane_2": 2144, "lane_3": 4943, "lane_4": 2486}}')
+        self.assertEqual(json.dumps(bench.diff_state(*NUMBERS, "lists")),
+                         '{"before": [2408, 2144, 4943, 2486], "after": [2409, 2144, 4943, 2486]}')
+        self.assertEqual(json.dumps(bench.diff_state(*WORDS_CASE[:2], "lists")),
+                         '{"before": ["tape", "tape", "park", "tear"], "after": ["cape", "tape", "park", "tear"]}')
+        self.assertEqual(bench.diff_state(*NUMBERS), bench.diff_state(*NUMBERS, bench.DIFF_FORM))
+        for form in bench.DIFF_FORMS:
+            self.assertEqual(solver(bench.diff_state(*NUMBERS, form)), "lane_1")
+
+    def test_questions_and_their_alternative_wordings(self):
+        for lanes in range(2, 9):
+            for form, key, text, alt in (("dicts", "changed", CHANGED, ALT_CHANGED), ("lists", "changed_list", CHANGED_LIST, ALT_CHANGED_LIST)):
+                with self.subTest(lanes=lanes, form=form):
+                    q = bench.diff_question(lanes, form)
+                    self.assertEqual(list(q), [key])
+                    self.assertEqual((q[key]["type"], q[key]["instructions"]), ("choice", text))
+                    self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps(bench.position_criteria(bench.lane_keys(lanes), "Lane")))
+                    self.assertEqual(bench.ALT[key], alt)
+                    self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt)
+                    self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), bench.lane_keys(lanes)[::-1])
+        self.assertEqual(bench.diff_question(4), bench.diff_question(4, bench.DIFF_FORM))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2087,6 +2087,28 @@ def diff_twins(case):
     return {i for i in range(len(before)) if i != answer and (after[i] == after[answer] or before[i] == before[answer])}
 
 
+def diff_state(before, after, form=None):
+    """Stav pro model: lists = seznamy hodnot zleva doprava, jinak (dicts) objekty {"lane_1": hodnota, …}."""
+    if (form or DIFF_FORM) == "lists":
+        return {"before": list(before), "after": list(after)}
+    keys = lane_keys(len(before))
+    return {"before": dict(zip(keys, before)), "after": dict(zip(keys, after))}
+
+
+DIFF_INTRO = ("A camera took two photos of the same row of lanes, first before and then after. Each lane shows one value, "
+              "a number or a word. ")
+DIFF_ASK = "Exactly one lane shows a different value in after than in before. Choose that lane."
+
+
+def diff_question(lanes, form=None):
+    """Otázka choice nad pruhy: changed (podoba dicts) nebo changed_list (podoba lists, zadání vysvětlí polohu v seznamu)."""
+    criteria = position_criteria(lane_keys(lanes), "Lane")
+    if (form or DIFF_FORM) == "lists":
+        text = DIFF_INTRO + "The lists before and after hold the lane values from left to right; the first item is lane 1. " + DIFF_ASK
+        return {"changed_list": {"type": "choice", "instructions": text, "criteria": criteria}}
+    return {"changed": {"type": "choice", "instructions": DIFF_INTRO + DIFF_ASK, "criteria": criteria}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2105,6 +2127,8 @@ ALT = {                                              # jinak formulované zadán
     "bet": "Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.",
     "speed": "The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.",
     "depot": "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
+    "changed": "Two photos show the same row of lanes, before first and after second, with one value per lane. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
+    "changed_list": "Two photos show the same row of lanes, before first and after second; each one lists the lane values from left to right, so its first item belongs to lane 1. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
