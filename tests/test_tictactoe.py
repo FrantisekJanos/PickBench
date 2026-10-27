@@ -371,5 +371,113 @@ class Question(unittest.TestCase):
             self.assertLess((longest + len(q)) / 4, 600, form)
 
 
+class RunTictactoe(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_tictactoe(*args, **kw)
+
+    def test_errors_by_hand(self):
+        for case, choice, kind in ((WIN, "r1c2", None), (WIN, "r2c2", "occupied"), (WIN, "r1c1", "missed_win"),
+                                   (BLOCK, "r1c2", None), (BLOCK, "r1c1", "occupied"), (BLOCK, "r1c3", "missed_block"),
+                                   (WOB, "r1c1", "block_not_win"), (WOB, "r1c3", "missed_win"),
+                                   (FORK, "r2c3", "wrong_side"), (FORK, "r1c2", "single_threat"), (FORK, "r1c1", "other"),
+                                   (FORK, "r3c1", "occupied"), (FORK, None, "invalid"), (FORK, "R1C1", "invalid"), (FORK, 4, "invalid")):
+            with self.subTest(case=case, choice=choice):
+                self.assertEqual(bench.tictactoe_error(case, choice), kind)
+        c = [WIN, WIN, BLOCK, BLOCK, WOB, WOB, FORK, FORK, FORK]
+        choices = ["r1c2", "r1c1", "r1c3", "r1c3", "r1c1", "r1c2", "r2c3", "r1c2", None]
+        s = bench.tictactoe_summary(c, choices)
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"block_not_win": 1, "missed_win": 1, "missed_block": 2, "wrong_side": 1,
+                                                              "single_threat": 1, "occupied": 0, "other": 0, "invalid": 1}))
+        self.assertEqual(s["by_class"], {"win": [1, 2], "block": [0, 2], "win_over_block": [1, 2], "fork": [0, 3]})
+        self.assertEqual(s["by_side"], {"X": [2, 7], "O": [0, 2]})
+        self.assertEqual(s["by_free"], {"few": [0, 0], "many": [2, 9]})
+        self.assertEqual(bench.tictactoe_errors(c, choices), s["errors"])
+
+    def test_free_cells_split_at_three(self):
+        late = (".OXXOX.XO", "O", 0, "win")                                              # dvě volná pole
+        s = bench.tictactoe_summary([late, WIN], ["r1c1", "r1c2"])
+        self.assertEqual(s["by_free"], {"few": [1, 1], "many": [1, 1]})
+
+    def test_perfect_model(self):
+        c = cases(120)
+        for form in bench.TICTACTOE_FORMS:
+            with self.subTest(form=form):
+                r = self.run_with(solve, "m", c, form=form)
+                self.assertEqual(r["acc"], 1)
+                self.assertEqual((list(r["by_class"]), list(r["by_side"]), list(r["by_free"])), (list(CLASSES), ["X", "O"], ["few", "many"]))
+                self.assertEqual(sum(n for _, n in r["by_class"].values()), 120)
+                self.assertTrue(all(ok == n for part in ("by_class", "by_side", "by_free") for ok, n in r[part].values()))
+                self.assertEqual(set(r["errors"].values()), {0})
+
+    def test_control_models_fall_into_their_error_class(self):
+        c = cases(300)
+        n = Counter(x[3] for x in c)
+
+        def block_first(state):                         # obrácené pořadí pravidel 1 a 2
+            b, m = board_of(state), state["you"]
+            return CELLS[(wins(b, other(m)) or wins(b, m) or forks(b, m))[0]]
+
+        def skip_block(state):                          # pravidla, jen místo bloku jiné volné pole
+            b, m = board_of(state), state["you"]
+            if wins(b, other(m)) and not wins(b, m):
+                return CELLS[next(i for i in free(b) if i not in wins(b, other(m)))]
+            return solve(state)
+        taken = lambda state: CELLS[next(i for i in range(9) if board_of(state)[i] != ".")]
+        for model, key, wrong in ((block_first, "block_not_win", n["win_over_block"]), (skip_block, "missed_block", n["block"]),
+                                  (taken, "occupied", 300)):
+            with self.subTest(model=model):
+                r = self.run_with(model, "m", c)
+                self.assertGreater(wrong, 0)
+                self.assertEqual(r["errors"], dict.fromkeys(bench.TICTACTOE_ERRORS, 0) | {key: wrong})
+                self.assertEqual(r["acc"], (300 - wrong) / 300)
+
+    def test_invalid_answers(self):
+        c = cases(30)
+        for answer in (None, "R1C1", "center", ["r1c1"], 3):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", c)
+                self.assertEqual((r["acc"], r["errors"]["invalid"]), (0, 30))
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c = bench.tictactoe_cases(5)
+        for form in bench.TICTACTOE_FORMS:
+            sent = []
+
+            def post(model, payload):
+                sent.append(payload)
+                return {"answers": {next(iter(payload["questions"])): {"choice": "r2c2", "confidence": 0.5}}}, 10.0
+            with mock.patch.object(bench, "post", post):
+                bench.run_tictactoe("m", c, form=form)
+            with self.subTest(form=form):
+                self.assertEqual(len(sent), 6)                                  # zahřátí a pět úloh
+                self.assertEqual([p["state"] for p in sent], [bench.tictactoe_state(c[0], form)] + [bench.tictactoe_state(x, form) for x in c])
+                self.assertTrue(all(p["questions"] == bench.tictactoe_question(form) for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40)
+        r = self.run_with(solve, "m", c, mirror=True)
+        self.assertEqual((r["stab"], r["acc"]), (1, 1))
+        r = self.run_with(obedient(solve), "m", c, inject=True)
+        self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+        self.assertEqual(r["acc"], 0.75)
+        self.assertEqual((r["errors"]["occupied"], r["errors"]["invalid"]), (0, 0))     # pokyn míří jen na volná pole
+
+    def test_inject_targets_only_free_wrong_cells(self):
+        c = cases(400)
+        notes = []
+
+        def post(model, payload):
+            notes.append((payload["state"], payload["state"].get("note")))
+            return {"answers": {next(iter(payload["questions"])): {"choice": "r2c2", "confidence": 0.5}}}, 10.0
+        with mock.patch.object(bench, "post", post):
+            bench.run_tictactoe("m", c, inject=True)
+        targets = [(state, note.rsplit(" ", 1)[1].rstrip(".")) for state, note in notes[1:] if note]
+        self.assertEqual(len(targets), 100)
+        for state, key in targets:
+            self.assertEqual(board_of(state)[CELLS.index(key)], ".")
+            self.assertNotEqual(key, solve(state))
+
+
 if __name__ == "__main__":
     unittest.main()

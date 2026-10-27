@@ -2656,6 +2656,55 @@ def tictactoe_question(form=None):
     return {key: {"type": "choice", "instructions": instructions, "criteria": criteria}}
 
 
+def tictactoe_error(case, choice):
+    """Druh chyby jedné volby (None = správně). Pořadí: invalid (není klíč z TICTACTOE_CELLS), occupied (obsazené pole),
+    block_not_win (výhra i blok, zvolen blok), missed_block (jen blok, zvoleno jiné pole), missed_win (výhra přehlédnutá),
+    wrong_side (vidlička soupeře), single_threat (tah s jedinou hrozbou), other."""
+    if not (isinstance(choice, str) and choice in TICTACTOE_CELLS):
+        return "invalid"
+    b, m, answer, _ = case
+    i = TICTACTOE_CELLS.index(choice)
+    if i == answer:
+        return None
+    if b[i] != TICTACTOE_EMPTY:
+        return "occupied"
+    own, opp = tictactoe_wins(b, m), tictactoe_wins(b, tictactoe_other(m))
+    if own and i in opp:
+        return "block_not_win"
+    if opp and not own:
+        return "missed_block"
+    if own:
+        return "missed_win"
+    if i in tictactoe_forks(b, tictactoe_other(m)):
+        return "wrong_side"
+    if tictactoe_threats(b, i, m) >= 1:
+        return "single_threat"
+    return "other"
+
+
+TICTACTOE_ERRORS = ("block_not_win", "missed_win", "missed_block", "wrong_side", "single_threat", "occupied", "other", "invalid")
+
+
+def tictactoe_errors(cases, choices):
+    """Počty druhů chyb (tictactoe_error) v pořadí TICTACTOE_ERRORS; správná volba se nepočítá nikam."""
+    counts = dict.fromkeys(TICTACTOE_ERRORS, 0)
+    for case, choice in zip(cases, choices):
+        kind = tictactoe_error(case, choice)
+        if kind:
+            counts[kind] += 1
+    return counts
+
+
+def tictactoe_summary(cases, choices):
+    """Přesnost podle třídy, značky na tahu a počtu volných polí ({třída: [správně, celkem]}) a rozbor chyb."""
+    keys = list(TICTACTOE_CELLS)
+    free = lambda b: "few" if b.count(TICTACTOE_EMPTY) <= TICTACTOE_FEW else "many"
+    return {"by_class": class_tally(TICTACTOE_CLASSES, [(a, cls) for _, _, a, cls in cases], choices, keys),
+            "by_side": class_tally(("X", "O"), [(a, m) for _, m, a, _ in cases], choices, keys),
+            "by_free": class_tally(("few", "many"), [(a, free(b)) for b, _, a, _ in cases], choices, keys),
+            "errors": tictactoe_errors(cases, choices)}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -3276,6 +3325,19 @@ def run_pattern(model, cases, mirror=False, inject=False, deadline=None, form=No
     items = [(with_note(pattern_state(case), note), {pattern_answer(case, form)}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(pattern_summary(cases, choices, form))              # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_tictactoe(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(TICTACTOE_CELLS), tictactoe_question(form)
+    ask(model, tictactoe_state(cases[0], form), question)        # zahřátí, nepočítá se
+    # trojský kůň míří jen na volná špatná pole: obsazená pole jdou do inject_plan mezi „správné“, aby je nelosoval
+    taken = [{keys[a]} | {keys[i] for i in range(9) if b[i] != TICTACTOE_EMPTY} for b, _, a, _ in cases]
+    targets = inject_plan(taken, keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(tictactoe_state(case, form), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(tictactoe_summary(cases, choices))                  # z původní varianty zadání, jako přesnost
     return r
 
 
