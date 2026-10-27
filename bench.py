@@ -1466,6 +1466,56 @@ def bet_summary(cases, choices, keys):
     return {"by_level": by_level, "regret": regret / len(cases), "errors": errors}
 
 
+# ---------- scénář: tempomat ----------
+# Úloha = (m, road, fog, answer, cls, place): vzdálenost překážky v m, povrch, mlha, správný stupeň, třída, poloha.
+# Stupeň = pásmo vzdálenosti (CRUISE_BANDS) minus srážka za povrch a za mlhu.
+CRUISE_TOP = 7                                       # nejvyšší stupeň (škála 1–7)
+CRUISE_BANDS = (20, 40, 60, 100, 150, 220)           # hranice pásem: pod 20 m stupeň 1, 20–39 m 2, …, 220 m a víc 7
+CRUISE_DIST = (8, 300)                               # nejkratší a nejdelší vzdálenost překážky v m
+CRUISE_EDGE = 3                                      # u hranice: b − 3 ≤ m ≤ b + 2 pro některou hranici b
+CRUISE_ROAD = {"dry": 0, "wet": 1, "icy": 2}         # o kolik stupňů níž
+CRUISE_FOG = {"none": 0, "light": 1, "dense": 2}
+CRUISE_CLASSES = ("table", "road", "fog", "both")    # platí žádná podmínka, jen povrch, jen mlha, obě
+CRUISE_PLACES = ("edge", "middle")
+CRUISE_FORM = "choice"                               # výchozí podoba otázky (Volby po pokusu)
+_CRUISE_ONE = {(2, 1): 1, (3, 1): 1, (3, 2): 4, (4, 1): 12, (4, 2): 22, (5, 1): 6, (5, 2): 11, (6, 1): 1, (6, 2): 17, (7, 1): 2, (7, 2): 22}
+CRUISE_WEIGHTS = {                                   # váhy kombinací (stupeň ze vzdálenosti, srážka povrch, srážka mlha) z prototypu
+    "table": {(1, 0, 0): 20, (2, 0, 0): 10, (3, 0, 0): 10, (4, 0, 0): 20, (5, 0, 0): 10, (6, 0, 0): 10, (7, 0, 0): 20},
+    "road": {(ld, p, 0): w for (ld, p), w in _CRUISE_ONE.items()},
+    "fog": {(ld, 0, f): w for (ld, f), w in _CRUISE_ONE.items()},
+    "both": {(3, 1, 1): 1, (4, 1, 1): 25, (4, 1, 2): 1, (4, 2, 1): 1, (5, 1, 1): 1, (5, 1, 2): 1, (5, 2, 1): 1, (5, 2, 2): 24,
+             (6, 1, 1): 1, (6, 1, 2): 16, (6, 2, 1): 9, (6, 2, 2): 1, (7, 1, 1): 1, (7, 1, 2): 16, (7, 2, 1): 9, (7, 2, 2): 1},
+}
+
+
+def band_level(m):
+    """Stupeň podle vzdálenosti m (pásmo z tabulky v zadání), bez srážek."""
+    return 1 + sum(m >= b for b in CRUISE_BANDS)
+
+
+def band_range(level):
+    """Nejmenší a největší vzdálenost pásma daného stupně, oříznutá na CRUISE_DIST."""
+    lo = CRUISE_DIST[0] if level == 1 else CRUISE_BANDS[level - 2]
+    hi = CRUISE_DIST[1] if level == CRUISE_TOP else CRUISE_BANDS[level - 1] - 1
+    return lo, hi
+
+
+def near_edge(m):
+    """Leží m u hranice pásma? Hranice b leží mezi b − 1 a b, proto b − 3 ≤ m ≤ b + 2 (Rozpory 3)."""
+    return any(b - CRUISE_EDGE <= m <= b + CRUISE_EDGE - 1 for b in CRUISE_BANDS)
+
+
+def neighbor_level(m):
+    """Stupeň pásma za nejbližší hranicí (omyl „sousední pásmo“)."""
+    b = min(CRUISE_BANDS, key=lambda b: abs(m - b + 0.5))
+    return band_level(b - 1) if m >= b else band_level(b)
+
+
+def cruise_level(m, road, fog):
+    """Správný stupeň: pásmo vzdálenosti minus srážka za povrch a za mlhu, bez ořezu."""
+    return band_level(m) - CRUISE_ROAD[road] - CRUISE_FOG[fog]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
