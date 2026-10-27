@@ -7,6 +7,8 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -17,6 +19,8 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
+          python bench.py 100 --queue --weighted tev1
+          python bench.py 100 --bet tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -57,6 +61,21 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --labeled, --matched-by:  jen s --rule: podoba stavu, deník je v obou stejný. labeled = každá brána říká jen znak,
             ve kterém se shoduje se vzorem, karty model nevidí; matched_by = karta vzoru a karty bran, znak shody
             musí model najít sám. Bez volby platí labeled.
+--queue:    nejkratší fronta: auto přijíždí k mýtné bráně s K pruhy (výchozí 4, 2 až 8), v každém pruhu čeká 1 až 12 vozidel
+            a model volí pruh s nejkratší frontou; ta je vždy jediná. N úloh (výchozí 100), rovnoměrně podle rozdílu
+            nejkratší a druhé nejkratší fronty (1, 2–3, 4+). Za řádkem modelu přesnost podle rozdílu, pod ním chyby:
+            nejkratší text (pruh, jehož seznam vozidel je jako text nejkratší), jiné, neplatné. U rozdílů 1 a 2–3 je
+            nejkratší text správně v třetině úloh (při 2 pruzích v polovině), u rozdílu 4+ skoro vždy.
+--weighted:  jen s --queue: nákladní auto (truck), autobus (bus) a traktor (tractor) se počítají za tři vozidla, ostatní
+            za jedno; v polovině úloh je nejkratší fronta podle počtu vozidel jiný pruh. Řádek chyb navíc počítá volbu
+            nejkratší fronty podle počtu (bez vah). Úlohy jsou jiné než bez volby.
+--bet:      sázka na bránu: každá z K bran (výchozí 4, 3 až 8) vyplatí s danou šancí v procentech svou odměnu (20 až 390),
+            jinak nic. Model volí bránu s nejvyšší očekávanou výplatou (odměna krát šance), ta je aspoň o 5 % vyšší než
+            u kterékoli jiné brány. N úloh (výchozí 100), rovnoměrně ve třech úrovních: stejná šance u všech bran;
+            50 nebo 100 % (brána se 100 % je špatně, správná je tím vždy brána s nejvyšší odměnou); obecná (brána s nejvyšší
+            odměnou je správná v třetině úloh, brána s nejvyšší šancí také; při 3 branách dá vyloučení obou skoro polovinu).
+            Za řádkem modelu přesnost podle úrovně, pod ním regret = průměrná ztráta očekávané výplaty proti nejlepší
+            bráně (neplatná odpověď 100 %) a chyby: nejvyšší odměna, nejvyšší šance, jiné, neplatné.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -91,6 +110,8 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -101,6 +122,8 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
+          python bench.py 100 --queue --weighted tev1
+          python bench.py 100 --bet tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -141,6 +164,21 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --labeled, --matched-by:  only with --rule: the form of the state; the log is the same in both. labeled = each gate
             says only the feature it shares with the sample, the model sees no cards; matched_by = the sample card and the
             cards of the gates, so the model has to find the shared feature itself. Without the option: labeled.
+--queue:    shortest queue: a car comes to a toll gate with K lanes (default 4, 2 to 8), 1 to 12 vehicles wait in each lane,
+            and the model picks the lane with the shortest queue; it is always unique. N tasks (default 100), spread evenly
+            by the difference between the shortest and the second shortest queue (1, 2–3, 4+). After the model row, the
+            accuracy by difference; below it the errors: shortest text (the lane whose list of vehicles is shortest as text),
+            other, invalid. At differences 1 and 2–3 the shortest text is right in a third of the tasks (half with 2 lanes), at 4+ almost always.
+--weighted:  only with --queue: a truck, a bus and a tractor count as three vehicles each, any other vehicle as one;
+            in half of the tasks the shortest queue by the number of vehicles is another lane. The error line also counts
+            picks of the shortest queue by count (unweighted). The tasks differ from those without the option.
+--bet:      bet on a gate: each of K gates (default 4, 3 to 8) pays its reward (20 to 390) with the given chance in percent,
+            otherwise nothing. The model picks the gate with the highest expected payout (reward times chance), at least
+            5% higher than at any other gate. N tasks (default 100), spread evenly over three levels: the same chance at
+            every gate; 50 or 100% (the gate with 100% is wrong, so the gate with the highest reward is always right); general
+            (the gate with the highest reward is right in a third of the tasks, and so is the gate with the highest chance; with
+            3 gates ruling both out gives almost half). After the model row, the accuracy by level; below it regret = the mean
+            loss of expected payout against the best gate (an invalid answer counts as 100%) and the errors: highest reward, highest chance, other, invalid.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -168,7 +206,9 @@ The game must not run in the browser during the measurement (the requests would 
 """
 import argparse
 import contextlib
+import itertools
 import json
+import math
 import random
 import re
 import statistics
@@ -1162,6 +1202,270 @@ def rule_summary(cases, choices, keys):
             "persev": [sum(choice == keys[old] for old, choice in switch), len(switch)]}
 
 
+# ---------- scénář: nejkratší fronta ----------
+# Fronta je n-tice jmen vozidel; pruh je číslo od nuly (pruh 1 je index 0).
+QUEUE_VEHICLES = ("car", "van", "bus", "truck", "motorbike", "tractor", "minibus", "pickup")
+QUEUE_WEIGHTS = {"bus": 3, "truck": 3, "tractor": 3}   # ostatní vozidla váží 1
+QUEUE_SIZE = (1, 12)                                    # nejmenší a největší počet vozidel ve frontě
+QUEUE_GAPS = ("gap1", "gap2-3", "gap4+")                # rozdíl nejkratší a druhé nejkratší fronty: 1, 2–3, 4 a víc
+QUEUE_COUNT_SHARE = 0.5                                 # podíl vážených úloh, kde je nejkratší podle počtu jiná
+QUEUE_TRIES = 20000000                                  # nejhorší kombinace zkratek (K = 3, gap2-3) má průměr asi 290 tisíc pokusů
+# Generátor losuje pruh jako dvojici (počet vozidel, z toho těžkých): počet rovnoměrně z QUEUE_SIZE, těžkých binomicky.
+# Je to totéž rozdělení jako vozidla losovaná po jednom, jen se třída a zkratky dají zamítnout dřív, než se losují jména.
+QUEUE_HEAVY = tuple(v for v in QUEUE_VEHICLES if v in QUEUE_WEIGHTS)
+QUEUE_LIGHT = tuple(v for v in QUEUE_VEHICLES if v not in QUEUE_WEIGHTS)
+QUEUE_SHAPES = tuple((size, heavy) for size in range(QUEUE_SIZE[0], QUEUE_SIZE[1] + 1) for heavy in range(size + 1))
+QUEUE_SHAPE_CUM = tuple(itertools.accumulate(
+    math.comb(size, heavy) * len(QUEUE_HEAVY) ** heavy * len(QUEUE_LIGHT) ** (size - heavy) / len(QUEUE_VEHICLES) ** size
+    for size, heavy in QUEUE_SHAPES))
+
+
+def queue_fewest(values):
+    """Pruhy s nejmenší hodnotou, všechny při shodě (model, který jde po zkratce, zvolí kterýkoli z nich)."""
+    low = min(values)
+    return tuple(i for i, v in enumerate(values) if v == low)
+
+
+def queue_length(queue, weighted=False):
+    """Délka fronty: počet vozidel, s vahami součet vah (nákladní auto, autobus a traktor za tři)."""
+    if weighted:
+        return sum(QUEUE_WEIGHTS.get(v, 1) for v in queue)
+    return len(queue)
+
+
+def queue_class(gap):
+    """Třída rozdílu nejkratší a druhé nejkratší fronty: 1, 2-3, 4 a víc."""
+    if gap < 1:
+        raise ValueError(f"queue_class: gap must be at least 1, got {gap}")
+    return "gap1" if gap == 1 else "gap2-3" if gap <= 3 else "gap4+"
+
+
+def queue_text(queues):
+    """Pruhy s nejkratším JSON zápisem seznamu (tak ho model čte v dotazu), při shodě všechny, vzestupně."""
+    return queue_fewest([len(json.dumps(list(q))) for q in queues])
+
+
+def queue_count(queues):
+    """Jediný pruh s nejméně vozidly (bez vah), nebo None, když jich je víc."""
+    sizes = [len(q) for q in queues]
+    return sizes.index(min(sizes)) if sizes.count(min(sizes)) == 1 else None
+
+
+def queue_heavy(queues):
+    """Kontrolní zkratka: pruhy s nejméně těžkými vozidly (s vahou 3), při shodě všechny, vzestupně."""
+    return queue_fewest([sum(v in QUEUE_WEIGHTS for v in q) for q in queues])
+
+
+def queue_text_share(lanes):
+    """Cílový podíl úloh, kde nejkratší text trefí správný pruh. Při dvou pruzích 1/2: jedna třetina by byla pod
+    náhodou a obrátila by zkratku (kde nejkratší text netrefí, trefí ho nejdelší text)."""
+    return 1 / 2 if lanes == 2 else 1 / 3
+
+
+def queue_case(rng, lanes, cls, weighted=False):
+    """Jedna úloha: (fronty, správný pruh, třída, pruhy nejkratšího textu, jediný pruh s nejméně vozidly nebo None).
+    Pruhy nejkratšího textu jsou n-tice všech pruhů se stejně krátkým zápisem (queue_text): zkratka trefí, když je
+    správný pruh mezi nimi, protože model, který jde po zkratce, zvolí kterýkoli z nich. Totéž platí pro těžká vozidla.
+    Předem se losuje, jestli má nejkratší text trefit správný pruh (queue_text_share, mimo gap4+), s vahami, jestli
+    má být nejkratší fronta podle počtu jiná (QUEUE_COUNT_SHARE), a s vahami při K >= 3 mimo gap4+, jestli má trefit
+    pruh s nejméně těžkými vozidly (queue_text_share). Při K = 2 se těžká nehlídají: „počet jiný“ tam vynucuje,
+    že pruh s méně těžkými vozidly je správný, takže vylosování „počet jiný, těžká netrefí“ nejde splnit.
+    Pruh se losuje jako (počet vozidel, z toho těžkých) z QUEUE_SHAPES; jména vozidel až po číselných kontrolách."""
+    if not 2 <= lanes <= 8 or cls not in QUEUE_GAPS:
+        raise RuntimeError(f"queue_case: unsupported lanes {lanes} or class {cls!r}")
+    hit = rng.random() < queue_text_share(lanes) if cls != "gap4+" else None
+    differ = rng.random() < QUEUE_COUNT_SHARE if weighted else None
+    heavy = rng.random() < queue_text_share(lanes) if weighted and lanes >= 3 and cls != "gap4+" else None
+    for _ in range(QUEUE_TRIES):
+        shapes = rng.choices(QUEUE_SHAPES, cum_weights=QUEUE_SHAPE_CUM, k=lanes)
+        sizes = [size for size, _ in shapes]
+        if sizes.count(min(sizes)) > 1:              # bez vah jediná nejkratší fronta, s vahami jediný pruh s nejméně vozidly
+            continue
+        lengths = [size + 2 * n for size, n in shapes] if weighted else sizes   # těžké vozidlo váží 3
+        order = sorted(range(lanes), key=lengths.__getitem__)
+        gap = lengths[order[1]] - lengths[order[0]]
+        if gap == 0 or queue_class(gap) != cls:
+            continue
+        answer = order[0]
+        if weighted and (sizes.index(min(sizes)) != answer) != differ:
+            continue
+        if heavy is not None and (answer in queue_fewest([n for _, n in shapes])) != heavy:
+            continue
+        drawn = [rng.choices(QUEUE_HEAVY, k=n) + rng.choices(QUEUE_LIGHT, k=size - n) for size, n in shapes]
+        text = queue_fewest([sum(map(len, lane)) + 4 * len(lane) for lane in drawn])   # délka json.dumps(seznam)
+        if hit is not None and (answer in text) != hit:
+            continue
+        break
+    else:
+        raise RuntimeError(f"queue_case: no {cls} task for {lanes} lanes after {QUEUE_TRIES} tries")
+    for lane in drawn:                           # těžká vozidla na náhodná místa ve frontě
+        rng.shuffle(lane)
+    queues = tuple(tuple(lane) for lane in drawn)
+    # záruky se kontrolují znovu z hotových front; porušení je chyba generátoru a nic se neopravuje potichu
+    lengths, count = [queue_length(q, weighted) for q in queues], queue_count(queues)
+    rest = sorted(lengths[:answer] + lengths[answer + 1:])
+    if (len(queues) != lanes or lengths[answer] >= rest[0] or queue_class(rest[0] - lengths[answer]) != cls
+            or queue_text(queues) != text or (not weighted and count != answer) or (weighted and count is None)):
+        raise RuntimeError("queue_case: generated task breaks its guarantees")
+    return queues, answer, cls, text, count
+
+
+def queue_cases(n, lanes=4, weighted=False, seed=1):
+    """n úloh ze semínka; třída rozdílu se losuje rovnoměrně na každou úlohu."""
+    rng = random.Random(seed)
+    return [queue_case(rng, lanes, rng.choice(QUEUE_GAPS), weighted) for _ in range(n)]
+
+
+def queue_state(queues):
+    """Stav pro model: lane_N → seznam vozidel v pořadí z generátoru."""
+    return {f"lane_{i + 1}": list(q) for i, q in enumerate(queues)}
+
+
+def queue_question(lanes, weighted=False):
+    """Otázka choice: lane (bez vah) nebo lane_weighted (s větou o vahách)."""
+    weights = "A truck, a bus or a tractor counts as three vehicles; any other vehicle counts as one. " if weighted else ""
+    instructions = (f"A car comes to a toll gate with {lanes} lanes. Each lane_N lists the vehicles waiting in that lane. "
+                    f"{weights}Choose the lane with the shortest queue.")
+    key = "lane_weighted" if weighted else "lane"
+    return {key: {"type": "choice", "instructions": instructions, "criteria": position_criteria(lane_keys(lanes), "Lane")}}
+
+
+def queue_errors(cases, choices, keys, weighted=False):
+    """Rozbor chybných voleb; správná volba se nepočítá nikam.
+
+    count (jen s vahami): zvolený je jediný pruh s nejméně vozidly podle počtu bez vah.
+    text: zvolený je některý z pruhů s nejkratším zápisem seznamu (při shodě kterýkoli z nich).
+    other: ostatní chybné volby.
+    invalid: volba, která není řetězec z keys (None, jiný řetězec, jiný typ)."""
+    counts = {"count": 0, "text": 0, "other": 0, "invalid": 0} if weighted else {"text": 0, "other": 0, "invalid": 0}
+    for (_, answer, _, text, count), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in keys):
+            counts["invalid"] += 1
+        elif choice == keys[answer]:
+            continue
+        elif weighted and count is not None and choice == keys[count]:
+            counts["count"] += 1
+        elif choice in [keys[i] for i in text]:
+            counts["text"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+# ---------- scénář: sázka na bránu ----------
+# Očekaná výplata brány je ev = odměna * šance v procentech, počítá se v celých číslech (bez dělení stem).
+BET_LEVELS = ("same", "round", "general")
+BET_REWARDS = range(20, 400, 10)
+BET_SAME_CHANCES = range(20, 100, 10)
+BET_CHANCES = range(10, 100, 5)
+BET_MARGIN = 105                                     # správná brána má mít aspoň o 5 % vyšší ev než druhá
+BET_SHORTCUT_SHARE = 1 / 3
+BET_TRIES = 10000
+
+
+def bet_top(values):
+    """Index jediného maxima, při shodě na maximu None."""
+    best = max(values)
+    return values.index(best) if values.count(best) == 1 else None
+
+
+def bet_second(rewards):
+    """Brány, jejichž odměna se rovná druhé hodnotě sestupně seřazených odměn, při shodě všechny, vzestupně (model, který
+    jde po zkratce „druhá nejvyšší odměna“, zvolí kteroukoli z nich). V general je nejvyšší odměna jediná."""
+    second = sorted(rewards, reverse=True)[1]
+    return tuple(i for i, r in enumerate(rewards) if r == second)
+
+
+def bet_case(rng, gates, level):
+    """Vrací (odměny, šance, správná brána, úroveň, jediná brána s nejvyšší odměnou nebo None, totéž pro šanci).
+
+    Úrovně same a round podle specu, round se staví přímo (jedna brána 100 %, ostatní 50 %). V general se předem losuje,
+    jestli má být správná brána s nejvyšší odměnou (BET_SHORTCUT_SHARE), totéž pro nejvyšší šanci a při K >= 4 pro druhou
+    nejvyšší odměnu (polovina ze zbylých, celkem 1/3); úloha se přijme, jen když se zkratky trefují přesně tak (vzor lookahead_case).
+    Při K = 3 se druhá odměna nehlídá: „nejvyšší odměna i druhá netrefí“ tam znamená nejnižší odměnu, ta vyhraje jen s nejvyšší šancí."""
+    if not 3 <= gates <= 8 or level not in BET_LEVELS:
+        raise RuntimeError(f"bet_case: unsupported task for {gates} gates and level {level}")
+    want = None
+    if level == "general":
+        top = rng.random() < BET_SHORTCUT_SHARE
+        chance = rng.random() < BET_SHORTCUT_SHARE
+        second = (not top and rng.random() < 1 / 2) if gates >= 4 else None
+        want = (top, chance, second)
+    for _ in range(BET_TRIES):
+        if level == "same":
+            chances = [rng.choice(BET_SAME_CHANCES)] * gates
+        elif level == "round":
+            chances = [50] * gates
+            chances[rng.randrange(gates)] = 100
+        else:
+            chances = [rng.choice(BET_CHANCES) for _ in range(gates)]
+        rewards = [rng.choice(BET_REWARDS) for _ in range(gates)]
+        ev = [r * c for r, c in zip(rewards, chances)]
+        order = sorted(range(gates), key=ev.__getitem__, reverse=True)
+        answer = order[0]
+        if 100 * ev[answer] < BET_MARGIN * ev[order[1]]:
+            continue
+        top_reward, top_chance = bet_top(rewards), bet_top(chances)
+        if level == "round" and top_chance == answer:
+            continue
+        if level == "general":
+            if top_reward is None or top_chance is None:
+                continue
+            if (top_reward == answer) != want[0] or (top_chance == answer) != want[1]:
+                continue
+            if want[2] is not None and (answer in bet_second(rewards)) != want[2]:
+                continue
+        break
+    else:
+        raise RuntimeError(f"bet_case: no {level} task for {gates} gates after {BET_TRIES} tries")
+    if level in ("same", "round") and top_reward != answer:
+        raise RuntimeError("bet_case: generated task breaks its guarantees")
+    return tuple(rewards), tuple(chances), answer, level, top_reward, top_chance
+
+
+def bet_cases(n, gates=4, seed=1):
+    """n úloh ze semínka; úroveň se losuje rovnoměrně na každou úlohu."""
+    rng = random.Random(seed)
+    return [bet_case(rng, gates, rng.choice(BET_LEVELS)) for _ in range(n)]
+
+
+def bet_state(rewards, chances):
+    """Stav pro model: gate_N → odměna a šance v procentech."""
+    return {f"gate_{i + 1}": {"reward": r, "chance_pct": c} for i, (r, c) in enumerate(zip(rewards, chances))}
+
+
+def bet_question(gates):
+    """Otázka choice: brána s nejvyšší očekávanou výplatou."""
+    instructions = ("Each gate pays its reward with the given chance in percent, otherwise nothing. "
+                    "Choose the gate with the highest expected payout (reward times chance).")
+    return {"bet": {"type": "choice", "instructions": instructions, "criteria": position_criteria(gate_keys(gates), "Gate")}}
+
+
+def bet_summary(cases, choices, keys):
+    """Přesnost po úrovních, regret a rozbor chyb sázky; volba mimo keys nebo ne-řetězec je neplatná (regret 1).
+
+    regret: průměr (ev[správná] - ev[zvolená]) / ev[správná]. errors: reward / chance = zvolená je jediná brána s nejvyšší
+    odměnou / šancí a není správná; other: ostatní chybné; invalid: neplatná volba. Správná volba se nepočítá nikam."""
+    by_level = class_tally(BET_LEVELS, [(answer, level) for _, _, answer, level, _, _ in cases], choices, keys)
+    errors, regret = {"reward": 0, "chance": 0, "other": 0, "invalid": 0}, 0
+    for (rewards, chances, answer, _, top_reward, top_chance), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in keys):
+            errors["invalid"] += 1
+            regret += 1
+            continue
+        ev = [r * c for r, c in zip(rewards, chances)]
+        regret += (ev[answer] - ev[keys.index(choice)]) / ev[answer]
+        if choice == keys[answer]:
+            continue
+        if top_reward is not None and choice == keys[top_reward]:
+            errors["reward"] += 1
+        elif top_chance is not None and choice == keys[top_chance]:
+            errors["chance"] += 1
+        else:
+            errors["other"] += 1
+    return {"by_level": by_level, "regret": regret / len(cases), "errors": errors}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1175,9 +1479,12 @@ ALT = {                                              # jinak formulované zadán
     "gate": "Which gate is right is set by a hidden rule: the right gate shares the color, the shape or the count with the sample card. Every gate shares exactly one feature with the sample. Right after any three correct picks in a row, the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate had in common with the sample, and whether the pick was correct. Find the rule in force now and pick the gate that matches the sample by it.",
     "gate_labeled": "A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.",
     "go": "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
+    "lane": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.",
+    "lane_weighted": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.",
+    "bet": "Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
-ALT_LANES = re.compile(r"\ba (\d+)-lane road\b")    # zadání move nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
+ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
 
 
 def noul_variant(question, v):
@@ -1196,8 +1503,9 @@ def variant(question, v):
         q["criteria"] = dict(reversed(list(q["criteria"].items())))
     if v == 2:
         alt = ALT[key]
-        if "{lanes}" in alt:                         # dva kroky dopředu: počet pruhů z původního zadání
-            alt = alt.format(lanes=ALT_LANES.search(q["instructions"]).group(1))
+        if "{lanes}" in alt:                         # dva kroky dopředu a fronta: počet pruhů z původního zadání
+            lanes = ALT_LANES.search(q["instructions"])
+            alt = alt.format(lanes=lanes.group(lanes.lastindex))     # číslo nese ta větev výrazu, která se chytila
         q["instructions"] = alt + (" " + q["instructions"] if key == "category" else "")   # pravidla sady e-mailů zůstávají
     return {key: q}
 
@@ -1613,6 +1921,30 @@ def run_rule(model, cases, mirror=False, inject=False, deadline=None, form=None)
     return r
 
 
+def run_queue(model, cases, lanes=4, mirror=False, inject=False, deadline=None, weighted=False):
+    keys, question = lane_keys(lanes), queue_question(lanes, weighted)
+    ask(model, queue_state(cases[0][0]), question)               # zahřátí, nepočítá se
+    targets = inject_plan([{keys[answer]} for _, answer, _, _, _ in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(queue_state(queues), note), {keys[answer]}, "")
+             for (queues, answer, _, _, _), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_gap"] = class_tally(QUEUE_GAPS, [(answer, cls) for _, answer, cls, _, _ in cases], choices, keys)
+    r["errors"] = queue_errors(cases, choices, keys, weighted)   # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_bet(model, cases, gates=4, mirror=False, inject=False, deadline=None):
+    keys, question = gate_keys(gates), bet_question(gates)
+    ask(model, bet_state(*cases[0][:2]), question)               # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[2]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(bet_state(*case[:2]), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(bet_summary(cases, choices, keys))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
@@ -1659,6 +1991,9 @@ def parse_args(argv):
     p.add_argument("--rule", action="store_true")
     p.add_argument("--matched-by", action="store_true")
     p.add_argument("--labeled", action="store_true")
+    p.add_argument("--queue", action="store_true")
+    p.add_argument("--weighted", action="store_true")
+    p.add_argument("--bet", action="store_true")                 # výchozí 4 brány dosadí níže (Úprava 11.5b)
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -1670,7 +2005,7 @@ def parse_args(argv):
     a.models = a.rest
     a.lanes_given = a.lanes is not None              # závora pruhy ani brány nemá: --lanes s --barrier končí hláškou
     if a.lanes is None:
-        a.lanes = 4 if a.memory or a.lookahead else 3      # paměťová stopa: 4 brány, dva kroky dopředu: 4 pruhy (spec)
+        a.lanes = 4 if a.memory or a.lookahead or a.queue or a.bet else 3      # paměťová stopa a sázka: 4 brány, dva kroky dopředu a fronta: 4 pruhy
     return a
 
 
@@ -1798,6 +2133,32 @@ def print_rule(r):
                             persev=frac(r["persev"])), flush=True)
 
 
+def queue_note(r):
+    """Poznámka za řádkem modelu: přesnost podle rozdílu nejkratší a druhé nejkratší fronty."""
+    return class_note(r["by_gap"], {"gap1": i18n.t("bench.queue.gap", d="1"), "gap2-3": i18n.t("bench.queue.gap", d="2–3"),
+                                    "gap4+": i18n.t("bench.queue.gap", d="4+")})
+
+
+def print_queue(r):
+    """Řádek chyb pod řádkem modelu; s vahami navíc volba nejkratší fronty podle počtu vozidel."""
+    e = r["errors"]
+    if "count" in e:
+        print(" " * 20 + i18n.t("bench.queue.errorsWeighted", **e), flush=True)
+    else:
+        print(" " * 20 + i18n.t("bench.queue.errors", **e), flush=True)
+
+
+def bet_note(r):
+    """Poznámka za řádkem modelu: přesnost podle úrovně sázky."""
+    return class_note(r["by_level"], {"same": i18n.t("bench.bet.same"), "round": i18n.t("bench.bet.round"),
+                                      "general": i18n.t("bench.bet.general")})
+
+
+def print_bet(r):
+    """Řádek pod řádkem modelu: regret a chyby na návnady."""
+    print(" " * 20 + i18n.t("bench.bet.line", regret=pct1(r["regret"]), **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
@@ -1820,9 +2181,10 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule)
+    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue,
+                 args.bet)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
-            or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
+            or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -1838,6 +2200,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.formRule"))
     if args.rule and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesRule"))
+    if args.weighted and not args.queue:
+        sys.exit(i18n.t("bench.err.weightedQueue"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -1938,6 +2302,27 @@ def main(argv):
                 r = run_rule(m, cases, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, rule_note(r))
                 print_rule(r)
+    elif args.queue:
+        cases = queue_cases(args.n or 100, args.lanes, args.weighted)     # vážené fronty jsou jiné úlohy: třída plyne z vážené délky
+        if args.weighted:
+            print(i18n.t("bench.intro.queueWeighted", n=len(cases), lanes=args.lanes) + "\n")
+        else:
+            print(i18n.t("bench.intro.queue", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_queue(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.weighted)
+                print_row(r, queue_note(r))
+                print_queue(r)
+    elif args.bet:
+        cases = bet_cases(args.n or 100, args.lanes)
+        print(i18n.t("bench.intro.bet", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_bet(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
+                print_row(r, bet_note(r))
+                print_bet(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

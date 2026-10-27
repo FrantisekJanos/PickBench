@@ -111,6 +111,14 @@ TEXTS = {
     # Skryté pravidlo: úvodní věta jmenuje podobu stavu ({form} = labeled / matched_by, nepřekládá se).
     "bench.intro.rule": {"cs": "{n} {n|úloha|úlohy|úloh} se skrytým pravidlem (podoba stavu {form}), 3 brány; sada je pro všechny modely stejná",
                          "en": "{n} {n|task|tasks} with a hidden rule (state form {form}), 3 gates, the same for all models"},
+    # Sázka na bránu: {lanes} = počet bran (3–8).
+    "bench.intro.bet": {"cs": "{n} {n|úloha|úlohy|úloh} se sázkou na bránu, {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
+                        "en": "{n} {n|task|tasks} with a bet on a gate, {lanes} gates, the same for all models"},
+    # Nejkratší fronta: úvodní věta říká, jestli se fronty počítají bez vah, nebo vážené (--weighted, jiné úlohy).
+    "bench.intro.queue": {"cs": "{n} {n|úloha|úlohy|úloh} u mýtné brány (fronty bez vah), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
+                          "en": "{n} {n|task|tasks} at a toll gate (unweighted queues), {lanes} lanes, the same for all models"},
+    "bench.intro.queueWeighted": {"cs": "{n} {n|úloha|úlohy|úloh} u mýtné brány (vážené fronty), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
+                                  "en": "{n} {n|task|tasks} at a toll gate (weighted queues), {lanes} lanes, the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -159,6 +167,20 @@ TEXTS = {
     "bench.rule.eliminate": {"cs": "vyloučení", "en": "eliminate"},
     "bench.rule.line": {"cs": "deník krátký {short}, dlouhý {long}; perseverace {persev}",
                         "en": "log short {short}, long {long}; perseveration {persev}"},
+    # Nejkratší fronta (--queue): popisek třídy v poznámce za řádkem modelu ({d} = 1, 2–3, 4+) a řádek chyb pod ním;
+    # vážená věta (--weighted) má navíc volbu nejkratší fronty podle počtu vozidel.
+    "bench.queue.gap": {"cs": "rozdíl {d}", "en": "difference {d}"},
+    "bench.queue.errors": {"cs": "chyby: nejkratší text {text}, jiné {other}, neplatné {invalid}",
+                           "en": "errors: shortest text {text}, other {other}, invalid {invalid}"},
+    "bench.queue.errorsWeighted": {"cs": "chyby: nejkratší podle počtu (bez vah) {count}, nejkratší text {text}, jiné {other}, neplatné {invalid}",
+                                   "en": "errors: shortest by count (unweighted) {count}, shortest text {text}, other {other}, invalid {invalid}"},
+    # Sázka na bránu (--bet): jména úrovní v poznámce za řádkem modelu a řádek pod ním ({regret} = hotová procenta „12.3%“,
+    # ostatní = počty chybných odpovědí).
+    "bench.bet.same": {"cs": "stejná šance", "en": "same chance"},
+    "bench.bet.round": {"cs": "50 nebo 100 %", "en": "50 or 100%"},
+    "bench.bet.general": {"cs": "obecná", "en": "general"},
+    "bench.bet.line": {"cs": "regret {regret}; chyby: nejvyšší odměna {reward}, nejvyšší šance {chance}, jiné {other}, neplatné {invalid}",
+                       "en": "regret {regret}; errors: highest reward {reward}, highest chance {chance}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -195,6 +217,7 @@ TEXTS = {
     "bench.err.lanesRule": {"cs": "Volba --lanes se s --rule nekombinuje.", "en": "The --lanes option cannot be combined with --rule."},
     "bench.err.formRule": {"cs": "Volby --matched-by a --labeled jdou jen s --rule.",
                            "en": "The --matched-by and --labeled options work only with --rule."},
+    "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",

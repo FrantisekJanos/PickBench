@@ -1,0 +1,5 @@
+12 úloh se sázkou na bránu, 5 bran; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      76%    43%     149   (stejná šance 2/3, 50 nebo 100 % 2/6, obecná 0/3)
+                    regret 27.5%; chyby: nejvyšší odměna 1, nejvyšší šance 3, jiné 4, neplatné 0
