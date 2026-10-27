@@ -58,6 +58,7 @@
   .card .cat { font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:600; }
   .card .body { color:var(--dim); }
   #legend { display:flex; flex-wrap:wrap; gap:6px 14px; }
+  #legend.lines { flex-direction:column; gap:4px; }
   .chip i { display:inline-block; width:18px; height:18px; border-radius:50%; text-align:center; font:600 11px/18px "Segoe UI", sans-serif; margin-right:5px; }
   #conf th, #conf td { text-align:center; }
   #conf th:first-child { text-align:left; }
@@ -574,7 +575,7 @@ const TEXTS = {
   'memory.seek': { cs: 'hledá se značka před {n} {n|krokem|kroky}', en: 'looking for the sign {n} {n|step|steps} back' },
   'memory.errors': { cs: 'chyby: o krok vedle {near}, nejnovější značka {latest}, jiné {other}, neplatné {invalid}; rozsah paměti {span}', en: 'errors: one step off {near}, most recent sign {latest}, other {other}, invalid {invalid}; memory span {span}' },
   // scénář závora: popis, tabulka přesnosti podle pravidla a třídy, řádek chyb a AUROC (třídy, chyby a AUROC znak po znaku jako bench.barrier.errors v i18n.py), dlaždice
-  'scenario.barrier.about': { cs: 'Závora: každá řada je křižovatka se závorou přes celou silnici. U ní je semafor a dopravní značka, podle úlohy i policista, záchranka a chodec na přechodu. Model dostane stav křižovatky slovy (pět polí: police_officer, emergency_vehicle, pedestrian_on_crossing, light, sign) a v zadání pět pravidel s pořadím: policista, záchranka se sirénou, chodec na přechodu, semafor, při zhasnutém semaforu značka. Na otázku typu noul odpoví pravděpodobností, že auto smí projet; auto jede při hodnotě aspoň 0,5. Pravidla jsou v zadání, takže scénář měří čtení zadání a stavu, ne znalost předpisů. Tři čtvrtiny křižovatek jsou „jeď“. Správně jeď = auto projede, správně stůj = auto zastaví (rozsvítí brzdová světla) a závora se zvedne až těsně před ním, oboje se zeleným kroužkem; falešný průjezd = jelo, mělo stát (náraz, červený kroužek); zbytečné stání = stálo, mělo jet (šedý kroužek); nestihl = odpověď nepřišla včas, auto jede, a když mělo stát, narazí. Po průjezdu se u řady ukáže rozhodující pravidlo. Tabulka „Přesnost podle pravidla“ dělí výsledek podle rozhodujícího pravidla a třídy úlohy. Jistota je max(p, 1 − p) z odpovědi, model ji nevrací.', en: 'Barrier: every row is an intersection with a barrier across the whole road. Next to it there is a traffic light and a traffic sign and, depending on the task, a police officer, an emergency vehicle and a pedestrian on the crossing. The model gets the state of the intersection in words (five fields: police_officer, emergency_vehicle, pedestrian_on_crossing, light, sign), and the prompt lists five rules in order of priority: police officer, emergency vehicle with its siren on, pedestrian on the crossing, traffic light and, with the light off, the sign. It answers a noul question with the probability that the car may drive through; the car goes at a value of 0.5 or more. The rules are in the prompt, so the scenario measures reading the prompt and the state, not knowing the traffic code. Three quarters of the intersections are "go". Correct go = the car drives through, correct stop = the car stops (its brake lights come on) and the barrier rises only just in front of it, both with a green ring; false go = it went when it should have stopped (a crash and a red ring); needless stop = it stopped when it should have gone (a grey ring); missed = the answer did not arrive in time, the car goes, and if it should have stopped, it crashes. After the car passes, the row shows the deciding rule. The "Accuracy by rule" table splits the result by the deciding rule and by the class of the task. The confidence is max(p, 1 − p) from the answer; the model does not return it.' },
+  'scenario.barrier.about': { cs: 'Závora: každá řada je křižovatka se závorou přes celou silnici. U ní je semafor a dopravní značka, podle úlohy i policista, záchranka a chodec na přechodu. Model dostane stav křižovatky slovy (pět polí: police_officer, emergency_vehicle, pedestrian_on_crossing, light, sign) a v zadání pět pravidel s pořadím: policista, záchranka se sirénou, chodec na přechodu, semafor, při zhasnutém semaforu značka. Na otázku typu noul odpoví pravděpodobností, že auto smí projet; auto jede při hodnotě aspoň 0,5. Pravidla jsou v zadání, takže scénář měří čtení zadání a stavu, ne znalost předpisů. Tři čtvrtiny křižovatek jsou „jeď“. Před řadou se ukáže rozhodnutí modelu: JEĎ nebo STŮJ s hodnotou noul. Při „jeď“ se závora zvedne s předstihem a auto projede. Při „stůj“, které přijde včas, auto u závory zastaví asi na 0.8 s (závora dole, brzdová světla), pak se závora zvedne a auto jede dál; doba stání se do „rozhodnutí za sekundu“ nepočítá. Po průjezdu nese výsledek štítek se slovem: projel nebo zastavil (správně), projel a měl stát (náraz), zastavil zbytečně, neplatná odpověď (auto nezastaví), nestihl (odpověď nepřišla včas, auto jede, a když mělo stát, narazí). Po průjezdu se u řady ukáže rozhodující pravidlo. Tabulka „Přesnost podle pravidla“ dělí výsledek podle rozhodujícího pravidla a třídy úlohy. Jistota je max(p, 1 − p) z odpovědi, model ji nevrací.', en: 'Barrier: every row is an intersection with a barrier across the whole road. Next to it there is a traffic light and a traffic sign and, depending on the task, a police officer, an emergency vehicle and a pedestrian on the crossing. The model gets the state of the intersection in words (five fields: police_officer, emergency_vehicle, pedestrian_on_crossing, light, sign), and the prompt lists five rules in order of priority: police officer, emergency vehicle with its siren on, pedestrian on the crossing, traffic light and, with the light off, the sign. It answers a noul question with the probability that the car may drive through; the car goes at a value of 0.5 or more. The rules are in the prompt, so the scenario measures reading the prompt and the state, not knowing the traffic code. Three quarters of the intersections are "go". Before the row the page shows the decision of the model: GO or STOP with the noul value. On "go" the barrier rises early and the car drives through. On a "stop" that arrives in time the car stops at the barrier for about 0.8 s (barrier down, brake lights on), then the barrier rises and the car drives on; the time spent standing does not count towards "decisions per second". After the car passes, a label names the result in words: drove through or stopped (correct), drove through when it should have stopped (a crash), stopped needlessly, invalid answer (the car does not stop), missed (the answer did not arrive in time, the car goes, and if it should have stopped, it crashes). After the car passes, the row shows the deciding rule. The "Accuracy by rule" table splits the result by the deciding rule and by the class of the task. The confidence is max(p, 1 − p) from the answer; the model does not return it.' },
   'scenario.barrier.extraTitle': { cs: 'Přesnost podle pravidla', en: 'Accuracy by rule' },
   'scenario.barrier.extraTip': { cs: 'Přesnost modelu podle pravidla, které úlohu rozhoduje (1 policista, 2 záchranka, 3 chodec, 4 semafor, 5 značka), a podle třídy úlohy jako v bench.py --barrier: shodné = semafor, při off značka, říká totéž co rozhodující pravidlo (u pravidla 4 značka); přebitý semafor = vyšší pravidlo (policista, záchranka, chodec) říká opak než semafor, při off značka; semafor přebil značku = semafor říká opak než značka; poslední pravidlo = rozhoduje značka. Pod tabulkou: falešný průjezd (jelo, mělo stát) a zbytečné stání (stálo, mělo jet) jako počet z úloh stůj a jeď, neplatné odpovědi, pozdní řady (jen ve hře; řada bez odpovědi do falešného průjezdu nepatří), AUROC (jak dobře hodnota noul řadí úlohy jeď nad úlohy stůj; 0,5 = náhoda) a nejlepší práh s vyváženou přesností (průměr podílu správných na úlohách jeď a na úlohách stůj). Počítají se všechny odpovědi, i pozdní. U řidičů Pravidla a Náhodně je hodnota noul 1 pro jeď a 0 pro stůj. Jistota v grafu kalibrace je max(p, 1 − p); model ji nevrací.', en: 'Model accuracy by the rule that decides the task (1 police officer, 2 emergency vehicle, 3 pedestrian, 4 light, 5 sign) and by the class of the task as in bench.py --barrier: agree = the light, or the sign when the light is off, says the same as the deciding rule (for rule 4, the sign); light overridden = a higher rule (police officer, emergency vehicle, pedestrian) says the opposite of the light, or of the sign when the light is off; light over sign = the light says the opposite of the sign; last rule = the sign decides. Below the table: false go (went when it should have stopped) and needless stop (stopped when it should have gone) as counts out of the stop and go tasks, invalid answers, late rows (in the game only; a row without an answer is not a false go), AUROC (how well the noul value ranks go tasks above stop tasks; 0.5 = chance) and the best threshold with its balanced accuracy (the mean of the shares correct on go tasks and on stop tasks). All answers count, including the late ones. For the Rules and Random drivers the noul value is 1 for go and 0 for stop. The confidence in the calibration chart is max(p, 1 − p); the model does not return it.' },
   'scenario.barrier.col.rule': { cs: 'rozhodující pravidlo', en: 'deciding rule' },
@@ -601,7 +602,19 @@ const TEXTS = {
   'barrier.go': { cs: 'jeď', en: 'go' },
   'barrier.stop': { cs: 'stůj', en: 'stop' },
   'barrier.decided': { cs: 'rozhodlo pravidlo {n}: {name}', en: 'decided by rule {n}: {name}' },
-  'barrier.needless': { cs: 'stál zbytečně', en: 'stopped needlessly' },
+  'label.invalid': { cs: '✗ neplatná odpověď', en: '✗ invalid answer' },
+  'label.late': { cs: '⏱ nestihl', en: '⏱ missed' },
+  'barrier.label.go': { cs: '✓ projel', en: '✓ drove through' },
+  'barrier.label.stop': { cs: '✓ zastavil', en: '✓ stopped' },
+  'barrier.label.falseGo': { cs: '✗ projel, měl stát', en: '✗ drove through, should have stopped' },
+  'barrier.label.needless': { cs: '✗ zastavil zbytečně', en: '✗ stopped needlessly' },
+  'barrier.label.lateCrash': { cs: '⏱ nestihl, náraz', en: '⏱ missed, crash' },
+  'barrier.pick.go': { cs: 'JEĎ {p}', en: 'GO {p}' },
+  'barrier.pick.stop': { cs: 'STŮJ {p}', en: 'STOP {p}' },
+  'legend.barrier.police': { cs: '👮 policista: zelená tečka pouští, červená zastavuje', en: '👮 police officer: a green dot lets the car go, a red one stops it' },
+  'legend.barrier.emergency': { cs: '🚑 záchranka: modrý maják a šipka = jede se sirénou, poloprůhledná = zaparkovaná', en: '🚑 emergency vehicle: a blue beacon and an arrow = siren on, see-through = parked' },
+  'legend.barrier.scene': { cs: '🚶 chodec na přechodu; vpravo semafor a značka (hlavní silnice, dej přednost, stop)', en: '🚶 pedestrian on the crossing; on the right a traffic light and a sign (priority road, give way, stop)' },
+  'legend.barrier.order': { cs: 'pořadí pravidel: policista › záchranka › chodec › semafor › značka', en: 'order of the rules: police officer › emergency vehicle › pedestrian › traffic light › sign' },
   // scénář dva kroky dopředu: popis, tabulka přesnosti podle hloubky pasti s řádkem chyb (lookahead.depth a lookahead.errors znak po znaku jako bench.lookahead.* v i18n.py), dlaždice
   'scenario.lookahead.about': { cs: 'Dva kroky dopředu: každá řada je blok 4 tenkých řad přes celou silnici s kostkami překážek. Auto stojí v pruhu, který patří úloze, a model volí tah pro nejbližší řadu: o pruh vlevo, zůstat, nebo o pruh vpravo. Před každou další řadou se auto smí posunout nejvýš o pruh a ze silnice nesmí. Správný tah je v každé úloze jediný a auto s ním projede všechny 4 řady. Model dostane číslo pruhu auta a u každé řady čísla zablokovaných pruhů. Hladový řidič jede do pruhu s nejdelší volnou dráhou rovně a v části úloh tím vjede do slepé uličky. Po průjezdu ukáže zelená čára v bloku správnou cestu a po chybném tahu oranžová cestu hladového řidiče, když se liší. Správně = zelený kroužek; tah do překážky nebo mimo silnici = červený kroužek; tah, po kterém auto uvízne dál v bloku = šedý kroužek s řadou slepé uličky; nestihl = odpověď nepřišla včas. Tabulka „Přesnost podle hloubky pasti“ dělí výsledek podle toho, kolik nejbližších řad musí model zvážit (1, 2, 3 a víc). Pruhů je 3 až 8.', en: 'Two steps ahead: every row is a block of 4 thin rows across the whole road with obstacles in it. The car starts in the lane that belongs to the task, and the model picks the move for the nearest row: one lane to the left, stay, or one lane to the right. Before every further row the car may shift by at most one lane, and it must stay on the road. Every task has exactly one right move, and with it the car gets through all 4 rows. The model gets the number of the lane the car is in and, for every row, the numbers of the blocked lanes. A greedy driver heads for the lane with the longest free run straight ahead, and in part of the tasks that leads into a dead end. After the car passes, a green line in the block shows the right path and, after a wrong move, an orange line the path of the greedy driver when it differs. Correct = a green ring; a move into an obstacle or off the road = a red ring; a move after which the car gets stuck further in the block = a grey ring with the row of the dead end; missed = the answer did not arrive in time. The "Accuracy by trap depth" table splits the result by how many of the nearest rows the model has to weigh (1, 2, 3 or more). There are 3 to 8 lanes.' },
   'scenario.lookahead.extraTitle': { cs: 'Přesnost podle hloubky pasti', en: 'Accuracy by trap depth' },
@@ -1021,6 +1034,12 @@ function drawTrojan(y, fooled) {                           // výstražný troj�
   ctx.beginPath(); ctx.moveTo(2, y - 14); ctx.lineTo(16, y - 14); ctx.lineTo(9, y - 27); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#0b1016'; ctx.fillRect(8.2, y - 23, 1.6, 5); ctx.fillRect(8.2, y - 17, 1.6, 1.6);
 }
+function drawRowLabel(text, color, ty) {                   // štítek výsledku přes celou šířku plátna: jeden řádek, dlouhý text zkrácený na šířku
+  ctx.fillStyle = 'rgba(11,16,22,.85)'; ctx.fillRect(2, ty - 9, W - 4, 18);
+  ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = color; ctx.fillText(text, W / 2, ty, W - 8);
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
 
 // ---------- jazyk stránky ----------
 // Server dostává jazyk s každým dotazem (hlavička X-PickBench-Lang) a věty chyb vrací v něm. Jinde než tady se fetch nevolá.
@@ -1047,7 +1066,7 @@ function renderLang() {                                    // všechno na strán
   if (!initDone) return;                                   // dál jen to, co potřebuje načtenou stránku
   $('extraTitle').textContent = SC.extraTitle || ''; setTip($('extraTitle'), SC.extraTip);      // texty scénáře; „Poslední rozhodnutí“ je řádek protokolu a zůstává v jazyce, ve kterém vzniklo
   $('about').textContent = aboutText(); setTip($('start'), SC.benchOnly ? t('public.benchOnly') : t('tip.start'));      // applyTips výš dává tlačítku vždy tip.start
-  queueKey = null; if (DS) renderLegend();                 // karty e-mailů a legenda kategorií
+  queueKey = null; renderLegend();                         // karty e-mailů, legenda kategorií nebo řádky scénáře
   drawStats(); draw(G); renderResults(); renderPlan(); renderDbNote(); syncRun();      // drawStats kreslí ze zapamatovaného, ne z ovladačů, a s ním i panel Hardware; syncRun varování poskytovatele
   if (tipFor && tipFor.isConnected) showTip(tipFor);       // otevřená bublina (typicky u přepínače, na který divák právě klikl) ukáže nový text
 }
@@ -1235,13 +1254,21 @@ function renderQueue(g) {                                  // karty e-mailů k �
   }));
 }
 
-function renderLegend() {
-  $('legend').replaceChildren(...DS.categories.map(c => {
+function renderLegend() {                                  // e-maily: kategorie; závora, dva kroky, skryté pravidlo: řádky „co vidíš“ (SC.legend = [[barva | null, klíč TEXTS]])
+  const lines = !DS && SC.legend;
+  if (!DS && !lines) return;
+  $('legend').classList.toggle('lines', !!lines);
+  $('legend').replaceChildren(...(lines ? lines.map(([color, key]) => {
+    const chip = el('span', 'chip');
+    if (color) { const dot = el('i'); dot.style.background = color; chip.append(dot); }
+    chip.append(t(key));
+    return chip;
+  }) : DS.categories.map(c => {
     const chip = el('span', 'chip'), dot = el('i', '', letterOf(c));
     dot.style.background = c.color; dot.style.color = ink(c.color);
     chip.append(dot, labelOf(c));
     return chip;
-  }));
+  })));
 }
 
 // Společné pro scénáře, kde řada na silnici = jedna úloha s jedním správným pruhem (e-maily, číselné duely, zákazy a výjimky, paměťová stopa).
@@ -1697,8 +1724,14 @@ function barrierOpen(r) {
 
 const BARRIER_GLYPH = { police: '👮', emergency: '🚑', pedestrian: '🚶' };      // emoji potřebují barevné písmo jako vozidla u zákazů
 const BARRIER_LAMP = { red: '#f85149', yellow: '#d29922', green: '#3fb950' };
-const BARRIER_COLOR = { go: '#3fb950', stop: '#3fb950', falseGo: '#f85149', lateCrash: '#f85149', needless: '#8b9aa8', late: '#8b9aa8', invalid: '#8b9aa8' };     // kroužek podle barrierOutcome
+const BARRIER_COLOR = { go: '#3fb950', stop: '#3fb950', falseGo: '#f85149', lateCrash: '#f85149', needless: '#f85149', late: '#8b9aa8', invalid: '#8b9aa8' };     // kroužek a štítek podle barrierOutcome: zelená správně, červená chyba, šedá nestihl a neplatná
+const BARRIER_LABEL = { go: 'barrier.label.go', stop: 'barrier.label.stop', falseGo: 'barrier.label.falseGo', needless: 'barrier.label.needless', invalid: 'label.invalid', late: 'label.late', lateCrash: 'barrier.label.lateCrash' };
 const BARRIER_STOP_Y = 1.05, BARRIER_HOLD = 0.8;            // bod zastavení před přechodem (y řady v polích) a doba stání v s skutečného času, i po tazích
+
+function barrierLabel(r) {                                 // štítek projeté řady: výsledek slovem a jeho barva
+  const out = barrierOutcome(r.result, r.truth, r.chosen);
+  return { text: t(BARRIER_LABEL[out]), color: BARRIER_COLOR[out] };
+}
 
 // Přechod, břevno, semafor, značka a piktogramy jedné řady; divák vidí všech pět polí stavu jako model (bez note). globalAlpha nastaví volající.
 // Vejde se i do dvou pruhů (W = 200): vlevo trojský kůň a sloupek břevna, pak policista a záchranka, vpravo značka a semafor, chodec na přechodu v pruhu auta.
@@ -1744,7 +1777,8 @@ const barrier = {
   __proto__: rowBase,
   id: 'barrier',                                   // úloha nemá pruhy: silnice má vždy 4, ať se výsledky nedělí podle voliče
   get about() { return t('scenario.barrier.about'); },
-  panels: ['confPanel'], get extraTitle() { return t('scenario.barrier.extraTitle'); },
+  panels: ['confPanel', 'legend'], get extraTitle() { return t('scenario.barrier.extraTitle'); },
+  legend: [[null, 'legend.barrier.police'], [null, 'legend.barrier.emergency'], [null, 'legend.barrier.scene'], [null, 'legend.barrier.order']],
   get extraTip() { return t('scenario.barrier.extraTip'); },
   get matchTip() { return t('scenario.barrier.tip.match'); },
   fixedLanes: 4, lanes: () => 4,
@@ -1766,6 +1800,7 @@ const barrier = {
   randomMove: () => Math.floor(Math.random() * 2),
   tally(g, task, move, res) {                              // počítají se všechny odpovědi, i pozdní; řidiči bez noul: 1 jeď, 0 stůj, neplatná null
     super.tally(g, task, move);
+    if (task.row) task.row.noul = res && 'noul' in res ? res.noul : null;     // hodnota noul pro rozhodnutí ukázané před řadou
     g.cases.push({ go: task.go, rule: task.rule, cls: task.cls });
     g.probs.push(res && 'noul' in res ? res.noul : move === 0 ? 1 : move === 1 ? 0 : null);
   },
@@ -1774,32 +1809,38 @@ const barrier = {
     super.onStep(g);
     if (passing.length) g.flash = passing.some(r => ['falseGo', 'lateCrash'].includes(barrierOutcome(r.result, r.truth, r.chosen))) ? 1 : flash;
   },
-  drawItems(g) {                                           // po průjezdu pod řadou rozhodující pravidlo (u spodního okraje plátna nad ním)
+  drawItems(g) {                                           // před průjezdem rozhodnutí modelu; po něm štítek výsledku a rozhodující pravidlo (jeden řádek, když se vejde)
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
       drawBarrier(r, y);
       ctx.globalAlpha = 1;
       this.drawRing(r, y, 14);
-      if (r.result === null) continue;
-      const ty = Math.min(y + 32, H - 10);
-      ctx.fillStyle = 'rgba(11,16,22,.8)'; ctx.fillRect(2, ty - 9, W - 4, 18);
-      ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#e6edf3';
-      ctx.fillText(t('barrier.decided', { n: r.rule, name: t(BARRIER_RULE_NAME[r.rule - 1]) }), W / 2, ty, W - 8);
+      if (r.result === null) { this.drawPick(r, y); continue; }
+      const lab = barrierLabel(r), rule = t('barrier.decided', { n: r.rule, name: t(BARRIER_RULE_NAME[r.rule - 1]) }), one = lab.text + ' · ' + rule;
+      ctx.font = '600 12px "Segoe UI", sans-serif';
+      if (ctx.measureText(one).width <= W - 8) drawRowLabel(one, lab.color, Math.min(y + 32, H - 10));
+      else {
+        const ty = Math.min(y + 32, H - 28);
+        drawRowLabel(lab.text, lab.color, ty);
+        drawRowLabel(rule, '#e6edf3', ty + 18);
+      }
     }
+  },
+  drawPick(r, y) {                                         // rozhodnutí modelu nad řadou, dokud nedojela: JEĎ / STŮJ s hodnotou noul (pozdní a neplatná odpověď nic)
+    if (r.result !== null || (r.chosen !== 0 && r.chosen !== 1)) return;
+    const text = t(r.chosen ? 'barrier.pick.stop' : 'barrier.pick.go', { p: Number.isFinite(r.noul) ? f(r.noul, 2) : '' }).trim();
+    ctx.font = '700 13px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 12;
+    ctx.fillStyle = 'rgba(11,16,22,.85)'; ctx.fillRect(W / 2 - w / 2, y - 71, w, 18);
+    ctx.fillStyle = r.chosen ? BARRIER_LAMP.red : BARRIER_LAMP.green; ctx.fillText(text, W / 2, y - 62);
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   },
-  drawRing(r, y, rad) {                                    // kroužek výsledku podle barrierOutcome (+ značka trojského koně); u zbytečného stání a neplatné odpovědi i slovo
+  drawRing(r, y, rad) {                                    // kroužek výsledku podle barrierOutcome (+ značka trojského koně); slovo nese štítek pod řadou
     if (r.inject !== null) drawTrojan(y, r.result !== null && r.fooled);
     if (!r.result) return;
     const out = barrierOutcome(r.result, r.truth, r.chosen), x = (r.passLane + 0.5) * LW;
     ctx.strokeStyle = BARRIER_COLOR[out]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, rad + 4, 0, 7); ctx.stroke();
-    const word = out === 'needless' ? t('barrier.needless') : out === 'invalid' ? t('answer.invalid') : null;
-    if (!word) return;
-    const gap = rad + 10, right = W - x >= x;                                          // slovo na stranu, kde je víc místa
-    ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = right ? 'left' : 'right'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = BARRIER_COLOR[out]; ctx.fillText(word, right ? x + gap : x - gap, y, (right ? W - x : x) - gap - 4);
-    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   },
   stopAhead(g) {                                           // nejbližší řada, kde model včas řekl stůj a auto u ní ještě nestálo: kolik polí k bodu zastavení
     const r = g.rows.filter(r => r.result === null && r.chosen === 1 && !r.hold).reduce((a, b) => a && a.y <= b.y ? a : b, null);
@@ -3895,7 +3936,7 @@ async function selectScenario() {
     if (!SC.hasExtra) $('extra').checked = false;
     setTip($('start'), SC.benchOnly ? t('public.benchOnly') : t('tip.start'));
     injectOn = $('inject').checked && !SC.benchOnly;
-    syncControls(); syncRun(); resetGame();
+    syncControls(); syncRun(); renderLegend(); resetGame();
   };
   const benchBack = () => { if (benchBefore !== null) { $('benchn').value = benchBefore; benchBefore = null; } };
   const notLoaded = r => apiError('', r.status, () => t('run.datasetFailed'));      // věta stránky: chyba ji nese i jako funkci say a stav ji po přepnutí jazyka složí znovu

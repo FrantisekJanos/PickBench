@@ -1900,7 +1900,7 @@ class PageStatic(unittest.TestCase):
         order = ("document.documentElement.lang = LANG;", "'[data-i18n]'", "'[data-i18n-placeholder]'", "'[data-i18n-empty]'", "'aria-pressed'",
                  "setTip($('langSwitch'), t('lang.tip'));", "renderHead();", "applyTips();", "renderOptions();", "$('speed').oninput?.();", "clearLook();",
                  "say(statusMsg)", "say(sqMsg)", "if (!initDone) return;", "SC.extraTitle", "setTip($('extraTitle'), SC.extraTip);",
-                 "$('about').textContent = aboutText();", "SC.benchOnly ? t('public.benchOnly') : t('tip.start')", "queueKey = null;", "if (DS) renderLegend();",
+                 "$('about').textContent = aboutText();", "SC.benchOnly ? t('public.benchOnly') : t('tip.start')", "queueKey = null;", "renderLegend();",
                  "drawStats();", "draw(G);", "renderResults();", "renderPlan();", "renderDbNote();", "syncRun();",
                  "if (tipFor && tipFor.isConnected) showTip(tipFor);")
         for part in order:

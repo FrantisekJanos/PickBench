@@ -662,7 +662,7 @@ class Page(unittest.TestCase):                                         # scéná
             self.assertIn("s." + name, draw, name)                                                 # divák vidí všech pět polí stavu
         self.assertNotIn("fillText('", draw)                                                       # žádný pevný text na plátně (nápis STOP ani písmena)
         body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
-        for part in ("drawRing(r, y, rad) {", "drawVehicle(g, x, w) {", "t('barrier.decided'", "t('barrier.needless')", "t('answer.invalid')",
+        for part in ("drawRing(r, y, rad) {", "drawVehicle(g, x, w) {", "t('barrier.decided'", "barrierLabel(r)",
                      "barrierOutcome(r.result, r.truth, r.chosen), x = (r.passLane + 0.5) * LW", "ctx.strokeStyle = BARRIER_COLOR[out]"):
             self.assertIn(part, body)
 
@@ -715,6 +715,47 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertRegex(start, r"while \(id === runId\) \{ +// rozhodovací smyčka\n +if \(G\.hold\) \{ drive\(0\); await sleep\(15\); continue; \}")
         advance = re.search(r"\nasync function advance\(id, cells\) \{.*?\n\}\n", page, re.S).group(0)
         self.assertIn("left -= drive(", advance)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek nese výsledek slovem; barva: zelená správně, červená chyba, šedá nestihl a neplatná
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("BARRIER_COLOR", "BARRIER_LABEL"))
+        code = "(() => {" + consts + page_function("barrierOutcome") + page_function("barrierLabel") + (
+            "return [['ok', 0, 0], ['ok', 1, 1], ['bad', 1, 0], ['bad', 0, 1], ['bad', 1, -1], ['late', 0, undefined], ['late', 1, undefined]]"
+            ".map(([result, truth, chosen]) => barrierLabel({ result, truth, chosen })); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ projel", "✓ zastavil", "✗ projel, měl stát", "✗ zastavil zbytečně", "✗ neplatná odpověď", "⏱ nestihl", "⏱ nestihl, náraz"])
+        self.assertEqual([x["text"] for x in en], ["✓ drove through", "✓ stopped", "✗ drove through, should have stopped", "✗ stopped needlessly",
+                                                   "✗ invalid answer", "⏱ missed", "⏱ missed, crash"])
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8", "#f85149"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_pick_is_shown_before_the_row(self):        # rozhodnutí modelu u řady, dokud nedojela; pozdní odpověď (chosen undefined) nic neukáže
+        from test_parity import run_js
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        pick = re.search(r"\n  drawPick\(r, y\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        lamp = re.search(r"\nconst BARRIER_LAMP = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + lamp + "const texts = [], W = 400; const ctx = new Proxy({ fillText(s) { texts.push(s); }, measureText: s => ({ width: s.length * 7 }) }," + (
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } }); const o = {" + pick + "};"
+            "[{ result: null, chosen: 1, noul: 0.12 }, { result: null, chosen: 0, noul: 0.8 }, { result: null, chosen: 0, noul: null },"
+            " { result: null, chosen: undefined }, { result: null, chosen: -1, noul: null }, { result: 'ok', chosen: 1, noul: 0.1 }].forEach(r => o.drawPick(r, 300));"
+            "return texts; })()")
+        self.assertEqual(run_js(code, None), ["STŮJ 0.12", "JEĎ 0.80", "JEĎ"])
+        self.assertEqual(run_js(code, None, "en"), ["STOP 0.12", "GO 0.80", "GO"])
+
+    def test_legend_and_labels_are_wired(self):
+        page = page_source()
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for part in ("panels: ['confPanel', 'legend']", "'legend.barrier.police'", "'legend.barrier.emergency'", "'legend.barrier.scene'", "'legend.barrier.order'",
+                     "barrierLabel(r)", "drawRowLabel(", "this.drawPick(r, y)", "task.row.noul ="):
+            self.assertIn(part, body)
+        self.assertNotIn("t('barrier.needless')", page)
+        legend = page_function("renderLegend")
+        for part in ("SC.legend", "classList.toggle('lines'", "DS.categories"):
+            self.assertIn(part, legend)
+        self.assertIn("#legend.lines { flex-direction:column; gap:4px; }", page)
+        self.assertIn("    syncControls(); syncRun(); renderLegend(); resetGame();", page)
 
 
 if __name__ == "__main__":
