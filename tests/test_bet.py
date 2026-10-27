@@ -132,5 +132,30 @@ class Generator(unittest.TestCase):
                 bench.bet_case(random.Random(1), gates, level)
 
 
+BET_TEXT = ("Each gate pays its reward with the given chance in percent, otherwise nothing. "
+            "Choose the gate with the highest expected payout (reward times chance).")
+ALT_BET = ("Every gate pays out its reward with the chance given in percent and pays nothing otherwise. "
+           "Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.")
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_example_state(self):
+        state = bench.bet_state(*EXAMPLE)
+        self.assertEqual(json.dumps(state), '{"gate_1": {"reward": 300, "chance_pct": 20}, "gate_2": {"reward": 200, "chance_pct": 60}, '
+                                            '"gate_3": {"reward": 100, "chance_pct": 90}}')
+        self.assertEqual(solver(state), "gate_2")
+
+    def test_question_and_its_alternative_wording(self):
+        for gates in range(3, 9):
+            with self.subTest(gates=gates):
+                q = bench.bet_question(gates)
+                self.assertEqual(list(q), ["bet"])
+                self.assertEqual((q["bet"]["type"], q["bet"]["instructions"]), ("choice", BET_TEXT))
+                self.assertEqual(json.dumps(q["bet"]["criteria"]), json.dumps(bench.position_criteria(bench.gate_keys(gates), "Gate")))
+                self.assertEqual(bench.ALT["bet"], ALT_BET)
+                self.assertEqual(bench.variant(q, 2)["bet"]["instructions"], ALT_BET)
+                self.assertEqual(list(bench.variant(q, 1)["bet"]["criteria"]), bench.gate_keys(gates)[::-1])
+
+
 if __name__ == "__main__":
     unittest.main()

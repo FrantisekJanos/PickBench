@@ -1386,6 +1386,18 @@ def bet_cases(n, gates=4, seed=1):
     return [bet_case(rng, gates, rng.choice(BET_LEVELS)) for _ in range(n)]
 
 
+def bet_state(rewards, chances):
+    """Stav pro model: gate_N → odměna a šance v procentech."""
+    return {f"gate_{i + 1}": {"reward": r, "chance_pct": c} for i, (r, c) in enumerate(zip(rewards, chances))}
+
+
+def bet_question(gates):
+    """Otázka choice: brána s nejvyšší očekávanou výplatou."""
+    instructions = ("Each gate pays its reward with the given chance in percent, otherwise nothing. "
+                    "Choose the gate with the highest expected payout (reward times chance).")
+    return {"bet": {"type": "choice", "instructions": instructions, "criteria": position_criteria(gate_keys(gates), "Gate")}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1401,6 +1413,7 @@ ALT = {                                              # jinak formulované zadán
     "go": "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
     "lane": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.",
     "lane_weighted": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.",
+    "bet": "Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
