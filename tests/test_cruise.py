@@ -302,6 +302,68 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(lines), 2)
 
 
+def score_reply(level, confidence=0.5):
+    """Odpověď score ve tvaru, který podle pokusu vrací Ollama: score = očekávaný index stupně OD NULY, legend, confidence."""
+    return {"type": "score", "score": level - bench.CRUISE_SCORE_OFFSET, "confidence": confidence,
+            "legend": {str(k): label for k, label in enumerate(LEVELS.values())}}
+
+
+def score_post(answer):
+    """Náhrada bench.post pro otázku score: answer(state, key) -> stupeň 1–7 ve smyslu klíče otázky (speed / brake), nebo None."""
+    def post(model, payload):
+        key = next(iter(payload["questions"]))
+        level = answer(payload["state"], key)
+        return {"answers": {key: {} if level is None else score_reply(level)}, "usage": {"input_tokens": 50}}, 10.0
+    return post
+
+
+def score_solver(state, key):
+    level = int(solver(state)[6:])
+    return level if key == "speed" else 8 - level                       # brake: obrácená škála
+
+
+class ScoreQuestion(unittest.TestCase):
+    def test_question_shapes(self):
+        speed, brake = bench.cruise_question_score(), bench.cruise_question_score(inverted=True)
+        self.assertEqual((list(speed), list(brake)), (["speed"], ["brake"]))
+        self.assertEqual((speed["speed"]["type"], speed["speed"]["instructions"]), ("score", CRUISE_TEXT))
+        self.assertEqual((brake["brake"]["type"], brake["brake"]["instructions"]), ("score", bench.CRUISE_BRAKE))
+        self.assertTrue(bench.CRUISE_BRAKE.startswith("Choose the cruise control braking level, from 1 (lightest braking, fastest) to 7"))
+        self.assertEqual((set(speed["speed"]), set(brake["brake"])), ({"type", "instructions", "criteria"},) * 2)
+        self.assertEqual(json.dumps(speed["speed"]["criteria"]), json.dumps(list(LEVELS.values())))     # pole názvů, ne slovník
+        self.assertEqual(brake["brake"]["criteria"], ["Braking level 1 (lightest)", "Braking level 2", "Braking level 3",
+                                                      "Braking level 4", "Braking level 5", "Braking level 6", "Braking level 7 (hardest)"])
+        self.assertEqual(bench.variant(speed, 2)["speed"]["instructions"], ALT_SPEED)
+        self.assertEqual(bench.variant(speed, 2)["speed"]["criteria"], speed["speed"]["criteria"])
+
+    def test_score_value(self):
+        self.assertEqual(bench.CRUISE_SCORE_OFFSET, 1)                  # Ollama, Jev i Clef: index od nuly (pokus 2026-10-27)
+        for raw, want in ((0, 1), (6, 7), (2, 3), (1.5, 2.5), (5.99, 6.99), (0.0, 1.0)):
+            with self.subTest(raw=raw):
+                self.assertAlmostEqual(bench.score_value({"type": "score", "score": raw}), want)
+        for raw in (-0.01, 6.01, 7, -1, True, False, "3", "level_3", float("nan"), float("inf"), None, [3]):
+            with self.subTest(raw=raw):
+                self.assertIsNone(bench.score_value({"type": "score", "score": raw}))
+        self.assertIsNone(bench.score_value({}))
+        self.assertIsNone(bench.score_value("3"))
+        self.assertIsNone(bench.score_value(None))
+        self.assertEqual([bench.round_level(x) for x in (1, 2.4, 2.5, 3.5, 6.49, 7)], [1, 2, 3, 4, 6, 7])
+
+    def test_ask_score(self):
+        with mock.patch.object(bench, "post", score_post(score_solver)):
+            level, ms, conf, tokens = bench.ask_score("m", bench.cruise_state(97, "icy", "none"), bench.cruise_question_score())
+        self.assertEqual((level, ms, conf, tokens), (2, 10.0, 0.5, 50))
+        real = {"type": "score", "score": 5.118529611187204, "confidence": 0.48580893985920237,      # první odpověď tev1 z pokusu
+                "legend": {"0": "Level 1 (slowest)", "6": "Level 7 (fastest)"}, "probabilities": {"6": 0.74}}
+        with mock.patch.object(bench, "post", lambda model, payload: ({"answers": {"speed": real}}, 7.0)):
+            level, ms, conf, tokens = bench.ask_score("m", {}, bench.cruise_question_score())
+        self.assertAlmostEqual(level, 6.118529611187204)
+        self.assertEqual((bench.round_level(level), ms, tokens), (6, 7.0, None))
+        for broken in ({"answers": None}, {"answers": {"speed": "3"}}, {}):
+            with mock.patch.object(bench, "post", lambda model, payload: (broken, 5.0)):
+                self.assertIsNone(bench.ask_score("m", {}, bench.cruise_question_score())[0])
+
+
 class Cli(unittest.TestCase):
     def setUp(self):
         patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat

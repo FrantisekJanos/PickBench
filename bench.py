@@ -1580,6 +1580,9 @@ CRUISE_FOG = {"none": 0, "light": 1, "dense": 2}
 CRUISE_CLASSES = ("table", "road", "fog", "both")    # platí žádná podmínka, jen povrch, jen mlha, obě
 CRUISE_PLACES = ("edge", "middle")
 CRUISE_FORM = "choice"                               # výchozí podoba otázky (Volby po pokusu)
+CRUISE_SCORE_FIELD = "score"                         # podoba score: pole odpovědi se stupněm (pokus 2026-10-27, Ollama, Jev i Clef)
+CRUISE_SCORE_OFFSET = 1                              # score je očekávaný index stupně OD NULY (necelý): stupeň = score + 1
+CRUISE_SCORE_MAE = "raw"                             # MAE z nezaokrouhleného stupně; přesnost, ±1 a druhy chyb z round_level
 _CRUISE_ONE = {(2, 1): 1, (3, 1): 1, (3, 2): 4, (4, 1): 12, (4, 2): 22, (5, 1): 6, (5, 2): 11, (6, 1): 1, (6, 2): 17, (7, 1): 2, (7, 2): 22}
 CRUISE_WEIGHTS = {                                   # váhy kombinací (stupeň ze vzdálenosti, srážka povrch, srážka mlha) z prototypu
     "table": {(1, 0, 0): 20, (2, 0, 0): 10, (3, 0, 0): 10, (4, 0, 0): 20, (5, 0, 0): 10, (6, 0, 0): 10, (7, 0, 0): 20},
@@ -1673,6 +1676,39 @@ def cruise_question():
     labels[CRUISE_TOP] += " (fastest)"
     return {"speed": {"type": "choice", "instructions": CRUISE_INS,
                       "criteria": {f"level_{k}": label for k, label in labels.items()}}}
+
+
+CRUISE_BRAKE = ("Choose the cruise control braking level, from 1 (lightest braking, fastest) to 7 (hardest braking, slowest). Start "
+                "from obstacle_m, the distance in meters to the nearest obstacle ahead: under 20 m is braking level 7, 20 to 39 m level 6, "
+                "40 to 59 m level 5, 60 to 99 m level 4, 100 to 149 m level 3, 150 to 219 m level 2, 220 m or more level 1. Then go one "
+                "braking level higher on a wet road and two higher on an icy road. Then go one braking level higher in light fog and two "
+                "higher in dense fog.")
+
+
+def round_level(x):
+    """Necelý stupeň na celý, polovina nahoru (2,5 → 3, ne k sudému jako round)."""
+    return math.floor(x + 0.5)
+
+
+def cruise_question_score(inverted=False):
+    """Otázka score: speed (1 nejpomalejší … CRUISE_TOP nejrychlejší), s inverted obrácená škála brake (1 nejslabší brzdění).
+
+    criteria je POLE názvů stupňů (Ollama chce 2–10 položek, slovník odmítne); odpověď nese v poli score index od nuly."""
+    if not inverted:
+        return {"speed": {"type": "score", "instructions": CRUISE_INS, "criteria": list(cruise_question()["speed"]["criteria"].values())}}
+    labels = [f"Braking level {k}" for k in range(1, CRUISE_TOP + 1)]
+    labels[0] += " (lightest)"
+    labels[-1] += " (hardest)"
+    return {"brake": {"type": "score", "instructions": CRUISE_BRAKE, "criteria": labels}}
+
+
+def score_value(answer):
+    """Stupeň 1–CRUISE_TOP z odpovědi score (score + CRUISE_SCORE_OFFSET), necelý beze změny; cokoli jiného None."""
+    v = answer.get(CRUISE_SCORE_FIELD) if isinstance(answer, dict) else None
+    if type(v) not in (int, float) or not math.isfinite(v):         # bez bool, NaN a nekonečna
+        return None
+    level = v + CRUISE_SCORE_OFFSET
+    return level if 1 <= level <= CRUISE_TOP else None
 
 
 def cruise_errors(cases, levels):
@@ -2341,6 +2377,20 @@ def ask_noul(model, state, questions, label=""):
         a = {}
     usage = out.get("usage")
     return a.get("noul"), ms, usage.get("input_tokens") if isinstance(usage, dict) else None
+
+
+def ask_score(model, state, questions, label=""):
+    """Jeden dotaz s otázkou score. Vrací (stupeň 1–CRUISE_TOP nebo None, ms, confidence, input_tokens)."""
+    try:
+        out, ms = post(model, {"state": state, "questions": questions})
+    except Exception as e:
+        raise RuntimeError(f"{e} ({label})" if label else str(e)) from e
+    answers = out.get("answers")
+    a = answers.get(next(iter(questions))) if isinstance(answers, dict) else None
+    if not isinstance(a, dict):                       # poškozená odpověď = neplatná (stupeň None), běh nespadne
+        a = {}
+    usage = out.get("usage")
+    return score_value(a), ms, a.get("confidence"), usage.get("input_tokens") if isinstance(usage, dict) else None
 
 
 def measure_noul(model, items, question, mirror=False, targets=None, deadline=None):
