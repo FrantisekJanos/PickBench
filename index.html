@@ -2372,6 +2372,53 @@ function lookaheadRow(lanes, rand) {                       // třída se losuje 
   const c = lookaheadCase(rand, lanes, pickOf(rand, LOOKAHEAD_CLASSES));
   return { ...c, truth: LOOKAHEAD_MOVES.indexOf(c.answer) };
 }
+// Rozbor chyb, stejné definice jako lookahead_errors v bench.py. Úloha c = { rows, lane, answer, greedy }. Správný tah vrací null a nepočítá se nikam.
+// invalid: volba, která není tahem z LOOKAHEAD_MOVES (null, jiný text, jiný typ); greedy: tah hladového řidiče úlohy;
+// crash: tah s hodnotou 0 (do '#' v nejbližší řadě nebo mimo silnici); other: ostatní chybné tahy.
+function lookaheadErrorKind(c, choice) {
+  if (typeof choice !== 'string' || !LOOKAHEAD_MOVES.includes(choice)) return 'invalid';
+  if (choice === c.answer) return null;
+  if (choice === c.greedy) return 'greedy';
+  return lookaheadValues(c.rows, c.lane)[choice] === 0 ? 'crash' : 'other';
+}
+function lookaheadErrors(cases, choices) {
+  const counts = { greedy: 0, crash: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = lookaheadErrorKind(c, choices[i]); if (kind) counts[kind]++; });
+  return counts;
+}
+// Jen pro stránku, bench.py ji nemá: pruhy (0-based), kudy auto po tahu projede nejvíc řad, jedna položka na řadu; délka = hodnota tahu,
+// [] u tahu do '#' nebo mimo silnici. V každé další řadě z tahů stay, left, right (v silnici, do '.') ten s ostře nejdelším přežitím za ní.
+function lookaheadPath(rows, lane, move) {
+  let at = lane + LOOKAHEAD_SHIFT[move];
+  if (at < 0 || at >= rows[0].length || rows[0][at] !== '.') return [];
+  const path = [at];
+  for (let i = 1; i < rows.length; i++) {
+    let best = null;
+    for (const m of ['stay', 'left', 'right']) {
+      const target = at + LOOKAHEAD_SHIFT[m];
+      if (target < 0 || target >= rows[i].length || rows[i][target] !== '.') continue;
+      const survive = lookaheadSurvive(rows.slice(i + 1), target);
+      if (best === null || survive > best[0]) best = [survive, target];
+    }
+    if (best === null) break;
+    at = best[1];
+    path.push(at);
+  }
+  return path;
+}
+// Jen pro stránku, bench.py ji nemá: výsledek projetého bloku. 'ok' a 'late' beze změny; 'bad' s chosen mimo 0–2 (neplatná odpověď,
+// jádro ji vede jako 'bad' s −1) je 'invalid'; 'bad' s tahem hodnoty 0 'crash' (náraz nebo mimo silnici); jinak 'deadEnd' (slepá ulička dál vpředu).
+function lookaheadOutcome(result, chosen, rows, lane) {
+  if (result !== 'bad') return result;
+  if (!(Number.isInteger(chosen) && chosen >= 0 && chosen < LOOKAHEAD_MOVES.length)) return 'invalid';
+  return lookaheadValues(rows, lane)[LOOKAHEAD_MOVES[chosen]] === 0 ? 'crash' : 'deadEnd';
+}
+// Jen pro stránku, bench.py ji nemá: zahřívací úloha bez rand. Auto v pruhu 2, v řadách volný jen pruh 2, 3, 2, 1; správně stay, hloubka 1.
+// Každá řada má K − 1 zablokovaných pruhů, nejdelší možný stav (generátor řadu bez volného pole nebere): odhad délky dotazu ve stepEstimate je horní.
+function lookaheadWarm(lanes) {
+  const rows = [1, 2, 1, 0].map(free => [...Array(lanes)].map((_, j) => j === free ? '.' : '#').join(''));
+  return { rows, lane: 1, answer: 'stay', depth: 1, greedy: lookaheadGreedy(rows, 1), truth: 1 };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------

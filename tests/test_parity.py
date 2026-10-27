@@ -707,6 +707,52 @@ class Lookahead(unittest.TestCase):
         self.assertEqual(got, ["lookaheadCase: no d1 task for 4 lanes after 100000 tries", "lookaheadCase: no d1 task for 2 lanes",
                                "lookaheadCase: no d1 task for 9 lanes", "lookaheadCase: no d4 task for 4 lanes"])
 
+    def test_errors_match_bench(self):
+        import bench
+        cases = bench.lookahead_cases(60, 4, seed=4) + bench.lookahead_cases(30, 6, seed=6)
+        rng = random.Random(2)
+        choices = [rng.choice(["left", "stay", "right", "left", "right", None, "LEFT", 1, ["stay"]]) for _ in cases]
+        js_cases = [{"rows": list(rows), "lane": lane, "answer": answer, "greedy": greedy} for rows, lane, answer, _, greedy in cases]
+        got = run_js("lookaheadErrors(arg.cases, arg.choices)", {"cases": js_cases, "choices": choices})
+        self.assertEqual(json.dumps(got), json.dumps(bench.lookahead_errors(cases, choices)))        # i pořadí klíčů
+        self.assertTrue(all(got[k] > 0 for k in ("greedy", "crash", "invalid")), got)
+
+    def test_path_follows_the_value_of_the_move(self):             # cesta pro kresbu: délka = hodnota tahu, po volných polích, nejvýš o pruh
+        import bench
+        cases = bench.lookahead_cases(60, 4, seed=4) + bench.lookahead_cases(30, 7, seed=7)
+        grids = [[list(rows), lane] for rows, lane, *_ in cases] + LOOKAHEAD_HAND
+        paths = run_js("arg.map(([rows, lane]) => LOOKAHEAD_MOVES.map(m => lookaheadPath(rows, lane, m)))", grids)
+        for (rows, lane), by_move in zip(grids, paths):
+            values = bench.lookahead_values(tuple(rows), lane)
+            for move, path in zip(bench.LOOKAHEAD_MOVES, by_move):
+                with self.subTest(rows=rows, lane=lane, move=move):
+                    self.assertEqual(len(path), values[move])
+                    if path:
+                        self.assertEqual(path[0], lane + bench.LOOKAHEAD_SHIFT[move])
+                    for i, at in enumerate(path):
+                        self.assertEqual(rows[i][at], ".")
+                        self.assertTrue(i == 0 or abs(at - path[i - 1]) <= 1)
+
+    def test_outcome_of_a_passed_block(self):                      # příklad z rešerše: left 2 (slepá ulička), stay 0 (náraz), right 4 (správně)
+        got = run_js("[['ok', 2], ['bad', 0], ['bad', 1], ['bad', -1], ['late', undefined]].map(([r, c]) => lookaheadOutcome(r, c, arg, 1))"
+                     ".concat([lookaheadOutcome('bad', 0, ['...', '...'], 0), lookaheadOutcome('bad', 2, ['...', '...'], 2)])", list(LOOKAHEAD_EXAMPLE))
+        self.assertEqual(got, ["ok", "deadEnd", "crash", "invalid", "late", "crash", "crash"])        # mimo silnici je náraz
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for lanes, warm in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => lookaheadWarm(k))", None)):
+            rows, lane = tuple(warm["rows"]), warm["lane"]
+            with self.subTest(lanes=lanes):
+                self.assertEqual(list(warm), ["rows", "lane", "answer", "depth", "greedy", "truth"])
+                self.assertEqual(len(rows), bench.LOOKAHEAD_ROWS)
+                self.assertTrue(all(len(r) == lanes and r.count(".") == 1 for r in rows))           # nejvíc zablokovaných pruhů
+                self.assertEqual(bench.lookahead_depth(rows, lane), (warm["answer"], warm["depth"]))
+                self.assertEqual(bench.lookahead_values(rows, lane)[warm["answer"]], bench.LOOKAHEAD_ROWS)
+                self.assertEqual(warm["greedy"], bench.lookahead_greedy(rows, lane))
+                self.assertEqual(warm["truth"], bench.LOOKAHEAD_MOVES.index(warm["answer"]))
+                longest = max(len(json.dumps(bench.lookahead_state(r, l, "blocked"))) for r, l, *_ in bench.lookahead_cases(20, lanes, seed=lanes))
+                self.assertGreaterEqual(len(json.dumps(bench.lookahead_state(rows, lane, "blocked"))), longest)      # horní odhad délky dotazu
+
 
 if __name__ == "__main__":
     unittest.main()
