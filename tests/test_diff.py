@@ -94,5 +94,94 @@ class Pairs(unittest.TestCase):
             bench.diff_pair(rng, "odd")
 
 
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        for lanes, n in ((2, 2000), (4, 4000), (8, 2000)):
+            for before, after, answer, cls, mode in cases(n, lanes):
+                with self.subTest(lanes=lanes, before=before, after=after):
+                    self.assertEqual((len(before), len(after)), (lanes, lanes))
+                    self.assertEqual([i for i in range(lanes) if before[i] != after[i]], [answer])     # jediná správná odpověď
+                    self.assertEqual(bench.diff_distance(before[answer], after[answer]),
+                                     {"num1": 1, "numnew": 4, "word1": 1, "wordnew": 4}[cls])
+                    if cls in ("num1", "numnew"):
+                        self.assertTrue(all(type(v) is int and 1000 <= v <= 9999 for v in before + after))
+                    else:
+                        self.assertTrue(all(v in bench.DIFF_WORDS for v in before + after))
+                    if cls == "num1":
+                        self.assertEqual(abs(before[answer] - after[answer]), 1)
+                    if mode == "plain":
+                        self.assertEqual((len(set(before)), len(set(after))), (lanes, lanes))
+                    else:
+                        self.assertEqual(mode, "repeat")
+
+    def test_classes_modes_and_answers_are_spread(self):
+        for lanes, n in ((2, 2000), (4, 4000), (8, 2000)):
+            c = cases(n, lanes)
+            classes, modes = Counter(x[3] for x in c), Counter(x[4] for x in c)
+            for cls in bench.DIFF_CLASSES:
+                self.assertTrue(0.2 <= classes[cls] / n <= 0.3, (lanes, classes))
+            self.assertLessEqual(abs(modes["repeat"] / n - bench.DIFF_REPEAT_SHARE), 0.05, (lanes, modes))
+        answers = Counter(x[2] for x in cases(4000, 4))
+        self.assertTrue(all(abs(answers[i] / 4000 - 0.25) <= 0.05 for i in range(4)), answers)
+
+    def test_repeat_rows_have_twins(self):
+        repeat = [x for x in cases(4000, 4) if x[4] == "repeat"]
+        self.assertTrue(0.6 <= sum(bool(bench.diff_twins(x)) for x in repeat) / len(repeat) <= 0.8)
+        self.assertFalse(any(bench.diff_twins(x) for x in cases(4000, 4) if x[4] == "plain"))
+
+    def test_twins(self):
+        self.assertEqual(bench.diff_twins(WORDS_CASE), {1})                          # stará hodnota tape i v pruhu 2
+        self.assertEqual(bench.diff_twins((("lane", "wall", "near", "lane"), ("stem", "wall", "near", "lane"), 0, "wordnew", "repeat")), {3})
+        self.assertEqual(bench.diff_twins((("bolt", "wall"), ("colt", "colt"), 0, "word1", "repeat")), {1})    # nová hodnota i v pruhu 2
+        self.assertEqual(bench.diff_twins(NUMBERS_CASE), set())
+
+    def test_single_snapshot_shortcuts_stay_at_chance(self):
+        def repeated(row):
+            count = Counter(row)
+            return {i for i, v in enumerate(row) if count[v] > 1}
+
+        def extreme(row, pick):
+            return {i for i, v in enumerate(row) if v == pick(row)} if type(row[0]) is int else set()
+
+        def lonely(row):
+            return {i for i in range(len(row)) if not any(bench.diff_distance(row[j], row[i]) == 1 for j in range(len(row)))}
+
+        shortcuts = {"first": lambda b, a: {0}, "last": lambda b, a: {len(a) - 1},
+                     "length": lambda b, a: {i for i in range(len(a)) if len(json.dumps(b[i])) != len(json.dumps(a[i]))},
+                     "repeated_after": lambda b, a: repeated(a), "repeated_before": lambda b, a: repeated(b),
+                     "unique_after": lambda b, a: set(range(len(a))) - repeated(a),
+                     "max_after": lambda b, a: extreme(a, max), "min_after": lambda b, a: extreme(a, min),
+                     "max_before": lambda b, a: extreme(b, max), "lonely_after": lambda b, a: lonely(a),
+                     "related_after": lambda b, a: set(range(len(a))) - lonely(a),
+                     "first_text_after": lambda b, a: {i for i, v in enumerate(a) if str(v) == min(map(str, a))}}
+
+        def hit(case, pick):                               # očekávaná trefa: z kandidátů náhodně, prázdná množina = hádání
+            found = pick(case[0], case[1])
+            return 1 / len(case[0]) if not found else (1 / len(found) if case[2] in found else 0)
+        c = cases(4000, 4)
+        for cls in bench.DIFF_CLASSES:
+            sub = [x for x in c if x[3] == cls]
+            for name, pick in shortcuts.items():
+                with self.subTest(cls=cls, shortcut=name):
+                    self.assertLessEqual(sum(hit(x, pick) for x in sub) / len(sub), 0.25 + 0.08)
+        new_value = lambda b, a: {i for i in range(len(a)) if a[i] not in b}     # srovnání množin, ne zkratka: repeat ho láme
+        for mode, low, high in (("plain", 1, 1), ("repeat", 0, 0.8)):
+            sub = [x for x in c if x[4] == mode]
+            with self.subTest(mode=mode):
+                self.assertTrue(low <= sum(hit(x, new_value) for x in sub) / len(sub) <= high)
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.diff_cases(30), bench.diff_cases(30, bench.DIFF_LANES, seed=1))
+        self.assertEqual(bench.diff_cases(30, 6, seed=3), bench.diff_cases(30, 6, seed=3))
+        self.assertNotEqual(bench.diff_cases(30, 4), bench.diff_cases(30, 4, seed=2))
+
+    def test_bounded_search_and_bad_arguments_raise(self):
+        with mock.patch.object(bench, "DIFF_TRIES", 0), self.assertRaises(RuntimeError):
+            bench.diff_case(random.Random(1), 4, "num1", "plain")
+        for lanes, cls, mode in ((1, "num1", "plain"), (9, "num1", "plain"), (4, "odd", "plain"), (4, "num1", "odd")):
+            with self.subTest(lanes=lanes, cls=cls, mode=mode), self.assertRaises(RuntimeError):
+                bench.diff_case(random.Random(1), lanes, cls, mode)
+
+
 if __name__ == "__main__":
     unittest.main()

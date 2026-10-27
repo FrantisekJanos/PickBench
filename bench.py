@@ -2005,6 +2005,88 @@ def diff_pool_pairs(lanes):
     return (lanes + 3) // 2
 
 
+def diff_single(rng, cls):
+    """Jedna hodnota výplně řady podoby plain, stejného typu jako třída cls."""
+    return rng.randint(*DIFF_NUMBERS) if cls in ("num1", "numnew") else rng.choice(DIFF_WORDS)
+
+
+def diff_related(cls, old, new):
+    """Platí mezi starou a novou hodnotou vztah třídy cls? (číslo o 1, slovo o písmeno, jinak všechna čtyři místa jiná)"""
+    if cls == "num1":
+        return abs(old - new) == 1 and diff_distance(old, new) == 1
+    return diff_distance(old, new) == (1 if cls == "word1" else 4)
+
+
+def diff_case(rng, lanes, cls, mode):
+    """Jedna úloha (before, after, answer, cls, mode) podle specu.
+
+    plain: řada bez opakování, měněný pruh nese starou hodnotu dvojice, ostatní pruhy různé hodnoty výplně.
+    repeat: zásoba z několika dvojic, každý snímek je řada nezávislých hodnot ze zásoby, takže měněný pruh v žádném
+    snímku nevyčnívá (stará nebo nová hodnota často stojí i v jiném pruhu). Zamítá se jen kolize hodnot (mez DIFF_TRIES);
+    záruky se po sestavení kontrolují znovu a porušení je RuntimeError."""
+    if not 2 <= lanes <= 8 or cls not in DIFF_CLASSES or mode not in DIFF_MODES:
+        raise RuntimeError(f"diff_case: unsupported {lanes} lanes, class {cls}, mode {mode}")
+    for _ in range(DIFF_TRIES):
+        answer = rng.randrange(lanes)
+        if mode == "plain":
+            old, new = diff_pair(rng, cls)
+            row, used = [], {old, new}
+            for i in range(lanes):
+                if i == answer:
+                    row.append(old)
+                    continue
+                value = diff_single(rng, cls)
+                if value in used:                    # kolize: celá úloha znovu
+                    break
+                used.add(value)
+                row.append(value)
+            else:
+                break
+            continue
+        pairs = [diff_pair(rng, cls) for _ in range(diff_pool_pairs(lanes))]
+        pool = [v for pair in pairs for v in pair]
+        if len(set(pool)) != len(pool):
+            continue
+        partner = {a: b for a, b in pairs} | {b: a for a, b in pairs}
+        old = rng.choice(pool)
+        new = partner[old]
+        row = [old if i == answer else rng.choice(pool) for i in range(lanes)]
+        break
+    else:
+        raise RuntimeError(f"diff_case: no {cls} {mode} task for {lanes} lanes after {DIFF_TRIES} tries")
+    before = tuple(row)
+    after = tuple(new if i == answer else v for i, v in enumerate(before))
+    if [i for i in range(lanes) if before[i] != after[i]] != [answer]:
+        raise RuntimeError("diff_case: exactly one lane must change, the answer")
+    if cls in ("num1", "numnew"):
+        if not all(type(v) is int and DIFF_NUMBERS[0] <= v <= DIFF_NUMBERS[1] for v in before + after):
+            raise RuntimeError("diff_case: every value must be a whole number in DIFF_NUMBERS")
+    elif not all(v in DIFF_WORDS for v in before + after):
+        raise RuntimeError("diff_case: every value must be a word from DIFF_WORDS")
+    if not diff_related(cls, before[answer], after[answer]):
+        raise RuntimeError(f"diff_case: the changed lane must keep the {cls} relation")
+    if mode == "plain" and not len(set(before)) == len(set(after)) == lanes:
+        raise RuntimeError("diff_case: a plain row must not repeat a value in either snapshot")
+    return before, after, answer, cls, mode
+
+
+def diff_cases(n, lanes=DIFF_LANES, seed=1):
+    """n úloh ze semínka: třída rovnoměrně z DIFF_CLASSES, podoba repeat s podílem DIFF_REPEAT_SHARE."""
+    rng = random.Random(seed)
+    out = []
+    for _ in range(n):
+        cls = rng.choice(DIFF_CLASSES)
+        mode = "repeat" if rng.random() < DIFF_REPEAT_SHARE else "plain"
+        out.append(diff_case(rng, lanes, cls, mode))
+    return out
+
+
+def diff_twins(case):
+    """Pruhy kromě správného, které v after nesou novou hodnotu měněného pruhu nebo v before jeho starou."""
+    before, after, answer = case[0], case[1], case[2]
+    return {i for i in range(len(before)) if i != answer and (after[i] == after[answer] or before[i] == before[answer])}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
