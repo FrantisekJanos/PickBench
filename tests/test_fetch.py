@@ -408,7 +408,7 @@ class Main(unittest.TestCase):
                 self.assertEqual((code, files, out), (fd.__doc__, [], []))
 
     def test_all_means_every_known_set(self):
-        self.assertEqual(fd.parse_args(["all"]).names, list(fd.SETS))
+        self.assertEqual(fd.parse_args(["all"]).names, list(fd.ALL))
         a = fd.parse_args(["banking77", "--n", "50", "--seed", "7", "--full"])
         self.assertEqual((a.names, a.n, a.seed, a.full, a.per_class), (["banking77"], 50, 7, True, 50))
 
@@ -650,9 +650,117 @@ class Cfpb(unittest.TestCase):
         self.assertEqual(str(e.exception), "CFPB: po 1 stránkách chybí stížnosti tříd mortgage, credit_card, bank_account, student_loan, vehicle_loan, debt_collection.")
 
 
+def tobi_row(i, queue, **change):
+    """Řádek sady Tobi-Bueck jako ze služby: tělo nese konce řádků jako doslovné \\n (dva znaky), jako zdroj."""
+    row = {"subject": f"Ticket {i}", "body": f"Hello,\\n\\nthis is ticket number {i} for {queue}. " + "Please help with the account settings. " * 2,
+           "answer": "Thank you.", "type": "Request", "queue": queue, "priority": "medium", "language": "en", "version": 51,
+           **{f"tag_{k}": None for k in range(1, 9)}}
+    row.update(change)
+    return row
+
+
+class Tobi(unittest.TestCase):
+    def where(self, queue):
+        return f"\"language\"='en' AND \"queue\"='{queue}'"
+
+    def url(self, queue, page):
+        return fd.hf_url("filter", fd.TOBI, "default", "train", page * 100, self.where(queue))
+
+    def pages(self, per_queue=150, rows_of=tobi_row):
+        """Každá fronta má per_queue anglických řádků, po stovkách na stránku."""
+        out = {}
+        for q in fd.TOBI_QUEUES:
+            for p in range((per_queue + 99) // 100):
+                rows = [rows_of(p * 100 + i, q) for i in range(min(100, per_queue - p * 100))]
+                out[self.url(q, p)] = hf_body(rows, per_queue)
+        return out
+
+    def test_sample_is_a_valid_public_set_with_equal_queues(self):
+        get = FakeGet(self.pages())
+        path, doc = fd.tobi_support(get, args("--per-class", "20"), self.fail, "2026-10-28")
+        self.assertEqual(path, "datasets/public/tobi-support-200.json")
+        ds = bench.validate_public(doc)
+        self.assertEqual([o["key"] for o in ds["labels"]], [fd.slug(q) for q in fd.TOBI_QUEUES])
+        self.assertEqual(Counter(it["label"] for it in ds["items"]), {fd.slug(q): 20 for q in fd.TOBI_QUEUES})
+        self.assertEqual(doc["sample"], {"n": 200, "of": 1500, "seed": 1, "full": False, "fetched": "2026-10-28"})
+        self.assertIn("CC-BY-NC-4.0", doc["license"])
+        self.assertEqual(doc["source"], "https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets")
+        for it in doc["items"]:
+            self.assertTrue(it["text"].startswith("Ticket ") and "\\n" not in it["text"] and "\n" not in it["text"], it["text"])
+        self.assertEqual(len({it["text"] for it in doc["items"]}), 200)
+        self.assertEqual(len(get.urls), 20)                            # dvě stránky na frontu
+        self.assertEqual(len(fd.TOBI_QUEUES), 10)
+
+    def test_reads_page_zero_and_one_more_page_by_seed(self):
+        get = FakeGet(self.pages(per_queue=450))
+        fd.tobi_support(get, args("--per-class", "20"), self.fail, "2026-10-28")
+        first = [u for u in get.urls if "General+Inquiry" in u or "General%20Inquiry" in u]
+        self.assertEqual(len(first), 2)
+        self.assertEqual(first[0], self.url("General Inquiry", 0))
+        other = FakeGet(self.pages(per_queue=450))
+        fd.tobi_support(other, args("--per-class", "20", "--seed", "2"), self.fail, "2026-10-28")
+        self.assertNotEqual(get.urls, other.urls)                       # jiné semínko, jiná druhá stránka (450 řádků = 5 stránek)
+
+    def test_texts_are_clipped_and_short_or_repeated_ones_skipped(self):
+        def rows_of(i, queue):
+            if i == 0:
+                return tobi_row(i, queue, body="x " * 2000)            # dlouhé tělo se zkrátí
+            if i == 1:
+                return tobi_row(i, queue, subject=None, body="Too short")   # bez předmětu a pod 40 znaků: vynechá se
+            if i == 2:
+                return tobi_row(1000, queue)                           # stejný text jako řádek 1000 níž by se opakoval
+            return tobi_row(i if i != 3 else 1000, queue)
+        path, doc = fd.tobi_support(FakeGet(self.pages(per_queue=60, rows_of=rows_of)), args("--per-class", "50"), self.fail, "2026-10-28")
+        texts = [it["text"] for it in doc["items"]]
+        self.assertTrue(all(len(t) <= fd.TOBI_MAX_CHARS for t in texts))
+        self.assertFalse(any(t.startswith("Too short") for t in texts))
+        self.assertEqual(len(texts), len(set(texts)))
+
+    def test_queue_with_too_few_tickets_ends_with_a_sentence(self):
+        with self.assertRaises(fd.FetchError) as e:
+            fd.tobi_support(FakeGet(self.pages(per_queue=10)), args("--per-class", "20"), self.fail, "2026-10-28")
+        self.assertEqual(str(e.exception), "Tobi-Bueck: fronta Technical Support má jen 10 použitelných anglických tiketů, chce se 20.")
+        with i18n.process("en"), self.assertRaises(fd.FetchError) as e:
+            fd.tobi_support(FakeGet(self.pages(per_queue=10)), args("--per-class", "20"), self.fail, "2026-10-28")
+        self.assertEqual(str(e.exception), "Tobi-Bueck: the queue Technical Support has only 10 usable English tickets, 20 are needed.")
+
+    def test_not_part_of_all_and_full_does_not_apply(self):
+        self.assertIn("tobi-support", fd.SETS)
+        self.assertNotIn("tobi-support", fd.ALL)
+        self.assertEqual(fd.parse_args(["all"]).names, list(fd.ALL))
+        path, doc = fd.tobi_support(FakeGet(self.pages()), args("--full", "--n", "7", "--per-class", "20"), self.fail, "2026-10-28")
+        self.assertEqual((path, doc["sample"]["full"], doc["sample"]["n"]), ("datasets/public/tobi-support-200.json", False, 200))
+
+    def test_all_and_tobi_support_named_fetches_both(self):          # „all“ sadu nezahrne, ale výslovně jmenovanou nezahodí
+        self.assertEqual(fd.parse_args(["all", "tobi-support"]).names, [*fd.ALL, "tobi-support"])
+        self.assertEqual(fd.parse_args(["tobi-support", "all"]).names, [*fd.ALL, "tobi-support"])
+
+    def test_large_per_class_reads_enough_pages(self):               # 250 tiketů z fronty: stránka 0 a tři další
+        get = FakeGet(self.pages(per_queue=450))
+        path, doc = fd.tobi_support(get, args("--per-class", "250"), self.fail, "2026-10-28")
+        self.assertEqual((path, len(get.urls)), ("datasets/public/tobi-support-2500.json", 40))
+
+    def test_main_writes_the_file_into_the_public_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = []
+            fd.main(["--per-class", "20", "tobi-support"], get=FakeGet(self.pages()), out=out.append, root=Path(tmp), today="2026-10-28")
+            self.assertEqual(out, ["tobi-support: uloženo 200 úloh do datasets/public/tobi-support-200.json"])
+            bench.load_public(Path(tmp) / "datasets" / "public" / "tobi-support-200.json")
+
+    def test_description_in_both_languages(self):
+        path, doc = fd.tobi_support(FakeGet(self.pages()), args("--per-class", "20"), self.fail, "2026-10-28")
+        self.assertEqual(list(doc)[:3], ["name", "about", "about_en"])
+        self.assertTrue(doc["about"].endswith("Rozsah: vzorek 200 z 1500, semínko 1; staženo 2026-10-28."), doc["about"])
+        self.assertTrue(doc["about_en"].endswith("Scope: a sample of 200 out of 1500, seed 1; downloaded 2026-10-28."), doc["about_en"])
+        for text in (doc["about"], doc["about_en"]):
+            self.assertIn("CC-BY-NC-4.0", text)
+            self.assertIn("Tobi-Bueck/customer-support-tickets", text)
+
+
 class AllSets(unittest.TestCase):
     def test_all_five_sets_are_known(self):
-        self.assertEqual(list(fd.SETS), ["banking77", "clinc150", "massive", "horizon-cs", "cfpb"])
+        self.assertEqual(list(fd.SETS), ["banking77", "clinc150", "massive", "horizon-cs", "cfpb", "tobi-support"])
+        self.assertEqual(fd.ALL, ("banking77", "clinc150", "massive", "horizon-cs", "cfpb"))
         for name in fd.SETS:
             self.assertIn(f"  {name} ", fd.__doc__)
 
@@ -811,7 +919,7 @@ class Language(unittest.TestCase):
             for word in (*(f"  {name} " for name in fd.SETS), "  all ", "[--n N]", "[--seed S]", "[--full]", "--per-class K", "--lang cs|en", LANG_ENV,
                          "datasets/public/", "datasets/cfpb-complaints-<", "datasets-server.huggingface.co", "HTTP 429", "bench.validate_public"):
                 self.assertIn(word, text)
-            self.assertEqual(text.count(" → "), 5)                           # pět sad: co je vstup a co se vybírá
+            self.assertEqual(text.count(" → "), 6)                           # šest sad: co je vstup a co se vybírá
 
     def test_main_prints_english_messages_and_writes_the_same_files(self):
         (lines_cs, code_cs, files_cs), (lines_en, code_en, files_en) = self.both("--n", "18", "--per-class", "20", "all", pages=all_pages())
@@ -953,6 +1061,9 @@ class Language(unittest.TestCase):
             (lambda: fd.cfpb(FakeGet(Cfpb().pages(2, lambda p: [cfpb_row(p * 100 + i, "Mortgage") for i in range(100)])), args("--per-class", "5"), self.fail, "2026-10-06"),
              "CFPB: po 2 stránkách chybí stížnosti tříd credit_card, bank_account, student_loan, vehicle_loan, debt_collection.",
              "CFPB: after 2 pages, complaints of these classes are missing: credit_card, bank_account, student_loan, vehicle_loan, debt_collection."),
+            (lambda: fd.tobi_support(FakeGet(Tobi().pages(per_queue=1)), args("--per-class", "2"), self.fail, "2026-10-28"),
+             "Tobi-Bueck: fronta Technical Support má jen 1 použitelný anglický tiket, chce se 2.",
+             "Tobi-Bueck: the queue Technical Support has only 1 usable English ticket, 2 are needed."),
         ]
         used, real = set(), i18n.t
 
@@ -968,7 +1079,7 @@ class Language(unittest.TestCase):
                         self.assertEqual(str(ctx.exception), want)
                     self.assertEqual(CZECH.findall(en), [])
         errors = {key for key in i18n.TEXTS if key.startswith("fetch.err.")}
-        self.assertEqual(len(errors), 20)
+        self.assertEqual(len(errors), 21)
         self.assertEqual(errors - used, {"fetch.err.write", "fetch.err.interrupted"})      # každá věta FetchError je tu vyvolaná; tyhle dvě říká main (test níže)
 
     def test_error_from_the_validator_keeps_the_name_of_the_set_and_follows_the_language(self):      # věta validátoru za jménem sady: žádné slovo navíc

@@ -2,7 +2,7 @@
 
 Stejný výpočet je v index.html (blok „sdíleno s Pythonem“); shodu hlídá tests/test_parity.py.
 Neplatná odpověď (štítek mimo nabídku, chyba) se předává jako None a počítá se jako špatně.
-Totéž platí pro AUROC a nejlepší práh otázky noul na konci souboru.
+Totéž platí pro AUROC a nejlepší práh otázky noul na konci souboru. Brierovo skóre, pokrytí nad prahem jistoty a třídy délky textu jsou za nimi; stejný výpočet bude ve stránce.
 """
 from fractions import Fraction
 
@@ -81,3 +81,37 @@ def best_threshold(probs, truths):
         return sum(Fraction(sum(p is not None and (p >= t) == want for p in ps), len(ps)) for want, ps in groups) / len(groups)
     t = min({0.5, *(p for p in probs if p is not None)}, key=lambda t: (-balanced(t), abs(t - 0.5), t))
     return t, float(balanced(t))
+
+
+def brier(pairs):
+    """Brierovo skóre z dvojic (jistota, správně?): průměr (jistota − správně)², 0 = dokonalé. Bez dat None."""
+    return sum((c - bool(ok)) ** 2 for c, ok in pairs) / len(pairs) if pairs else None
+
+
+def coverage(pairs, n, threshold):
+    """Práh jistoty: úlohy s jistotou aspoň threshold rozhodne model, ostatní se předají (člověku, pravidlům).
+
+    pairs = [(jistota, správně?)] jen z odpovědí s jistotou; n = počet všech úloh, i bez jistoty (ty jdou pod práh).
+    Vrací threshold, n, covered (nad prahem), coverage (covered ÷ n), acc (správně nad prahem ÷ covered) a handed (n − covered);
+    bez úloh, nebo bez úloh nad prahem, je podíl None."""
+    above = [bool(ok) for c, ok in pairs if c >= threshold]
+    return {"threshold": threshold, "n": n, "covered": len(above), "coverage": len(above) / n if n else None,
+            "acc": sum(above) / len(above) if above else None, "handed": n - len(above)}
+
+
+LENGTH_CLASSES = ("short", "medium", "long")
+
+
+def length_classes(lengths):
+    """Třídy délky textu z délek celé sady: seřadit podle (délka, pořadí v sadě) a rozdělit na třetiny po pořadí
+    (hranice n // 3 a 2n // 3). Stejně dlouhé texty na hranici mohou padnout do dvou tříd.
+
+    Vrací classes (třída každého textu v pořadí sady) a ranges ({třída: [nejkratší, nejdelší]}, prázdná třída None)."""
+    n = len(lengths)
+    order = sorted(range(n), key=lambda i: (lengths[i], i))
+    classes, ranges = [None] * n, dict.fromkeys(LENGTH_CLASSES)
+    for rank, i in enumerate(order):
+        cls = LENGTH_CLASSES[0 if rank < n // 3 else 1 if rank < 2 * n // 3 else 2]
+        classes[i] = cls
+        ranges[cls] = [lengths[i], lengths[i]] if ranges[cls] is None else [ranges[cls][0], lengths[i]]      # pořadí je vzestupné
+    return {"classes": classes, "ranges": ranges}

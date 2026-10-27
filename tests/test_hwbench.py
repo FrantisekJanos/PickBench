@@ -2,6 +2,7 @@ import ast
 import contextlib
 import csv
 import io
+import json
 import os
 import re
 import subprocess
@@ -19,6 +20,7 @@ import bench
 import hwbench
 import i18n
 import providers
+from test_golden import FakeResponse
 
 LANG_ENV = "PICKBENCH_LANG"
 CZECH = re.compile(r"[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“]")
@@ -337,6 +339,205 @@ class Sampler(unittest.TestCase):
             time.sleep(0.01)
         self.assertTrue(s._thread.is_alive())                         # GPU už byla vidět → čte se dál
         self.assertEqual(len(s.stop()), 1)
+
+
+class Cache(unittest.TestCase):
+    ROUND = [50.0, 10.0, 10.0, 10.0, 40.0, 40.0, 40.0, 40.0]           # kolo při n = 4: první dotaz, tři opakování, čtyři jiné stavy
+
+    def test_same_state_n_times_then_n_fresh_states_in_every_round(self):
+        post = FakePost()
+        r = hwbench.run_cache("m", n=4, rounds=3, post=post)
+        states = [str(sorted(p["state"].items())) for p in post.calls[1:]]          # bez zahřívacího dotazu
+        self.assertEqual(len(states), 3 * 8)
+        for k in range(3):
+            block = states[k * 8:(k + 1) * 8]
+            self.assertEqual(len(set(block[:4])), 1)                   # stejný stav čtyřikrát po sobě
+            self.assertEqual(len(set(block[4:])), 4)                   # pak čtyři jiné
+            self.assertNotIn(block[0], block[4:])
+        self.assertEqual(len({states[k * 8] for k in range(3)}), 3)    # každé kolo má nový stav
+        self.assertEqual((r["n"], r["rounds"]), (4, 3))
+
+    def test_latencies_go_to_first_same_and_fresh(self):
+        r = hwbench.run_cache("m", n=4, rounds=3, post=FakePost(ms=[99.0] + self.ROUND * 3))
+        self.assertEqual((r["first"], r["same"], r["fresh"]), (50.0, 10.0, 40.0))
+        self.assertAlmostEqual(r["ratio"], 0.25)
+
+    def test_one_request_per_state_has_no_repeats(self):
+        r = hwbench.run_cache("m", n=1, rounds=2, post=FakePost())
+        self.assertTrue(r["same"] != r["same"] and r["ratio"] != r["ratio"])       # NaN
+        self.assertEqual(r["first"], 10.0)
+
+    def test_row(self):
+        a = hwbench.parse_args(["cache", "--n", "4", "m"])
+        head, rows, csv_head, csv_rows, notes = hwbench.measure(a, "m", FakePost(ms=[99.0] + self.ROUND * 3))
+        self.assertEqual((rows, csv_rows, notes, csv_head), ([["m", 4, "50.0", "10.0", "40.0", "0.25"]], rows, [], head))
+        self.assertEqual(len(hwbench.measure(hwbench.parse_args(["cache", "m"]), "m", FakePost())[1][0]), 6)      # bez --n: 10 opakování
+
+
+def replying(replies):
+    """Náhrada post: odpovědi (volba, jistota) po řadě, i pro zahřívací dotaz; jistota None = pole chybí."""
+    it = iter(replies)
+
+    def post(model, payload):
+        choice, conf = next(it)
+        a = {"choice": choice} if conf is None else {"choice": choice, "confidence": conf}
+        return {"answers": {"target": a}}, 10.0
+    return post
+
+
+class Repeat(unittest.TestCase):
+    def test_every_state_is_asked_n_times_in_rounds(self):
+        post = FakePost()
+        r = hwbench.run_repeat("m", n=3, states=5, post=post)
+        states = [str(sorted(p["state"].items())) for p in post.calls[1:]]
+        self.assertEqual(len(states), 15)
+        self.assertEqual(states[:5], states[5:10])                     # kolo = každý stav jednou, pořád ve stejném pořadí
+        self.assertEqual(states[:5], states[10:])
+        self.assertEqual(len(set(states[:5])), 5)                      # stejný dotaz nikdy dvakrát po sobě
+        self.assertEqual((r["states"], r["n"], r["same_choice"], r["same_conf"], r["spread"]), (5, 3, 5, 5, 0.0))
+
+    def test_counts_states_with_a_different_answer(self):
+        post = replying([("lane_1", 0.5),                              # zahřátí
+                         ("lane_1", 0.9), ("lane_2", 0.8),             # kolo 1: stav 1, stav 2
+                         ("lane_1", 0.9), ("lane_3", 0.6)])            # kolo 2
+        r = hwbench.run_repeat("m", n=2, states=2, post=post)
+        self.assertEqual((r["same_choice"], r["same_conf"]), (1, 1))
+        self.assertAlmostEqual(r["spread"], 0.2)
+
+    def test_answers_without_a_confidence(self):
+        post = replying([("lane_1", None)] + [("lane_1", None)] * 4)
+        r = hwbench.run_repeat("m", n=2, states=2, post=post)
+        self.assertEqual((r["same_choice"], r["same_conf"]), (2, 0))   # stejná volba bez jistoty: jistota se za shodnou nepočítá
+        self.assertTrue(r["spread"] != r["spread"])                    # NaN
+
+    def test_row(self):
+        head, rows, csv_head, csv_rows, notes = hwbench.measure(hwbench.parse_args(["repeat", "m"]), "m", FakePost())
+        self.assertEqual((rows, csv_rows, notes), ([["m", 20, 10, "20/20", "20/20", "0.000"]], rows, []))
+
+
+class Quant(unittest.TestCase):
+    INFO = {"quant": "Q4_K_M", "params": "9.0B", "disk_gb": 5.6, "mem_gb": 6.1}
+
+    def test_accuracy_against_the_ideal_driver(self):
+        keys = bench.lane_keys(3)
+        right = [keys[min(bench.oracle(lane, dists))] for lane, dists in bench.make_cases(6, 3, 1)]
+        post = replying([("lane_1", 0.5)] + [(k, 0.9) for k in right[:4]] + [("nonsense", 0.9), (None, None)])
+        r = hwbench.run_quant("m", n=6, post=post, info=lambda model: self.INFO)
+        self.assertEqual((r["n"], r["correct"], r["quant"], r["params"], r["disk_gb"], r["mem_gb"], r["p50"]), (6, 4, "Q4_K_M", "9.0B", 5.6, 6.1, 10.0))
+
+    def test_ollama_info_reads_show_tags_and_ps(self):
+        seen = []
+        replies = {"/api/show": {"details": {"quantization_level": "Q8_0", "parameter_size": "9.7B"}},
+                   "/api/tags": {"models": [{"name": "tev1:latest", "size": 1}, {"name": "nimble:latest", "size": 9_500_000_000}]},
+                   "/api/ps": {"models": [{"name": "nimble:latest", "model": "nimble:latest", "size_vram": 10_200_000_000}]}}
+
+        def opener(req, timeout=None):
+            path = req.full_url.split("11434")[1]
+            seen.append((path, req.data))
+            return FakeResponse(json.dumps(replies[path]).encode())
+        want = {"quant": "Q8_0", "params": "9.7B", "disk_gb": 9.5, "mem_gb": 10.2}
+        self.assertEqual(hwbench.ollama_info("nimble:latest", opener=opener), want)
+        self.assertEqual(seen[0], ("/api/show", b'{"model": "nimble:latest"}'))
+        self.assertEqual([path for path, _ in seen], ["/api/show", "/api/tags", "/api/ps"])
+        self.assertEqual(hwbench.ollama_info("nimble", opener=opener), want)          # jméno bez tagu = :latest
+
+    def test_ollama_info_survives_a_missing_server_or_field(self):
+        def down(req, timeout=None):
+            raise urllib.error.URLError("refused")
+        self.assertEqual(hwbench.ollama_info("m", opener=down), hwbench.NO_INFO)
+        self.assertEqual(hwbench.NO_INFO, {"quant": None, "params": None, "disk_gb": None, "mem_gb": None})
+
+        def empty(req, timeout=None):
+            return FakeResponse(b'{"models": [{"name": "m:latest"}], "details": "x"}')
+        self.assertEqual(hwbench.ollama_info("m", opener=empty), hwbench.NO_INFO)
+
+    def test_row_and_hosted_model(self):
+        keys = bench.lane_keys(3)
+        ok = sum("lane_1" in {keys[i] for i in bench.oracle(lane, dists)} for lane, dists in bench.make_cases(8, 3, 1))
+        a = hwbench.parse_args(["quant", "--n", "8", "m"])
+        head, rows, csv_head, csv_rows, notes = hwbench.measure(a, "m", FakePost(), info=lambda model: self.INFO)
+        self.assertEqual((rows, csv_rows, notes), ([["m", "Q4_K_M", "9.0B", "5.6", "6.1", "10.0", "10.0", f"{ok}/8"]], rows, []))
+        post = FakePost()
+        head, rows, _, csv_rows, notes = hwbench.measure(hwbench.parse_args(["quant", "cf:x"]), "cf:x", post, info=lambda m: self.fail("info"))
+        self.assertEqual((rows, csv_rows, post.calls), ([], [], []))
+        self.assertEqual(notes, ["cf:x: test quant je jen pro lokální modely (velikost a kvantizaci hlásí Ollama)"])
+        with i18n.process("en"):
+            notes = hwbench.measure(hwbench.parse_args(["quant", "cf:x"]), "cf:x", FakePost())[4]
+        self.assertEqual(notes, ["cf:x: the quant test is only for local models (Ollama reports the size and the quantization)"])
+
+    def test_injected_post_never_asks_ollama(self):
+        with mock.patch.object(urllib.request, "urlopen", side_effect=AssertionError("test sahá na Ollamu")):
+            rows = hwbench.measure(hwbench.parse_args(["quant", "--n", "4", "m"]), "m", FakePost())[1]
+        self.assertEqual(rows[0][1:5], ["—", "—", "—", "—"])
+
+    def test_default_number_of_requests(self):
+        post = FakePost()
+        hwbench.measure(hwbench.parse_args(["quant", "m"]), "m", post, info=lambda model: self.INFO)
+        self.assertEqual(len(post.calls), 1 + 100)                     # zahřátí a 100 dotazů
+
+
+class Idle(unittest.TestCase):
+    IDLE = [(float(t), 30, 10.0, 210) for t in range(6)]               # šest vzorků v klidu, příkon 10 W
+
+    def soak(self, *argv, idle=None, clock=None, samples=None):
+        a = hwbench.parse_args(["soak", *argv])
+        return hwbench.measure(a, a.models[0], FakePost(), FakeSampler(samples or Language.SAMPLES), clock=clock or FakeClock(20.0),
+                               idle_sampler=idle or FakeSampler(self.IDLE), sleep=lambda seconds: None)
+
+    def test_idle_power_is_the_mean_of_the_samples(self):
+        slept = []
+        r = hwbench.run_idle(FakeSampler([(float(t), 40, 10.0 + t, 210) for t in range(6)]), 5, sleep=slept.append)
+        self.assertEqual((r["samples"], r["seconds"], slept), (6, 5, [5]))
+        self.assertAlmostEqual(r["watts"], 12.5)
+        few = hwbench.run_idle(FakeSampler(self.IDLE[:4]), 5, sleep=lambda s: None)
+        self.assertEqual(few["samples"], 4)
+        self.assertTrue(few["watts"] != few["watts"])                  # méně než gpu.MIN_SAMPLES: NaN
+
+    def test_soak_prints_the_energy_without_idle(self):
+        idle = FakeSampler(self.IDLE)
+        notes = self.soak("--minutes", "1", "--idle", "5", "m", idle=idle)[4]
+        self.assertTrue(idle.started)
+        self.assertEqual(notes[1], "m: klidový příkon 10.0 W (6 vzorků za 5 s), J na rozhodnutí bez klidu 1200.00")      # (3200 J − 10 W × 80 s) ÷ 2
+        self.assertEqual(len(notes), 2)                                # jedna minuta: průběh se nekreslí
+        with i18n.process("en"):
+            notes = self.soak("--minutes", "1", "--idle", "5", "m")[4]
+        self.assertEqual(notes[1], "m: idle power draw 10.0 W (6 samples in 5 s), J per decision without idle 1200.00")
+        self.assertEqual(len(self.soak("--minutes", "1", "m", idle=FakeSampler([]))[4]), 1)       # bez --idle beze změny
+
+    def test_idle_only_with_soak(self):
+        self.assertEqual(hwbench.parse_args(["soak", "--idle", "30", "m"]).idle, 30)
+        self.assertEqual(hwbench.parse_args(["soak", "m"]).idle, 0)
+        for argv in (["latency", "--idle", "5", "m"], ["soak", "--idle", "-1", "m"], ["soak", "--idle", "nan", "m"]):
+            with self.subTest(argv=argv), self.assertRaises(SystemExit) as e:
+                hwbench.main(argv, post=FakePost(), out=lambda line: None)
+            self.assertIn("Použití", str(e.exception.code))
+
+    def test_hosted_soak_has_no_idle_line(self):
+        idle = FakeSampler(self.IDLE)
+        a = hwbench.parse_args(["soak", "--minutes", "1", "--hosted-soak", "--idle", "5", "cf:x"])
+        notes = hwbench.measure(a, "cf:x", FakePost(), FakeSampler([]), clock=FakeClock(20.0), idle_sampler=idle, sleep=lambda s: None)[4]
+        self.assertFalse(idle.started)
+        self.assertEqual(len(notes), 1)
+
+    def test_spark(self):
+        self.assertEqual(hwbench.spark([1, 2, 3, 4]), "▁▃▆█")
+        self.assertEqual(hwbench.spark([5, 5]), "▄▄")
+        self.assertEqual(hwbench.spark([1, None, float("nan"), 3]), "▁··█")
+        self.assertEqual(hwbench.spark([None, None]), "··")
+
+    def test_two_minutes_draw_the_course(self):
+        samples = [(float(t), 50, 40.0, 1500) for t in range(0, 161, 5)]
+        notes = self.soak("--minutes", "2", "m", clock=FakeClock(40.0), samples=samples)[4]
+        self.assertEqual(notes[1:], ["m: p50 po minutách ▄▄ (10.0–10.0 ms)", "m: příkon po minutách ▄▄ (40.0–40.0 W)",
+                                     "m: teplota po minutách ▄▄ (50–50 °C)"])
+        with i18n.process("en"):
+            notes = self.soak("--minutes", "2", "m", clock=FakeClock(40.0), samples=samples)[4]
+        self.assertEqual(notes[1:], ["m: p50 by minute ▄▄ (10.0–10.0 ms)", "m: power draw by minute ▄▄ (40.0–40.0 W)",
+                                     "m: temperature by minute ▄▄ (50–50 °C)"])
+
+    def test_course_without_gpu_has_only_latency(self):
+        notes = self.soak("--minutes", "2", "m", clock=FakeClock(40.0), samples=[(0.0, None, None, None)])[4]
+        self.assertEqual(notes[1:], ["m: p50 po minutách ▄▄ (10.0–10.0 ms)"])
 
 
 class Cli(unittest.TestCase):
@@ -845,6 +1046,11 @@ class Language(unittest.TestCase):
         "context": (["model", "cíl tokenů", "input_tokens", "ms"], ["model", "target tokens", "input tokens", "ms"]),
         "soak": (["model", "minuta", "N", "p50 ms", "p95 ms", "°C", "W", "MHz"], ["model", "minute", "N", "p50 ms", "p95 ms", "°C", "W", "MHz"]),
         "server": (["model", "tempo/s", "dosaženo/s", "p50 ms", "p99 ms", "včas"], ["model", "rate/s", "achieved/s", "p50 ms", "p99 ms", "in time"]),
+        "cache": (["model", "N", "první ms", "stejný p50 ms", "jiný p50 ms", "poměr"], ["model", "N", "first ms", "same p50 ms", "fresh p50 ms", "ratio"]),
+        "repeat": (["model", "stavů", "N", "stejná volba", "stejná jistota", "rozptyl jistoty"],
+                   ["model", "states", "N", "same choice", "same confidence", "confidence spread"]),
+        "quant": (["model", "kvantizace", "parametrů", "GB na disku", "GB v paměti", "p50 ms", "p95 ms", "správně"],
+                  ["model", "quantization", "parameters", "GB on disk", "GB in memory", "p50 ms", "p95 ms", "correct"]),
     }
     SOAK_CSV = (["model", "čas s", "ms", "°C", "W", "MHz"], ["model", "time s", "ms", "°C", "W", "MHz"])
     SAMPLES = [(float(t), 50, 40.0, 1500) for t in range(0, 81, 5)]      # vzorky GPU přes celý běh testu soak s hodinami FakeClock(20.0)

@@ -1,10 +1,11 @@
 """Měření obsluhy rozhodovacího modelu a hardwaru z příkazové řádky (bez hry).
 
 Použití:  python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv soubor]
-                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+                                   [--idle S] [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
 Příklad:  python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
+          python hwbench.py quant nimble:9b-q4_K_M nimble:latest
 
 Testy:
   latency      N dotazů po sobě (výchozí 1000): p50, p90, p95, p99, max, rozh./s
@@ -16,11 +17,19 @@ Testy:
                odmítnutý stupeň (HTTP 400) se vypíše jako „nevešlo se“ a větší se nezkouší
   soak         dotazy po dobu M minut (výchozí 10), GPU se vzorkuje přibližně po 1 s: souhrn po minutách,
                J na rozhodnutí, poměr latence poslední ÷ první minuta; CSV má řádek na každé rozhodnutí
+               --idle S: před měřením S sekund bez dotazů (výchozí 0 = ne); pod souhrnem klidový příkon a J na rozhodnutí
+               bez klidu. Od 2 minut ještě průběh p50, příkonu a teploty po minutách (znaky ▁ až █).
   server       scénář Server podle MLPerf: dotazy přicházejí náhodně (Poissonův proces, pevné semínko) zadaným tempem
                bez ohledu na to, jestli předchozí odpověď dorazila; latence se měří od plánovaného příchodu (fronta se počítá).
                Stupně tempa jsou 0,25 až 2násobek sériové rychlosti modelu (nebo --rates v dotazech za sekundu),
                N dotazů na stupeň (výchozí 200); hledá se nejvyšší tempo, při kterém p99 zůstane do --p99-ms
                (výchozí 1000). Stupeň, který limit nesplní nebo nedoběhne, je poslední.
+  cache        stejný stav N× po sobě (výchozí 10) proti N pokaždé jiným stavům, 3 kola: medián prvního dotazu,
+               p50 opakování, p50 jiných stavů a poměr stejný ÷ jiný (pod 1 = opakovaný stav je rychlejší)
+  repeat       20 stavů, každý N× (výchozí 10), po kolech: u kolika stavů byla volba pokaždé stejná, u kolika i jistota,
+               a největší rozptyl jistoty (opakovatelnost odpovědí)
+  quant        N dotazů (výchozí 100): kvantizace a parametry modelu, GB na disku a v paměti podle Ollamy (/api/show,
+               /api/tags, /api/ps), p50, p95 a správně proti ideálnímu řidiči; dva tagy téhož modelu = dva modely v příkazu
 
 Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
 server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.
@@ -29,17 +38,18 @@ Dotaz je vždy stejný a malý: překážky, 3 pruhy (stejné úlohy jako bench.
 Před každým testem kromě cold jde zahřívací dotaz, který se nepočítá.
 --lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
 Hostovaný model (jev:jev-1.13.0, cf:clef-flash, cf:clef — viz bench.py) běží u poskytovatele a stojí peníze:
-testy cold, concurrency a server ho přeskočí; soak běží jen s přepínačem --hosted-soak a nevzorkuje GPU;
+testy cold, concurrency, server a quant ho přeskočí; soak běží jen s přepínačem --hosted-soak a nevzorkuje GPU;
 pod tabulkou je útrata a odhad sítě a latence zahrnuje síť. --max-usd a --max-hosted jsou strop útraty jako v bench.py.
 Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu).
 """
 USAGE_EN = """Measures how this machine serves a decision model, and its hardware, from the command line (without the game).
 
 Usage:    python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv file]
-                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+                                   [--idle S] [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
 Examples: python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
+          python hwbench.py quant nimble:9b-q4_K_M nimble:latest
 
 Tests:
   latency      N requests one after another (default 1000): p50, p90, p95, p99, max, dec./s
@@ -51,11 +61,19 @@ Tests:
                hwbench.py prints a refused level (HTTP 400) as "did not fit" and does not try larger ones
   soak         requests for M minutes (default 10), with the GPU sampled about once a second: a summary per minute,
                J per decision, the latency ratio last ÷ first minute; the CSV has a row for every decision
+               --idle S: S seconds without requests before the measurement (default 0 = no); below the summary the idle power draw
+               and J per decision without idle. From 2 minutes on also the course of p50, power draw and temperature by minute (▁ to █).
   server       MLPerf's Server scenario: requests arrive at random (a Poisson process, fixed seed) at the given rate
                whether or not the previous answer has arrived; the test measures latency from the planned arrival (waiting in the queue counts).
                The rate levels are 0.25 to 2 times the serial speed of the model (or --rates in requests per second),
                N requests per level (default 200); the test looks for the highest rate at which p99 stays within --p99-ms
                (default 1000). A level that misses the limit or does not finish is the last one.
+  cache        the same state N times in a row (default 10) against N different states, 3 rounds: the median of the first request,
+               p50 of the repeats, p50 of the different states and the ratio same ÷ different (below 1 = the repeated state is faster)
+  repeat       20 states, each N times (default 10), in rounds: for how many states the choice was the same every time, for how many
+               also the confidence, and the largest spread of the confidence (repeatability of the answers)
+  quant        N requests (default 100): the quantization and parameters of the model, GB on disk and in memory as Ollama reports them
+               (/api/show, /api/tags, /api/ps), p50, p95 and correct against the ideal driver; two tags of one model = two models in the command
 
 The names follow MLPerf: latency = SingleStream (reports p90), concurrency = Offline (the highest throughput),
 server = Server. This is a measurement in the style of MLPerf, not a result submitted under the MLCommons rules.
@@ -64,7 +82,7 @@ The request is always the same small one: obstacles, 3 lanes (the same tasks as 
 Before every test except cold a warm-up request goes first, and it does not count.
 --lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
 A hosted model (jev:jev-1.13.0, cf:clef-flash, cf:clef — see bench.py) runs at the provider and costs money:
-the cold, concurrency and server tests skip it; soak runs only with the --hosted-soak option and does not sample the GPU;
+the cold, concurrency, server and quant tests skip it; soak runs only with the --hosted-soak option and does not sample the GPU;
 below the table are the spend and the network estimate, and the latency includes the network. --max-usd and --max-hosted are the spend cap as in bench.py.
 The game must not run in the browser during the measurement (the requests would compete for the GPU).
 """
@@ -77,17 +95,24 @@ import statistics
 import subprocess
 import sys
 import threading
+import json
 import time
 import urllib.error
+import urllib.request
 
 import bench
 import gpu
 import i18n
 import providers
 
-TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server")
+TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server", "cache", "repeat", "quant")
 SERVER_SHARES = (0.25, 0.5, 0.7, 0.85, 1.0, 1.25, 1.5, 2.0)      # stupně tempa testu server jako podíl sériové rychlosti (1000 ÷ medián latence)
 SERVER_SLACK, SERVER_DRAIN = 30.0, 120.0                         # s: rezerva stupně nad poslední příchod; čekání na dotazy, které po stupni ještě běží
+CACHE_ROUNDS = 3                                                 # test cache: kola (nový stav N× po sobě, pak N jiných stavů)
+REPEAT_STATES = 20                                               # test repeat: počet stavů, každý se ptá N× po kolech
+GB = 1e9                                                         # test quant: GB jako Ollama (10⁹ B)
+NO_INFO = {"quant": None, "params": None, "disk_gb": None, "mem_gb": None}      # údaje o modelu, které se nezjistily
+SPARK = "▁▂▃▄▅▆▇█"                                               # průběh soaku po minutách: nejnižší až nejvyšší hodnota
 NAN = float("nan")
 KEYS = bench.lane_keys(3)
 QUESTION = bench.lane_question(3)
@@ -318,6 +343,96 @@ def run_server(model, n=200, limit_ms=1000, rates=None, post=None, clock=time.pe
             "best": max((r["rate"] for r in rows if r["ok"]), default=None), "interrupted": interrupted, "limit_ms": limit_ms}
 
 
+def run_cache(model, n=10, rounds=CACHE_ROUNDS, post=None):
+    """Vliv cache promptu. Každé kolo: nový stav n× po sobě, pak n pokaždé jiných stavů (úlohy jako bench.py, překážky, 3 pruhy).
+
+    Vrací first = medián prvních dotazů s novým stavem, same = p50 opakování (2. až n. dotaz), fresh = p50 jiných stavů
+    a ratio = same ÷ fresh (pod 1 = opakovaný stav je rychlejší). n = 1: opakování nejsou, same a ratio jsou NaN."""
+    post = post or bench.post
+    warm(model, post)
+    work = payloads(rounds * (n + 1))
+    firsts, same, fresh = [], [], []
+    for r in range(rounds):
+        block = work[r * (n + 1):(r + 1) * (n + 1)]
+        lat = [post(model, block[0])[1] for _ in range(n)]
+        firsts.append(lat[0])
+        same += lat[1:]
+        fresh += [post(model, p)[1] for p in block[1:]]
+    s, f = percentile(same, .5), percentile(fresh, .5)
+    return {"n": n, "rounds": rounds, "first": statistics.median(firsts), "same": s, "fresh": f,
+            "ratio": s / f if s == s and f == f and f > 0 else NAN}
+
+
+def run_repeat(model, n=10, states=REPEAT_STATES, post=None):
+    """Opakovatelnost: states stavů, každý n× po kolech (kolo = každý stav jednou, ve stejném pořadí), takže stejný dotaz
+    nejde dvakrát po sobě. Vrací same_choice = počet stavů se stejnou volbou ve všech n odpovědích (i neplatná None je hodnota),
+    same_conf = počet stavů s číselnou jistotou, všechny n hodnoty přesně stejné, a spread = největší (max − min) jistoty
+    přes stavy (bez číselné jistoty NaN)."""
+    post = post or bench.post
+    warm(model, post)
+    work = payloads(states)
+    seen = [[] for _ in work]
+    for _ in range(n):
+        for i, p in enumerate(work):
+            out = post(model, p)[0]
+            answers = out.get("answers") if isinstance(out, dict) else None
+            a = answers.get("target") if isinstance(answers, dict) else None
+            a = a if isinstance(a, dict) else {}
+            c, choice = a.get("confidence"), a.get("choice")
+            seen[i].append((choice if isinstance(choice, str) else None, c if type(c) in (int, float) and c == c else None))
+    confs = [[c for _, c in s] for s in seen]
+    spreads = [max(v) - min(v) for v in ([c for c in cs if c is not None] for cs in confs) if v]
+    return {"states": states, "n": n, "same_choice": sum(len({ch for ch, _ in s}) == 1 for s in seen),
+            "same_conf": sum(None not in cs and len(set(cs)) == 1 for cs in confs), "spread": max(spreads) if spreads else NAN}
+
+
+def ollama_info(model, base=None, opener=None, timeout=10):
+    """Kvantizace, počet parametrů a velikost modelu podle Ollamy: POST /api/show (details.quantization_level,
+    details.parameter_size), GET /api/tags (size na disku), GET /api/ps (size_vram v paměti; po zahřátí).
+
+    Jméno bez tagu se hledá i jako „:latest“. Co Ollama nevrátí nebo co nejde přečíst (Ollama neběží, starší verze), je None.
+    opener se bere při volání, ne při importu: testy podstrkují urllib.request.urlopen."""
+    base, opener = base or bench.OLLAMA, opener or urllib.request.urlopen
+    names = {model, model if ":" in model else model + ":latest"}
+
+    def ask(path, body=None):
+        req = urllib.request.Request(base + path, data=None if body is None else json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with opener(req, timeout=timeout) as r:
+                doc = json.loads(r.read())
+        except Exception:                            # Ollama neběží, nezná cestu, odpověď není JSON
+            return {}
+        return doc if isinstance(doc, dict) else {}
+
+    def entry(doc):
+        models = doc.get("models") if isinstance(doc.get("models"), list) else []
+        return next((m for m in models if isinstance(m, dict) and (m.get("name") in names or m.get("model") in names)), {})
+    details = ask("/api/show", {"model": model}).get("details")
+    details = details if isinstance(details, dict) else {}
+    text = lambda v: v if isinstance(v, str) and v else None
+    gb = lambda v: round(v / GB, 1) if type(v) in (int, float) and v > 0 else None
+    return {"quant": text(details.get("quantization_level")), "params": text(details.get("parameter_size")),
+            "disk_gb": gb(entry(ask("/api/tags")).get("size")), "mem_gb": gb(entry(ask("/api/ps")).get("size_vram"))}
+
+
+def run_quant(model, n=100, post=None, info=None):
+    """Srovnání tagů téhož modelu: zahřátí, údaje o modelu (info, výchozí ollama_info; po zahřátí ho už zná /api/ps),
+    pak n dotazů na úlohy bench.make_cases(n, 3): p50, p95 a correct = počet odpovědí, které vybral i ideální řidič."""
+    post = post or bench.post
+    warm(model, post)
+    facts = (info or ollama_info)(model)
+    lat, ok = [], 0
+    for (lane, dists), p in zip(bench.make_cases(n, 3), payloads(n)):
+        out, ms = post(model, p)
+        lat.append(ms)
+        answers = out.get("answers") if isinstance(out, dict) else None
+        a = answers.get("target") if isinstance(answers, dict) else None
+        choice = a.get("choice") if isinstance(a, dict) else None
+        ok += isinstance(choice, str) and choice in {KEYS[i] for i in bench.oracle(lane, dists)}
+    return {"n": n, "p50": percentile(lat, .5), "p95": percentile(lat, .95), "correct": ok, **NO_INFO, **facts}
+
+
 class GpuSampler:
     """Vlákno, které po dobu měření čte stav GPU. Vzorek = (čas od startu v s, teplota, příkon, takt)."""
 
@@ -386,6 +501,45 @@ def soak_summary(decisions, samples, duration=None):
             "max_temp": max(temps) if temps else None}
 
 
+def run_idle(sampler, seconds, sleep=time.sleep):
+    """Klidový příkon: seconds s bez dotazů se vzorkuje GPU. watts = průměr příkonu ze vzorků; méně než gpu.MIN_SAMPLES → NaN."""
+    sampler.start()
+    try:
+        sleep(seconds)
+    finally:
+        samples = sampler.stop()
+    watts = [s[2] for s in samples if type(s[2]) in (int, float) and s[2] == s[2]]
+    return {"seconds": seconds, "samples": len(watts), "watts": sum(watts) / len(watts) if len(watts) >= gpu.MIN_SAMPLES else NAN}
+
+
+def spark(values):
+    """Řádek znaků SPARK od nejnižší po nejvyšší hodnotu; všechny stejné → prostřední znak; chybějící hodnota (None, NaN) → „·“."""
+    ok = lambda v: type(v) in (int, float) and v == v
+    nums = [v for v in values if ok(v)]
+    lo, hi = (min(nums), max(nums)) if nums else (0, 0)
+    pick = lambda v: SPARK[3] if hi == lo else SPARK[round((v - lo) / (hi - lo) * (len(SPARK) - 1))]
+    return "".join(pick(v) if ok(v) else "·" for v in values)
+
+
+def spark_notes(model, minutes):
+    """Průběh soaku po minutách (od 2 minut): p50, příkon a teplota; řádek bez jediné hodnoty se vynechá. Klíče stojí doslova."""
+    if len(minutes) < 2:
+        return []
+    out = []
+
+    def part(field):
+        vals = [m[field] for m in minutes]
+        nums = [v for v in vals if v is not None and v == v]
+        return (spark(vals), min(nums), max(nums)) if nums else None
+    if p := part("p50"):
+        out.append(i18n.t("hw.soak.chartLatency", model=model, line=p[0], lo=num(p[1], 1), hi=num(p[2], 1)))
+    if p := part("power"):
+        out.append(i18n.t("hw.soak.chartPower", model=model, line=p[0], lo=num(p[1], 1), hi=num(p[2], 1)))
+    if p := part("temp"):
+        out.append(i18n.t("hw.soak.chartTemp", model=model, line=p[0], lo=num(p[1]), hi=num(p[2])))
+    return out
+
+
 def run_soak(model, minutes=10, post=None, clock=time.perf_counter, sampler=None):
     """Dotazy po dobu M minut. sampler má start() a stop() -> vzorky; None = GPU se nevzorkuje."""
     post = post or bench.post
@@ -403,7 +557,7 @@ def run_soak(model, minutes=10, post=None, clock=time.perf_counter, sampler=None
     finally:
         duration = clock() - t0
         samples = sampler.stop() if sampler else []
-    return {"decisions": decisions, "samples": samples, "interrupted": interrupted, **soak_summary(decisions, samples, duration)}
+    return {"decisions": decisions, "samples": samples, "interrupted": interrupted, "duration": duration, **soak_summary(decisions, samples, duration)}
 
 
 # ---------- výstup ----------
@@ -445,6 +599,13 @@ def heads(test):
         head = [model, i18n.t("hw.col.questions"), i18n.t("hw.col.msRequest"), i18n.t("hw.col.msQuestion")]
     elif test == "context":
         head = [model, i18n.t("hw.col.target"), i18n.t("hw.col.inputTokens"), i18n.t("hw.col.ms")]
+    elif test == "cache":
+        head = [model, n, i18n.t("hw.col.first"), i18n.t("hw.col.sameP50"), i18n.t("hw.col.freshP50"), i18n.t("hw.col.ratio")]
+    elif test == "repeat":
+        head = [model, i18n.t("hw.col.states"), n, i18n.t("hw.col.sameChoice"), i18n.t("hw.col.sameConf"), i18n.t("hw.col.confSpread")]
+    elif test == "quant":
+        head = [model, i18n.t("hw.col.quant"), i18n.t("hw.col.params"), i18n.t("hw.col.diskGb"), i18n.t("hw.col.memGb"),
+                i18n.t("hw.col.p50"), i18n.t("hw.col.p95"), i18n.t("hw.col.correct")]
     else:                                            # soak
         card = [i18n.t("hw.col.temp"), i18n.t("hw.col.power"), i18n.t("hw.col.clock")]
         return ([model, i18n.t("hw.col.minute"), n, i18n.t("hw.col.p50"), i18n.t("hw.col.p95"), *card],
@@ -468,7 +629,7 @@ def noted(lines, interrupted):
 
 def hosted_skip(a):
     """Test, který hostovaný model vůbec nepouští (a nic za něj neplatí)."""
-    return a.test in ("cold", "concurrency", "server") or (a.test == "soak" and not a.hosted_soak)
+    return a.test in ("cold", "concurrency", "server", "quant") or (a.test == "soak" and not a.hosted_soak)
 
 
 def spent_notes(model, before, net):
@@ -477,7 +638,7 @@ def spent_notes(model, before, net):
     return [f"{model}: {text}" for text in (spent, net) if text]
 
 
-def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf_counter):
+def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf_counter, info=None, idle_sampler=None, sleep=time.sleep):
     """Jeden test pro jeden model. Vrací (záhlaví, řádky tabulky, záhlaví CSV, řádky CSV, řádky textu pod tabulku)."""
     local = not providers.hosted(model)
     head, csv_head = heads(a.test)
@@ -515,12 +676,33 @@ def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf
     if a.test == "context":
         rows = [[model, r["target"], r["tokens"] or "—", num(r["ms"], 1) if r["fit"] else i18n.t("hw.didNotFit")] for r in run_context(model, post=post)]
         return head, rows, csv_head, rows, [] if local else [i18n.t("hw.note.truncation", model=model)]
+    if a.test == "cache":
+        r = run_cache(model, a.n or 10, post=post)
+        rows = [[model, r["n"], num(r["first"], 1), num(r["same"], 1), num(r["fresh"], 1), num(r["ratio"], 2)]]
+        return head, rows, csv_head, rows, []
+    if a.test == "repeat":
+        r = run_repeat(model, a.n or 10, post=post)
+        rows = [[model, r["states"], r["n"], f"{r['same_choice']}/{r['states']}", f"{r['same_conf']}/{r['states']}", num(r["spread"], 3)]]
+        return head, rows, csv_head, rows, []
+    if a.test == "quant":
+        if not local:
+            return head, [], csv_head, [], [i18n.t("hw.skip.quant", model=model)]
+        facts = info or (ollama_info if post is None else (lambda m: NO_INFO))      # s podstrčeným post (testy) se na Ollamu nesahá
+        r = run_quant(model, a.n or 100, post, facts)
+        rows = [[model, r["quant"] or "—", r["params"] or "—", num(r["disk_gb"], 1), num(r["mem_gb"], 1), num(r["p50"], 1), num(r["p95"], 1),
+                 f"{r['correct']}/{r['n']}"]]
+        return head, rows, csv_head, rows, []
     if not local and not a.hosted_soak:
         return head, [], csv_head, [], [i18n.t("hw.skip.soak", model=model)]
+    idle = run_idle(idle_sampler or GpuSampler(), a.idle, sleep) if local and a.idle > 0 else None      # klid před zahřátím; hostovaný model GPU nemá
     r = run_soak(model, a.minutes, post, clock, (sampler or GpuSampler()) if local else None)
     rows = [[model, m["minute"], m["n"], num(m["p50"], 1), num(m["p95"], 1), num(m["temp"]), num(m["power"], 1), num(m["clock"])] for m in r["minutes"]]
     notes = [i18n.t("hw.soak.summary", model=model, n=len(r["decisions"]), mark=mark(r["interrupted"]), j=num(r["j_per_decision"], 2),
                     wh=num(r["joules"] / 3600, 3), temp=num(r["max_temp"]), ratio=num(r["ratio"], 2))]
+    if idle is not None:                             # J bez klidu = (energie běhu − klidový příkon × délka běhu) ÷ rozhodnutí
+        net = (r["joules"] - idle["watts"] * r["duration"]) / len(r["decisions"]) if r["decisions"] else NAN
+        notes.append(i18n.t("hw.soak.idle", model=model, watts=num(idle["watts"], 1), k=idle["samples"], seconds=num(a.idle), net=num(net, 2)))
+    notes += spark_notes(model, r["minutes"])
     return head, rows, csv_head, [[model, *row] for row in soak_rows(r["decisions"], r["samples"])], noted(notes, r["interrupted"])
 
 
@@ -532,6 +714,7 @@ def parse_args(argv):
     p.add_argument("--rates", type=lambda text: [float(x) for x in text.split(",")])
     p.add_argument("--csv")
     p.add_argument("--hosted-soak", action="store_true")
+    p.add_argument("--idle", type=float, default=0)              # soak: sekund klidu před měřením; 0 = bez odečtu klidu
     p.add_argument("--max-usd", type=float)
     p.add_argument("--max-hosted", type=int)
     p.add_argument("rest", nargs="*")
@@ -546,7 +729,7 @@ def line(cells, head):
     return f"{cells[0]:<20}" + "".join(f"{str(c):>{max(len(h) + 2, 10, len(str(c)) + 1)}}" for c, h in zip(cells[1:], head[1:]))
 
 
-def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out=print, clock=time.perf_counter):
+def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out=print, clock=time.perf_counter, info=None, idle_sampler=None, sleep=time.sleep):
     """Celý běh nástroje v jazyce, který už platí (volbu --lang vyjímá main)."""
     try:
         a = parse_args(argv)
@@ -555,6 +738,8 @@ def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out
     if a.test not in TESTS or not a.models or (a.n is not None and a.n < 1) or not a.minutes > 0:
         sys.exit(usage())
     if not a.p99_ms > 0 or (a.rates is not None and not all(rate > 0 for rate in a.rates)):
+        sys.exit(usage())
+    if not a.idle >= 0 or (a.idle and a.test != "soak"):           # i NaN; --idle jen se soak
         sys.exit(usage())
     if a.max_usd is not None or a.max_hosted is not None:
         if (a.max_usd is not None and not 0 <= a.max_usd < float("inf")) or (a.max_hosted is not None and a.max_hosted < 0):
@@ -576,7 +761,7 @@ def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out
                 providers.resolve(model)             # model, který nejde zavolat (není v seznamu, chybí klíč), skončí větou před prvním dotazem
             before, net = providers.BUDGET.state(), providers.net_line(model) if paid else None
             try:
-                head, rows, csv_head, csv_rows, notes = measure(a, model, post, sampler, stop, clock)
+                head, rows, csv_head, csv_rows, notes = measure(a, model, post, sampler, stop, clock, info, idle_sampler, sleep)
             except BaseException:                    # i po chybě nebo Ctrl+C: co se utratilo, se vypíše
                 for text in spent_notes(model, before, net):
                     out(text)

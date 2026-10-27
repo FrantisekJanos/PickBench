@@ -315,6 +315,22 @@ TEXTS = {
     "hw.col.power": {"cs": "W", "en": "W"},
     "hw.col.clock": {"cs": "MHz", "en": "MHz"},
     "hw.col.time": {"cs": "čas s", "en": "time s"},
+    # Test cache: medián prvního dotazu s novým stavem, p50 opakování téhož stavu, p50 pokaždé jiných stavů, poměr stejný ÷ jiný.
+    "hw.col.first": {"cs": "první ms", "en": "first ms"},
+    "hw.col.sameP50": {"cs": "stejný p50 ms", "en": "same p50 ms"},
+    "hw.col.freshP50": {"cs": "jiný p50 ms", "en": "fresh p50 ms"},
+    "hw.col.ratio": {"cs": "poměr", "en": "ratio"},
+    # Test repeat: stavů, opakování N, stavy se stejnou volbou a se stejnou jistotou (k/stavů), největší rozptyl jistoty.
+    "hw.col.states": {"cs": "stavů", "en": "states"},
+    "hw.col.sameChoice": {"cs": "stejná volba", "en": "same choice"},
+    "hw.col.sameConf": {"cs": "stejná jistota", "en": "same confidence"},
+    "hw.col.confSpread": {"cs": "rozptyl jistoty", "en": "confidence spread"},
+    # Test quant: údaje Ollamy o modelu (kvantizace, parametry, GB na disku a v paměti), p50, p95, správně proti ideálnímu řidiči (k/N).
+    "hw.col.quant": {"cs": "kvantizace", "en": "quantization"},
+    "hw.col.params": {"cs": "parametrů", "en": "parameters"},
+    "hw.col.diskGb": {"cs": "GB na disku", "en": "GB on disk"},
+    "hw.col.memGb": {"cs": "GB v paměti", "en": "GB in memory"},
+    "hw.col.correct": {"cs": "správně", "en": "correct"},
     # Buňky tabulky: stupeň, který server odmítl; podíl dotazů včas (česky s mezerou jako dosud, anglicky bez ní jako ve stránce).
     "hw.didNotFit": {"cs": "nevešlo se", "en": "did not fit"},
     "hw.pct": {"cs": "{value:.0f} %", "en": "{value:.0f}%"},
@@ -331,6 +347,8 @@ TEXTS = {
                             "en": "{model}: the concurrency test is only for local models (hwbench.py does not measure concurrent requests to a hosted model)"},
     "hw.skip.server": {"cs": "{model}: test server je jen pro lokální modely (souběžné dotazy na hostovaný model jsou mimo rozsah)",
                        "en": "{model}: the server test is only for local models (hwbench.py does not measure concurrent requests to a hosted model)"},
+    "hw.skip.quant": {"cs": "{model}: test quant je jen pro lokální modely (velikost a kvantizaci hlásí Ollama)",
+                      "en": "{model}: the quant test is only for local models (Ollama reports the size and the quantization)"},
     "hw.skip.soak": {"cs": "{model}: test soak u hostovaného modelu stojí peníze po celou dobu běhu — spusťte ho výslovně s --hosted-soak",
                      "en": "{model}: the soak test with a hosted model costs money for the whole run duration — run it explicitly with --hosted-soak"},
     "hw.note.truncation": {"cs": "{model}: hostovaný model dlouhý vstup nemusí odmítnout — Clef ho podle dokumentace tiše ořízne; "
@@ -345,6 +363,13 @@ TEXTS = {
                               "latence poslední ÷ první minuta {ratio}",
                         "en": "{model}: {n} {n|decision|decisions}{mark}, J per decision {j}, energy {wh} Wh, highest temperature {temp} °C, "
                               "latency last ÷ first minute {ratio}"},
+    # soak --idle: klidový příkon ({watts} W z {k} vzorků za {seconds} s) a J na rozhodnutí bez klidu ({net}); průběh po minutách
+    # ({line} = znaky ▁ až █ od nejnižší po nejvyšší hodnotu, {lo}–{hi} = rozsah), od 2 minut.
+    "hw.soak.idle": {"cs": "{model}: klidový příkon {watts} W ({k} {k|vzorek|vzorky|vzorků} za {seconds} s), J na rozhodnutí bez klidu {net}",
+                     "en": "{model}: idle power draw {watts} W ({k} {k|sample|samples} in {seconds} s), J per decision without idle {net}"},
+    "hw.soak.chartLatency": {"cs": "{model}: p50 po minutách {line} ({lo}–{hi} ms)", "en": "{model}: p50 by minute {line} ({lo}–{hi} ms)"},
+    "hw.soak.chartPower": {"cs": "{model}: příkon po minutách {line} ({lo}–{hi} W)", "en": "{model}: power draw by minute {line} ({lo}–{hi} W)"},
+    "hw.soak.chartTemp": {"cs": "{model}: teplota po minutách {line} ({lo}–{hi} °C)", "en": "{model}: temperature by minute {line} ({lo}–{hi} °C)"},
     # Věty, kterými hwbench.py končí. {error} je hláška systému nebo Ollamy, {name} jméno proměnné prostředí.
     "hw.err.limits": {"cs": "--max-usd a --max-hosted musí být nezáporná čísla.", "en": "--max-usd and --max-hosted must be non-negative numbers."},
     "hw.err.coldNeedsOllama": {"cs": "Test cold potřebuje program ollama v PATH (ollama stop <model>).",
@@ -389,6 +414,8 @@ TEXTS = {
                                "en": "Horizon-Labs: no Czech customer support row with 2–10 labels — the source changed its content."},
     "fetch.err.cfpb.missing": {"cs": "CFPB: po {pages} stránkách chybí stížnosti tříd {missing}.",
                                "en": "CFPB: after {pages} {pages|page|pages}, complaints of these classes are missing: {missing}."},
+    "fetch.err.tobi.missing": {"cs": "Tobi-Bueck: fronta {queue} má jen {n} {n|použitelný anglický tiket|použitelné anglické tikety|použitelných anglických tiketů}, chce se {want}.",
+                               "en": "Tobi-Bueck: the queue {queue} has only {n} usable English {n|ticket|tickets}, {want} are needed."},
     # Řádky běhu: {name} = jméno sady z příkazové řádky, {path} = cesta souboru, {error} = věta chyby nebo hláška systému, jak přišla.
     "fetch.err.write": {"cs": "{name}: soubor nejde zapsat ({error})", "en": "{name}: fetch_datasets.py cannot write the file ({error})"},
     "fetch.err.interrupted": {"cs": "Přerušeno.", "en": "Interrupted."},
@@ -457,6 +484,16 @@ TEXTS = {
               "with the characters XXXX. Origin of the texts: a copy of the database on Hugging Face ({mirror}), downloaded from the agency "
               "in February 2024, CC0 according to the card of the copy; the agency itself does not release the complaint texts through its API today. "
               "fetch_datasets.py downloaded the sample from the copy on {today}."},
+    # {max_chars} = nejvyšší délka textu tiketu; {scope}, {today} jako u ostatních veřejných sad.
+    "fetch.about.tobiSupport": {
+        "cs": "Tobi-Bueck/customer-support-tickets (Hugging Face): tikety zákaznické podpory, které podle stránky sady vygeneroval "
+              "jazykový model; anglické tikety deseti nejčastějších front, úkolem je poznat z předmětu a textu tiketu frontu, "
+              "která ho má vyřídit. Text je zkrácený nejvýš na {max_chars} znaků. Licence CC-BY-NC-4.0: jen nekomerční použití, "
+              "soubor se nepřibaluje ani nesdílí. Rozsah: {scope}; staženo {today}.",
+        "en": "Tobi-Bueck/customer-support-tickets (Hugging Face): customer support tickets that, according to the dataset page, "
+              "a language model generated; English tickets of the ten most frequent queues, and the task is to recognize from the subject "
+              "and the text of the ticket the queue that should handle it. The text is shortened to at most {max_chars} characters. "
+              "License CC-BY-NC-4.0: non-commercial use only, so do not ship or share the file. Scope: {scope}; downloaded {today}."},
     # providers.py. Věty chyb hostovaného modelu stojí za popiskem poskytovatele („Jev 401: …“); popisky Jev, Cloudflare a Test jsou vlastní jména
     # a nepřekládají se, prov.label je náhradní popisek modelu bez poskytovatele. Žádná věta nenese klíč: cizí text ({body}, {fault}, {errors})
     # do ní jde až vyčištěný (providers.scrub) a zkrácený. Částka má znak dolaru česky za číslem, anglicky před ním, jako ve stránce;
