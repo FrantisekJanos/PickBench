@@ -13,6 +13,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -29,6 +30,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -120,6 +122,16 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --dicts, --lists:  jen s --diff: podoba stavu, úlohy jsou v obou stejné. dicts = before a after jako objekty
             {"lane_1": hodnota, …}; lists = before a after jako seznamy hodnot zleva doprava, pruh je poloha v seznamu.
             Bez volby platí lists.
+--pattern:  vzor soupeře (kámen–nůžky–papír): stav nese tahy soupeře (nejstarší první); po krátké rozehrávce soupeř
+            opakuje pevný cyklus 1 až 4 tahů aspoň 8 tahů, takže další tah je vždy jediný. Model volí tah, který porazí
+            další tah soupeře (counter), nebo tah soupeře přímo (predict). N úloh (výchozí 100), rovnoměrně podle periody
+            (1 až 4; perioda 1 je kontrolní: soupeř hraje pořád totéž). Za řádkem modelu přesnost podle periody, pod ním
+            u counter výsledek (výhra, remíza, prohra, neplatné) a chyby: opakuje poslední tah, nejčastější tah, špatná
+            perioda, přechod, jiné, neplatné; v counter se chyba čte přes tah, který zvolený tah porazí. Náhoda dá třetinu,
+            u periody 2 levná zkratka „jiný tah než poslední“ polovinu. S --lanes se nekombinuje.
+--counter, --predict:  jen s --pattern: podoba otázky, úlohy jsou v obou stejné. counter = vlastní tah, který porazí
+            další tah soupeře; predict = další tah soupeře, řádek chyb navíc počítá protitah místo předpovědi.
+            Bez volby platí predict.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.

@@ -1,0 +1,7 @@
+12 tasks against an opponent's pattern (rock-paper-scissors, prediction question), the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  goodput  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      76%    46%       8%     178   (period 1 2/3, period 2 0/3, period 3 1/2, period 4 1/4)
+                    errors: counter instead of prediction 6, repeats the last move 0, most frequent move 1, wrong period 0, transition 0, other 1, invalid 0
+m2                       11ms     12ms    17ms    5ms    17ms     88.2      33%      75%    42%       0%     178   (period 1 0/3, period 2 1/3, period 3 1/2, period 4 2/4)
+                    errors: counter instead of prediction 6, repeats the last move 0, most frequent move 0, wrong period 0, transition 0, other 2, invalid 0

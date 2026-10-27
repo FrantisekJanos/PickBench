@@ -413,5 +413,104 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(printed("en", bench.print_pattern, r)), 2)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--pattern", "m1"])
+        self.assertEqual((a.n, a.pattern, a.counter, a.predict, a.lanes_given, a.models), (40, True, False, False, False, ["m1"]))
+        a = bench.parse_args(["--predict", "--pattern", "m1"])
+        self.assertEqual((a.pattern, a.counter, a.predict), (True, False, True))
+        self.assertTrue(bench.parse_args(["--pattern", "--counter", "m1"]).counter)
+        self.assertTrue(bench.parse_args(["--memory", "--count", "m1"]).count)          # --count (paměťová stopa) se s --counter neplete
+
+    def test_first_line_and_rows(self):
+        words = {"counter": ("protitah", "counter"), "predict": ("předpověď", "prediction")}
+        for argv, n, form in ((["1", "--pattern", "m1"], 1, FORM), (["7", "--pattern", "--predict", "m1"], 7, "predict"),
+                              (["3", "--counter", "--pattern", "m1"], 3, "counter")):
+            cs = {1: "1 úloha", 3: "3 úlohy", 7: "7 úloh"}[n] + f" se vzorem soupeře (kámen–nůžky–papír, otázka {words[form][0]}); sada je pro všechny modely stejná"
+            en = {1: "1 task", 3: "3 tasks", 7: "7 tasks"}[n] + f" against an opponent's pattern (rock-paper-scissors, {words[form][1]} question), the same for all models"
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs)
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en)
+        self.assertTrue(self.cli("--pattern", "m1")[0].startswith("100 úloh se vzorem soupeře"))      # výchozí počet úloh
+        lines = self.cli("6", "--pattern", "--counter", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(lines), 6)
+        self.assertRegex(lines[3], r"^m1 .*   \(period 1 \d+/\d+, period 2 \d+/\d+, period 3 \d+/\d+, period 4 \d+/\d+\)$")
+        self.assertRegex(lines[4], r"^ {20}outcome: win \d+, draw \d+, loss \d+, invalid \d+$")
+        self.assertRegex(lines[5], r"^ {20}errors: repeats the last move \d+, most frequent move \d+, wrong period \d+, transition \d+, other \d+, invalid \d+$")
+        lines = self.cli("6", "--pattern", "--predict", "m1")[0].splitlines()
+        self.assertEqual(len(lines), 5)
+        self.assertRegex(lines[4], r"^ {20}chyby: protitah místo předpovědi \d+, opakuje poslední \d+, ")
+        self.assertEqual(len(self.cli("1", "--pattern", "m1")[0].splitlines()), 6 if FORM == "counter" else 5)    # jediná úloha: prázdné třídy 0/0
+
+    def test_option_errors_in_both_languages(self):
+        form_cs, form_en = "Volby --counter a --predict jdou jen s --pattern.", "The --counter and --predict options work only with --pattern."
+        for argv, cs, en in (
+                (["6", "--pattern", "--lanes", "3", "m1"], "Volba --lanes se s --pattern nekombinuje.", "The --lanes option cannot be combined with --pattern."),
+                (["6", "--predict", "m1"], form_cs, form_en),
+                (["--counter", "--rule", "m1"], form_cs, form_en),
+                (["--pattern", "--rows", "m1"], "Volby --rows a --blocked jdou jen s --lookahead.", "The --rows and --blocked options work only with --lookahead."),
+                (["--pattern", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--pattern", "--rule", "m1"], ["--pattern", "--timetable", "m1"], ["--pattern", "--counter", "--predict", "m1"],
+                     ["--pattern", "--lanes", "9", "m1"], ["--pattern"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_states(self):
+        self.cli("6", "--pattern", "--counter", "m1")
+        counter, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--pattern", "--predict", "m1")
+        predict = [json.loads(body) for body in self.sent]
+        self.assertEqual((len(counter), len(predict)), (7, 7))                   # zahřátí a šest úloh
+        self.assertEqual([p["state"] for p in counter], [p["state"] for p in predict])
+        self.assertEqual({next(iter(p["questions"])) for p in counter}, {KEYS["counter"]})
+        self.assertEqual({next(iter(p["questions"])) for p in predict}, {KEYS["predict"]})
+
+    def test_mirror_and_inject_work_with_pattern(self):
+        out, code = self.cli("8", "--pattern", "--counter", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("výsledek: výhra "), lines[6])
+        self.assertTrue(lines[7].strip().startswith("chyby: opakuje poslední "), lines[7])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --pattern tev1", text)
+            self.assertIn("\n--pattern:  ", text)
+            self.assertIn("\n--counter, --predict:  ", text)
+        self.assertIn(f"Bez volby platí {FORM}.", bench.__doc__)
+        self.assertIn(f"Without the option: {FORM}.", bench.USAGE_EN)
+
+
 if __name__ == "__main__":
     unittest.main()

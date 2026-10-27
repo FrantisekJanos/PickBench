@@ -13,6 +13,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -29,6 +30,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -120,6 +122,16 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --dicts, --lists:  jen s --diff: podoba stavu, úlohy jsou v obou stejné. dicts = before a after jako objekty
             {"lane_1": hodnota, …}; lists = before a after jako seznamy hodnot zleva doprava, pruh je poloha v seznamu.
             Bez volby platí lists.
+--pattern:  vzor soupeře (kámen–nůžky–papír): stav nese tahy soupeře (nejstarší první); po krátké rozehrávce soupeř
+            opakuje pevný cyklus 1 až 4 tahů aspoň 8 tahů, takže další tah je vždy jediný. Model volí tah, který porazí
+            další tah soupeře (counter), nebo tah soupeře přímo (predict). N úloh (výchozí 100), rovnoměrně podle periody
+            (1 až 4; perioda 1 je kontrolní: soupeř hraje pořád totéž). Za řádkem modelu přesnost podle periody, pod ním
+            u counter výsledek (výhra, remíza, prohra, neplatné) a chyby: opakuje poslední tah, nejčastější tah, špatná
+            perioda, přechod, jiné, neplatné; v counter se chyba čte přes tah, který zvolený tah porazí. Náhoda dá třetinu,
+            u periody 2 levná zkratka „jiný tah než poslední“ polovinu. S --lanes se nekombinuje.
+--counter, --predict:  jen s --pattern: podoba otázky, úlohy jsou v obou stejné. counter = vlastní tah, který porazí
+            další tah soupeře; predict = další tah soupeře, řádek chyb navíc počítá protitah místo předpovědi.
+            Bez volby platí predict.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -160,6 +172,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -176,6 +189,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -267,6 +281,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --dicts, --lists:  only with --diff: the form of the state; the tasks are the same in both. dicts = before and after as
             objects {"lane_1": value, ...}; lists = before and after as lists of values from left to right, the lane is the position in the list.
             Without the option: lists.
+--pattern:  opponent's pattern (rock-paper-scissors): the state holds the opponent's moves (oldest first); after a short
+            opening the opponent repeats a fixed cycle of 1 to 4 moves for at least 8 moves, so the next move is unique.
+            The model picks the move that beats the opponent's next move (counter) or that next move itself (predict).
+            N tasks (default 100), spread evenly by period (1 to 4; period 1 is the control: always the same move). After
+            the model row, the accuracy by period; below it, for counter, the outcome (win, draw, loss, invalid) and the
+            errors: repeats the last move, most frequent move, wrong period, transition, other, invalid (for counter read
+            from the move the chosen move beats). Chance gives a third, "any move but the last" half at period 2. Not with --lanes.
+--counter, --predict:  only with --pattern: the form of the question; the tasks are the same in both. counter = your own
+            move that beats the opponent's next move; predict = the opponent's next move, and the error line also counts a
+            counter move given instead of the prediction. Without the option: predict.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -3062,6 +3086,9 @@ def parse_args(argv):
     p.add_argument("--diff", action="store_true")
     p.add_argument("--dicts", action="store_true")
     p.add_argument("--lists", action="store_true")
+    p.add_argument("--pattern", action="store_true")
+    p.add_argument("--counter", action="store_true")
+    p.add_argument("--predict", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -3331,9 +3358,10 @@ def main(argv):
                  args.bet, args.cruise, args.timetable)
     scenarios += (args.hint,)                        # rušivá nápověda
     scenarios += (args.diff,)                        # co se změnilo
+    scenarios += (args.pattern,)                     # vzor soupeře
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
-            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score)):
+            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score) or (args.counter and args.predict)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.dicts and args.lists:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
@@ -3361,6 +3389,10 @@ def main(argv):
         sys.exit(i18n.t("bench.err.formTimetable"))
     if args.timetable and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesTimetable"))
+    if (args.counter or args.predict) and not args.pattern:
+        sys.exit(i18n.t("bench.err.formPattern"))
+    if args.pattern and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesPattern"))
     if args.cruise and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesCruise"))
     if (args.as_choice or args.as_score) and not args.cruise:
@@ -3532,6 +3564,19 @@ def main(argv):
                 r = run_timetable(m, cases, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, timetable_note(r))
                 print_timetable(r)
+    elif args.pattern:
+        form = "predict" if args.predict else "counter" if args.counter else PATTERN_FORM
+        cases = pattern_cases(args.n or 100)             # úlohy jsou v obou podobách stejné, podoba mění jen otázku
+        if form == "predict":
+            print(i18n.t("bench.intro.patternPredict", n=len(cases)) + "\n")
+        else:
+            print(i18n.t("bench.intro.pattern", n=len(cases)) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_pattern(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, pattern_note(r))
+                print_pattern(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

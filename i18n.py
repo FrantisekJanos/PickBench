@@ -135,6 +135,11 @@ TEXTS = {
     # Rušivá nápověda: {n} = počet řad čísel (každá jde do modelu třikrát), {lanes} = počet bran (2–8).
     "bench.intro.hint": {"cs": "{n} {n|řada|řady|řad} čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                          "en": "{n} {n|row|rows} of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), {lanes} gates, the same for all models"},
+    # Vzor soupeře: úvodní věta jmenuje podobu otázky (protitah / předpověď).
+    "bench.intro.pattern": {"cs": "{n} {n|úloha|úlohy|úloh} se vzorem soupeře (kámen–nůžky–papír, otázka protitah); sada je pro všechny modely stejná",
+                            "en": "{n} {n|task|tasks} against an opponent's pattern (rock-paper-scissors, counter question), the same for all models"},
+    "bench.intro.patternPredict": {"cs": "{n} {n|úloha|úlohy|úloh} se vzorem soupeře (kámen–nůžky–papír, otázka předpověď); sada je pro všechny modely stejná",
+                                   "en": "{n} {n|task|tasks} against an opponent's pattern (rock-paper-scissors, prediction question), the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -290,6 +295,9 @@ TEXTS = {
     "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
                                 "en": "The --sorted and --shuffled options work only with --timetable."},
     "bench.err.lanesTimetable": {"cs": "Volba --lanes se s --timetable nekombinuje.", "en": "The --lanes option cannot be combined with --timetable."},
+    "bench.err.formPattern": {"cs": "Volby --counter a --predict jdou jen s --pattern.",
+                              "en": "The --counter and --predict options work only with --pattern."},
+    "bench.err.lanesPattern": {"cs": "Volba --lanes se s --pattern nekombinuje.", "en": "The --lanes option cannot be combined with --pattern."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",

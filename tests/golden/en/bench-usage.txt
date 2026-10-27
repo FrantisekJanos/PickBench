@@ -13,6 +13,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -29,6 +30,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -120,6 +122,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --dicts, --lists:  only with --diff: the form of the state; the tasks are the same in both. dicts = before and after as
             objects {"lane_1": value, ...}; lists = before and after as lists of values from left to right, the lane is the position in the list.
             Without the option: lists.
+--pattern:  opponent's pattern (rock-paper-scissors): the state holds the opponent's moves (oldest first); after a short
+            opening the opponent repeats a fixed cycle of 1 to 4 moves for at least 8 moves, so the next move is unique.
+            The model picks the move that beats the opponent's next move (counter) or that next move itself (predict).
+            N tasks (default 100), spread evenly by period (1 to 4; period 1 is the control: always the same move). After
+            the model row, the accuracy by period; below it, for counter, the outcome (win, draw, loss, invalid) and the
+            errors: repeats the last move, most frequent move, wrong period, transition, other, invalid (for counter read
+            from the move the chosen move beats). Chance gives a third, "any move but the last" half at period 2. Not with --lanes.
+--counter, --predict:  only with --pattern: the form of the question; the tasks are the same in both. counter = your own
+            move that beats the opponent's next move; predict = the opponent's next move, and the error line also counts a
+            counter move given instead of the prediction. Without the option: predict.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

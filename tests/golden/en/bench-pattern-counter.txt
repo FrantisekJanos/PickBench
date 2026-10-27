@@ -1,0 +1,6 @@
+12 tasks against an opponent's pattern (rock-paper-scissors, counter question), the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      50%      72%    27%     186   (period 1 1/3, period 2 2/3, period 3 1/2, period 4 2/4)
+                    outcome: win 6, draw 2, loss 4, invalid 0
+                    errors: repeats the last move 2, most frequent move 1, wrong period 0, transition 0, other 3, invalid 0
