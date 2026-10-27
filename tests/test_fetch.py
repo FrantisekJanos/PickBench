@@ -731,6 +731,15 @@ class Tobi(unittest.TestCase):
         path, doc = fd.tobi_support(FakeGet(self.pages()), args("--full", "--n", "7", "--per-class", "20"), self.fail, "2026-10-28")
         self.assertEqual((path, doc["sample"]["full"], doc["sample"]["n"]), ("datasets/public/tobi-support-200.json", False, 200))
 
+    def test_all_and_tobi_support_named_fetches_both(self):          # „all“ sadu nezahrne, ale výslovně jmenovanou nezahodí
+        self.assertEqual(fd.parse_args(["all", "tobi-support"]).names, [*fd.ALL, "tobi-support"])
+        self.assertEqual(fd.parse_args(["tobi-support", "all"]).names, [*fd.ALL, "tobi-support"])
+
+    def test_large_per_class_reads_enough_pages(self):               # 250 tiketů z fronty: stránka 0 a tři další
+        get = FakeGet(self.pages(per_queue=450))
+        path, doc = fd.tobi_support(get, args("--per-class", "250"), self.fail, "2026-10-28")
+        self.assertEqual((path, len(get.urls)), ("datasets/public/tobi-support-2500.json", 40))
+
     def test_main_writes_the_file_into_the_public_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = []

@@ -531,7 +531,8 @@ TOBI = "Tobi-Bueck/customer-support-tickets"
 TOBI_QUEUES = ("Technical Support", "Product Support", "Customer Service", "IT Support", "Billing and Payments",      # deset nejčastějších front
                "Returns and Exchanges", "Service Outages and Maintenance", "Sales and Pre-Sales", "Human Resources", "General Inquiry")
 TOBI_MAX_CHARS, TOBI_MIN_CHARS = 1200, 40
-TOBI_PAGES = 2                                       # stránek na frontu: stránka 0 (zjistí počet) a jedna další v pořadí daném semínkem
+TOBI_PAGES = 2                                       # stránek na frontu: stránka 0 (zjistí počet) a jedna další v pořadí daném semínkem;
+                                                     # při --per-class nad 100 tolik dalších, kolik stovek K má
 
 
 def tobi_support(get, a, out, today):
@@ -546,7 +547,7 @@ def tobi_support(get, a, out, today):
         pool += total
         pages = list(range(1, (total + HF_PAGE - 1) // HF_PAGE))
         rng.shuffle(pages)
-        for page in pages[:TOBI_PAGES - 1]:
+        for page in pages[:max(TOBI_PAGES - 1, -(-a.per_class // HF_PAGE))]:      # velké --per-class čte víc stránek
             rows = rows + hf_page(get, "filter", TOBI, "default", "train", page * HF_PAGE, where)[0]
         found = []
         for row in rows:
@@ -583,7 +584,7 @@ def parse_args(argv):
     p.add_argument("--per-class", type=int, default=50)
     p.add_argument("rest", nargs="*")
     a = p.parse_intermixed_args(argv)
-    a.names = list(ALL) if "all" in a.rest else a.rest
+    a.names = [*ALL, *(name for name in a.rest if name != "all" and name not in ALL)] if "all" in a.rest else a.rest      # „all“ + výslovně jmenovaná sada mimo all
     return a
 
 
