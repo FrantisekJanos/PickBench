@@ -963,6 +963,7 @@ const ALT = {                                              // jinak formulované
   allowed: 'Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.',
   recall: 'For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.',
   move_blocked: 'The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.',
+  gate_labeled: 'A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.',
   go: "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
 };
 const ALT_LANES = /\ba (\d+)-lane road\b/;                  // zadání move_blocked nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
@@ -2561,6 +2562,65 @@ function lookaheadOutcome(result, chosen, rows, lane) {
 function lookaheadWarm(lanes) {
   const rows = [1, 2, 1, 0].map(free => [...Array(lanes)].map((_, j) => j === free ? '.' : '#').join(''));
   return { rows, lane: 1, answer: 'stay', depth: 1, greedy: lookaheadGreedy(rows, 1), truth: 1 };
+}
+
+// Skryté pravidlo: konstanty, čtení deníku, stav a otázka, stejné jako v bench.py (RULE_*, rule_read, rule_least, rule_state, rule_question).
+// Položka deníku je [znak, správně?]. Stránka má jen výchozí podobu labeled: brána nese jen znak shody se vzorem, karty nejsou
+// (ani RULE_VALUES); podoba matched_by je jen v bench.py.
+const RULE_FEATURES = ['color', 'shape', 'count'];
+const RULE_CLASSES = ['repeat', 'switch', 'eliminate'];    // pravidlo plyne ze správného pokusu, ze změny, z vyloučení
+const RULE_STREAK = 3;                                     // po tolika správných v řadě se pravidlo mění
+const RULE_LOG = [3, 10];                                  // nejkratší a nejdelší deník
+const RULE_SHORT = 5;                                      // krátký deník: nejvýš tolik pokusů
+const RULE_LENGTHS = ['short', 'long'];
+const RULE_STICK = 0.8;                                    // skript pokusů: po správném pokusu s touto pravděpodobností stejný znak
+const RULE_TRIES = 10000;                                  // mez pokusů na jednu úlohu
+const RULE_INSERT = 0.5;                                   // skript ve třídě switch: před změnou místo náhodného znaku budoucí pravidlo
+// Co o pravidle ví čtenář deníku (jen z výsledků): [kandidáti v pořadí RULE_FEATURES, starý znak nebo null, třída nebo null].
+// Série správných od začátku, špatný pokus ji nuluje; po RULE_STREAK správných v řadě se pravidlo mění (starý znak = znak toho pokusu).
+// Končí-li deník změnou (i prázdný deník: change = −1 = délka − 1), nové pravidlo určené není.
+function ruleRead(log) {
+  let streak = 0, change = -1, old = null;
+  log.forEach(([feature, ok], i) => {
+    streak = ok ? streak + 1 : 0;
+    if (streak === RULE_STREAK) { change = i; old = feature; streak = 0; }
+  });
+  let candidates = new Set(RULE_FEATURES.filter(f => f !== old));
+  const ordered = () => RULE_FEATURES.filter(f => candidates.has(f));
+  if (change === log.length - 1) return [ordered(), old, null];      // deník končí změnou: nové pravidlo neznámé
+  const tail = log.slice(change + 1);
+  for (const [feature, ok] of tail) {
+    if (ok) candidates = new Set([feature]);
+    else candidates.delete(feature);
+  }
+  if (candidates.size !== 1) return [ordered(), old, null];
+  return [ordered(), old, tail.some(([, ok]) => ok) ? 'repeat' : old ? 'switch' : 'eliminate'];
+}
+function ruleLeast(log) {                                  // zkratka „nejméně častý znak“ (shoda → pořadí RULE_FEATURES)
+  const counts = f => log.filter(([feature]) => feature === f).length;
+  return RULE_FEATURES.reduce((best, f) => counts(f) < counts(best) ? f : best);
+}
+// Jen pro stránku, bench.py ji nemá: indexy pokusů, po kterých se pravidlo změnilo (pás deníku), série jako v ruleRead.
+function ruleChanges(log) {
+  const changes = [];
+  let streak = 0;
+  log.forEach(([, ok], i) => {
+    streak = ok ? streak + 1 : 0;
+    if (streak === RULE_STREAK) { changes.push(i); streak = 0; }
+  });
+  return changes;
+}
+function ruleState(log, order) {                           // stav ve stejném tvaru a pořadí klíčů jako rule_state(…, "labeled"); order[i] = znak brány i + 1
+  const state = { log: log.map(([feature, ok]) => ({ matched_by: feature, result: ok ? 'correct' : 'wrong' })) };
+  gateKeys(order.length).forEach((k, i) => state[k] = { matches_sample_by: order[i] });
+  return state;
+}
+function ruleQuestion() {                                  // popisky bran jako memoryQuestion(3)
+  const instructions = 'A hidden rule decides which gate is right: the gate that matches the sample card by color, by shape, or by count. '
+    + 'Each gate says which feature it shares with the sample. The rule changes to another feature right after every three correct picks in a row. '
+    + 'log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. '
+    + 'Work out the current rule and choose the gate that shares that feature with the sample.';
+  return { gate_labeled: { type: 'choice', instructions, criteria: memoryQuestion(3).recall.criteria } };
 }
 // ==== sdíleno s Pythonem: konec ====
 

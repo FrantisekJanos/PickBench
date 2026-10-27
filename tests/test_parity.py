@@ -754,5 +754,58 @@ class Lookahead(unittest.TestCase):
                 self.assertGreaterEqual(len(json.dumps(bench.lookahead_state(rows, lane, "blocked"))), longest)      # horní odhad délky dotazu
 
 
+SPEC_RULE_LOG = [["color", True]] * 3 + [["color", False], ["shape", False]]     # příklad z rešerše (SPEC_LOG v tests/test_rule.py): přepnutí na count
+C, W = True, False
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Rule(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ features: RULE_FEATURES, classes: RULE_CLASSES, streak: RULE_STREAK, log: RULE_LOG, short: RULE_SHORT, lengths: RULE_LENGTHS,"
+                    " stick: RULE_STICK, tries: RULE_TRIES, insert: RULE_INSERT, question: ruleQuestion() })", None)
+        self.assertEqual((js["features"], js["classes"], js["lengths"]), (list(bench.RULE_FEATURES), list(bench.RULE_CLASSES), list(bench.RULE_LENGTHS)))
+        self.assertEqual((js["streak"], js["log"], js["short"], js["stick"], js["tries"], js["insert"]),
+                         (bench.RULE_STREAK, list(bench.RULE_LOG), bench.RULE_SHORT, bench.RULE_STICK, bench.RULE_TRIES, bench.RULE_INSERT))
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.rule_question("labeled")))
+        cases = bench.rule_cases(40, seed=3)
+        tasks = [[[list(e) for e in log], [bench.rule_shared(sample, g)[0] for g in gates]] for log, sample, gates, *_ in cases]
+        for case, state in zip(cases, run_js("arg.map(([log, order]) => ruleState(log, order))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.rule_state(case, "labeled")))        # bajtově, i pořadí klíčů
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  gate_labeled: '([^'\\]*)',$", alt, re.M), [bench.ALT["gate_labeled"]])
+        self.assertNotIn("\n  gate: ", "\n" + alt)                 # podoba --matched-by je jen v bench.py
+
+    def test_read_and_least_match_bench(self):
+        import bench
+        rng = random.Random(5)
+        logs = [[[rng.choice(bench.RULE_FEATURES), rng.random() < 0.6] for _ in range(rng.randint(0, 10))] for _ in range(800)]
+        logs += [SPEC_RULE_LOG, [["color", C]] * 3, [["color", C]] * 3 + [["shape", C]] * 3, [["color", C]] * 3 + [["shape", C]],
+                 [["color", C], ["color", C], ["shape", W], ["color", C], ["color", C]], [["color", W], ["shape", W], ["color", W]],
+                 [["shape", C]] * 3 + [["shape", W], ["count", W]]]                      # ručně ověřené deníky z tests/test_rule.py (Reading)
+        for log, ([candidates, old, cls], least) in zip(logs, run_js("arg.map(log => [ruleRead(log), ruleLeast(log)])", logs)):
+            entries = [tuple(e) for e in log]
+            py_candidates, py_old, py_cls = bench.rule_read(entries)
+            with self.subTest(log=log):
+                self.assertEqual(candidates, [f for f in bench.RULE_FEATURES if f in py_candidates])      # pořadí RULE_FEATURES
+                self.assertEqual((old, cls), (py_old, py_cls))
+                self.assertEqual(least, bench.rule_least(entries))
+
+    def test_changes_follow_the_streak(self):                      # pás deníku: svislá čára za pokusem, po kterém se pravidlo změnilo
+        import bench
+        hand = [SPEC_RULE_LOG, [["color", C]] * 6 + [["shape", W]], [["color", C], ["color", C], ["shape", W], ["color", C], ["color", C], ["color", C]],
+                [["color", C]] * 3 + [["shape", C]], [["color", W]] * 4, []]
+        self.assertEqual(run_js("arg.map(ruleChanges)", hand), [[2], [2, 5], [5], [2], [], []])
+        rng = random.Random(8)
+        logs = [[[rng.choice(bench.RULE_FEATURES), rng.random() < 0.7] for _ in range(rng.randint(1, 10))] for _ in range(300)]
+        for log, changes in zip(logs, run_js("arg.map(ruleChanges)", logs)):
+            old = bench.rule_read([tuple(e) for e in log])[1]
+            self.assertEqual(old, log[changes[-1]][0] if changes else None, log)            # poslední změna je ta, kterou zná rule_read
+
+
 if __name__ == "__main__":
     unittest.main()
