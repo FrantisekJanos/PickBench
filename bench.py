@@ -1943,6 +1943,21 @@ def print_rule(r):
                             persev=frac(r["persev"])), flush=True)
 
 
+def queue_note(r):
+    """Poznámka za řádkem modelu: přesnost podle rozdílu nejkratší a druhé nejkratší fronty."""
+    return class_note(r["by_gap"], {"gap1": i18n.t("bench.queue.gap", d="1"), "gap2-3": i18n.t("bench.queue.gap", d="2–3"),
+                                    "gap4+": i18n.t("bench.queue.gap", d="4+")})
+
+
+def print_queue(r):
+    """Řádek chyb pod řádkem modelu; s vahami navíc volba nejkratší fronty podle počtu vozidel."""
+    e = r["errors"]
+    if "count" in e:
+        print(" " * 20 + i18n.t("bench.queue.errorsWeighted", **e), flush=True)
+    else:
+        print(" " * 20 + i18n.t("bench.queue.errors", **e), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

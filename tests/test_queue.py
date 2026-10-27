@@ -247,5 +247,31 @@ class RunQueue(unittest.TestCase):
         self.assertEqual((e["text"] + e["other"], e["invalid"]), (10, 0))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_gap(self):
+        r = {"by_gap": {"gap1": [5, 10], "gap2-3": [9, 11], "gap4+": [12, 12]}}
+        for lang, want in (("cs", "(rozdíl 1 5/10, rozdíl 2–3 9/11, rozdíl 4+ 12/12)"),
+                           ("en", "(difference 1 5/10, difference 2–3 9/11, difference 4+ 12/12)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.queue_note(r), want)
+
+    def test_error_lines_in_both_languages(self):
+        plain = {"errors": {"text": 4, "other": 2, "invalid": 1}}
+        weighted = {"errors": {"count": 5, "text": 4, "other": 2, "invalid": 1}}
+        pad = " " * 20
+        self.assertEqual(printed("cs", bench.print_queue, plain), [pad + "chyby: nejkratší text 4, jiné 2, neplatné 1"])
+        self.assertEqual(printed("en", bench.print_queue, plain), [pad + "errors: shortest text 4, other 2, invalid 1"])
+        self.assertEqual(printed("cs", bench.print_queue, weighted),
+                         [pad + "chyby: nejkratší podle počtu (bez vah) 5, nejkratší text 4, jiné 2, neplatné 1"])
+        self.assertEqual(printed("en", bench.print_queue, weighted),
+                         [pad + "errors: shortest by count (unweighted) 5, shortest text 4, other 2, invalid 1"])
+
+    def test_lines_with_empty_classes(self):
+        r = {"by_gap": {"gap1": [1, 1], "gap2-3": [0, 0], "gap4+": [0, 0]}, "errors": {"text": 0, "other": 0, "invalid": 0}}
+        with i18n.process("en"):
+            self.assertEqual(bench.queue_note(r), "(difference 1 1/1, difference 2–3 0/0, difference 4+ 0/0)")
+        self.assertEqual(len(printed("en", bench.print_queue, r)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

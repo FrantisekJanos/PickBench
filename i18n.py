@@ -159,6 +159,13 @@ TEXTS = {
     "bench.rule.eliminate": {"cs": "vyloučení", "en": "eliminate"},
     "bench.rule.line": {"cs": "deník krátký {short}, dlouhý {long}; perseverace {persev}",
                         "en": "log short {short}, long {long}; perseveration {persev}"},
+    # Nejkratší fronta (--queue): popisek třídy v poznámce za řádkem modelu ({d} = 1, 2–3, 4+) a řádek chyb pod ním;
+    # vážená věta (--weighted) má navíc volbu nejkratší fronty podle počtu vozidel.
+    "bench.queue.gap": {"cs": "rozdíl {d}", "en": "difference {d}"},
+    "bench.queue.errors": {"cs": "chyby: nejkratší text {text}, jiné {other}, neplatné {invalid}",
+                           "en": "errors: shortest text {text}, other {other}, invalid {invalid}"},
+    "bench.queue.errorsWeighted": {"cs": "chyby: nejkratší podle počtu (bez vah) {count}, nejkratší text {text}, jiné {other}, neplatné {invalid}",
+                                   "en": "errors: shortest by count (unweighted) {count}, shortest text {text}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
