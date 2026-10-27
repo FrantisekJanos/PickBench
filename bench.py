@@ -318,6 +318,7 @@ The game must not run in the browser during the measurement (the requests would 
 """
 import argparse
 import contextlib
+import functools
 import itertools
 import json
 import math
@@ -2404,6 +2405,147 @@ def pattern_summary(cases, choices, form=None):
             outcome[pattern_outcome(case, choice)] += 1
         out["outcome"] = outcome
     return out
+
+
+# ---------- scénář: tah na výhru (piškvorky 3×3) ----------
+# Deska je řetězec devíti znaků v pořadí čtení (r1c1 … r3c3): "X", "O", "." volné pole; X začíná. Úloha je n-tice
+# (deska, značka na tahu, index pole odpovědi 0–8, třída).
+TICTACTOE_CELLS = tuple(f"r{r}c{c}" for r in (1, 2, 3) for c in (1, 2, 3))     # klíče otázky, index 0–8 v pořadí čtení
+TICTACTOE_LINES = ((0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6))
+TICTACTOE_CLASSES = ("win", "block", "win_over_block", "fork")   # podle prvního pravidla, které platí
+TICTACTOE_EMPTY = "."
+TICTACTOE_CORNERS, TICTACTOE_EDGES, TICTACTOE_CENTER = (0, 2, 6, 8), (1, 3, 5, 7), 4
+TICTACTOE_FORMS = ("rows", "cells")
+TICTACTOE_FORM = "cells"                             # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-28 (v rows modely volí obsazená pole)
+TICTACTOE_FEW = 3                                    # „málo volných polí“: nejvýš tolik (řádek pod modelem: 2–3 a 4–6)
+TICTACTOE_TRIES = 1000                               # mez losů na jednu úlohu (zamítání podle zkratek)
+# Vyvážení (konstanty z prohledávání nad přesným modelem generátoru v pokusu, opsané z prototypu):
+# úloha se přijme s pravděpodobností ∏ (1 − h·(1 − a)), h = očekávaná trefa zkratky na úloze, a = koeficient pro třídu.
+TICTACTOE_BALANCE = {
+    "win": {"fewest_opp": 0.25, "center_corner": 0.45, "corner": 0.35, "edge": 0.75, "own_neighbors": 0.3,
+            "opp_neighbors": 0.65, "neighbors": 0.7},
+    "block": {"edge": 0.75, "opp_neighbors": 0.12},
+    "win_over_block": {"fewest_opp": 0.4, "center_corner": 0.8, "edge": 0.22, "own_neighbors": 0.3, "opp_neighbors": 0.8,
+                       "neighbors": 0.8},
+    "fork": {"fewest_opp": 0.2, "edge": 0.2, "own_neighbors": 0.6},
+}
+TICTACTOE_CELL_WEIGHT = {                            # váha typu pole odpovědi při losování pole (roh = 1)
+    "win": {"corner": 1, "edge": 3.3, "center": 3.4},
+    "block": {"corner": 1, "edge": 2.6, "center": 5.5},
+    "win_over_block": {"corner": 1, "edge": 2, "center": 2.35},
+    "fork": {"corner": 1, "edge": 0.6, "center": 2.65},
+}
+TICTACTOE_SIDE_X = {"win": 0.28, "block": 0.48, "win_over_block": 0.54, "fork": 0.47}    # podíl X před zamítáním; po něm asi 1 : 1
+TICTACTOE_NEIGH = tuple(tuple(j for j in range(9) if j != i and abs(j // 3 - i // 3) <= 1 and abs(j % 3 - i % 3) <= 1)
+                        for i in range(9))           # sousedé pole v osmi směrech
+
+
+def tictactoe_winner(b):
+    """Značka, která má trojici, nebo None."""
+    for x, y, z in TICTACTOE_LINES:
+        if b[x] != TICTACTOE_EMPTY and b[x] == b[y] == b[z]:
+            return b[x]
+    return None
+
+
+def tictactoe_to_move(b):
+    return "X" if b.count("X") == b.count("O") else "O"
+
+
+def tictactoe_other(m):
+    return "O" if m == "X" else "X"
+
+
+def tictactoe_free(b):
+    return [i for i in range(9) if b[i] == TICTACTOE_EMPTY]
+
+
+def tictactoe_wins(b, m):
+    """Volná pole, kterými m hned vyhraje (vzestupně)."""
+    return sorted({line[k] for line in TICTACTOE_LINES for k in range(3)
+                   if b[line[k]] == TICTACTOE_EMPTY and all(b[line[j]] == m for j in range(3) if j != k)})
+
+
+def tictactoe_threats(b, i, m):
+    """Počet různých vítězných polí, která m má po tahu na i."""
+    return len(tictactoe_wins(b[:i] + m + b[i + 1:], m))
+
+
+def tictactoe_forks(b, m):
+    """Volná pole, po kterých má m dvě různé vítězné hrozby."""
+    return [i for i in tictactoe_free(b) if tictactoe_threats(b, i, m) >= 2]
+
+
+@functools.lru_cache(maxsize=None)
+def tictactoe_value(b):
+    """Minimax z pohledu hráče na tahu: 1 výhra, 0 remíza, −1 prohra (b je nerozhodnutá pozice)."""
+    m, best = tictactoe_to_move(b), None
+    for i in tictactoe_free(b):
+        nb = b[:i] + m + b[i + 1:]
+        v = 1 if tictactoe_winner(nb) else -tictactoe_value(nb)
+        best = v if best is None else max(best, v)
+        if best == 1:
+            break
+    return 0 if best is None else best
+
+
+def tictactoe_move_value(b, i):
+    m = tictactoe_to_move(b)
+    nb = b[:i] + m + b[i + 1:]
+    return 1 if tictactoe_winner(nb) else -tictactoe_value(nb)
+
+
+def tictactoe_solve(b):
+    """Tah podle pravidel v zadání (výhra, jinak blok, jinak vidlička): (třída, index pole), nebo None, když první
+    platné pravidlo nedává právě jedno pole. win_over_block: jediná výhra a jediný blok, na různých polích."""
+    m = tictactoe_to_move(b)
+    own, opp = tictactoe_wins(b, m), tictactoe_wins(b, tictactoe_other(m))
+    if own:
+        if len(own) != 1 or len(opp) > 1 or own[0] in opp:
+            return None
+        return ("win_over_block" if opp else "win"), own[0]
+    if opp:
+        return ("block", opp[0]) if len(opp) == 1 else None
+    forks = tictactoe_forks(b, m)
+    return ("fork", forks[0]) if len(forks) == 1 else None
+
+
+def tictactoe_strict(b, cls, answer):
+    """Záruky nad rámec pravidel: u block každý jiný volný tah prohrává hned, u fork je vidlička jediný tah, který vyhrává
+    silou (minimax)."""
+    free = [i for i in tictactoe_free(b) if i != answer]
+    if cls == "fork":
+        return tictactoe_move_value(b, answer) == 1 and all(tictactoe_move_value(b, i) < 1 for i in free)
+    if cls == "block":
+        m = tictactoe_to_move(b)
+        return all(tictactoe_wins(b[:i] + m + b[i + 1:], tictactoe_other(m)) for i in free)
+    return True
+
+
+def tictactoe_positions():
+    """Všechny platné nerozhodnuté pozice s aspoň dvěma volnými poli dosažitelné hrou od prázdné desky, seřazené."""
+    seen, stack = set(), [TICTACTOE_EMPTY * 9]
+    while stack:
+        b = stack.pop()
+        if b in seen:
+            continue
+        seen.add(b)
+        if tictactoe_winner(b) or TICTACTOE_EMPTY not in b:
+            continue
+        m = tictactoe_to_move(b)
+        stack.extend(b[:i] + m + b[i + 1:] for i in tictactoe_free(b))
+    return sorted(b for b in seen if not tictactoe_winner(b) and b.count(TICTACTOE_EMPTY) >= 2)
+
+
+@functools.lru_cache(maxsize=None)
+def tictactoe_pools():
+    """Koše {třída: {index pole odpovědi: (pozice, …)}} z pozic s jednoznačnou odpovědí a se zárukami (jednou za modul)."""
+    out = {c: {} for c in TICTACTOE_CLASSES}
+    for b in tictactoe_positions():
+        s = tictactoe_solve(b)
+        if s and tictactoe_strict(b, *s):
+            out[s[0]].setdefault(s[1], []).append(b)
+    return {c: {i: tuple(p[i]) for i in sorted(p)} for c, p in out.items()}
 
 
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
