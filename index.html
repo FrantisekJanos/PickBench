@@ -690,6 +690,13 @@ const TEXTS = {
   'scenario.queue.tip.match': { cs: 'Kolika řadami auto projelo pruhem s nejkratší frontou, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows the car passed in the lane with the shortest queue, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
   'scenario.queueWeighted.tile.count': { cs: 'nejméně vozidel bez vah', en: 'fewest vehicles, unweighted' },
   'scenario.queueWeighted.tip.count': { cs: 'Kolik chybných odpovědí byl pruh s nejméně vozidly podle počtu bez vah, ze všech chybných a neplatných odpovědí (i pozdních). Stejné číslo je pod tabulkou „Přesnost podle rozdílu front“.', en: 'How many of the wrong answers were the lane with the fewest vehicles by count, without weights, out of all wrong and invalid answers (late ones included). The same number is below the "Accuracy by queue difference" table.' },
+  'queue.label.ok': { cs: '✓ pruh {n}: nejkratší fronta ({len})', en: '✓ lane {n}: the shortest queue ({len})' },
+  'queue.label.bad': { cs: '✗ pruh {pick} ({pickLen}), nejkratší je pruh {n} ({len})', en: '✗ lane {pick} ({pickLen}), the shortest is lane {n} ({len})' },
+  'queue.label.count': { cs: '✗ pruh {pick}: nejméně vozidel, ale váha {pickLen}; nejkratší pruh {n} ({len})', en: '✗ lane {pick}: the fewest vehicles, but weight {pickLen}; the shortest is lane {n} ({len})' },
+  'legend.queue.queue': { cs: 'fronta = sloupec vozidel v pruhu; budka mýtné brány nahoře, konec fronty dole u auta', en: 'queue = a column of vehicles in a lane; the toll booth at the top, the end of the queue at the bottom next to the car' },
+  'legend.queue.pick': { cs: 'model volí pruh s nejkratší frontou; modrý obrys = jeho volba', en: 'the model picks the lane with the shortest queue; blue outline = its pick' },
+  'legend.queue.out': { cs: 'po průjezdu: nad budkou délka fronty, nejkratší pruh zeleně', en: 'after the car passes: the length of the queue above the booth, the shortest lane in green' },
+  'legend.queue.heavy': { cs: 'oranžové = nákladní auto, autobus, traktor: počítá se za 3 vozidla, proto je 3× vyšší', en: 'orange = a truck, a bus, a tractor: counts as 3 vehicles, so it is 3 times as tall' },
   'queue.gap': { cs: 'rozdíl {d}', en: 'difference {d}' },
   'queue.errors': { cs: 'chyby: nejkratší text {text}, jiné {other}, neplatné {invalid}', en: 'errors: shortest text {text}, other {other}, invalid {invalid}' },
   'queue.errorsWeighted': { cs: 'chyby: nejkratší podle počtu (bez vah) {count}, nejkratší text {text}, jiné {other}, neplatné {invalid}', en: 'errors: shortest by count (unweighted) {count}, shortest text {text}, other {other}, invalid {invalid}' },
@@ -2298,13 +2305,55 @@ const rule = {
 // Vážená fronta (queueWeighted) je tentýž objekt s weighted: true; metody čtou jen this.weighted.
 const QUEUE_GAP = 6, QUEUE_SPAN = 4.6;                     // rozestup řad a výška fronty s budkou v polích (fronta má až 12 vozidel)
 const QUEUE_GAP_NAME = { gap1: '1', 'gap2-3': '2–3', 'gap4+': '4+' };      // {d} v queue.gap, jako queue_note v bench.py
+const QUEUE_BOOTH = 0.6, QUEUE_UNIT_MAX = 16, QUEUE_LABEL = 1.3;      // výška budky v polích, nejvyšší jednotka fronty v px, do kdy (r.y nad −QUEUE_LABEL) je pod řadou štítek
+const QUEUE_GLYPH = { car: '🚗', van: '🚐', bus: '🚌', truck: '🚚', motorbike: '🏍', tractor: '🚜', minibus: '🚐', pickup: '🛻' };      // emoji potřebují barevné písmo jako vozidla u zákazů
+
+function queueLayout(queues, weighted, height) {            // sloupce vozidel v px od konce fronty nahoru; délka sloupce = (vážená) délka fronty × jednotka
+  const unit = Math.min(QUEUE_UNIT_MAX, height / Math.max(...queues.map(q => queueLength(q, weighted))));
+  return { unit, lanes: queues.map(q => {
+    let top = unit * queueLength(q, weighted);
+    return q.map(vehicle => {
+      const w = weighted ? (QUEUE_WEIGHTS[vehicle] ?? 1) : 1, y1 = top;
+      top -= unit * w;
+      return { vehicle, heavy: weighted && w > 1, y0: Math.max(0, top), y1 };
+    });
+  }) };
+}
+function queueLabel(r, weighted) {                          // slovy, co se stalo; počet pruhů z r.queues, ne z LANES
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const len = i => queueLength(r.queues[i], weighted), n = r.truth + 1;
+  if (r.result === 'ok') return { text: t('queue.label.ok', { n, len: len(r.truth) }), color: RESULT.ok.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.queues.length)) return { text: t('label.invalid'), color: RESULT.late.color };
+  return { text: t(weighted && r.chosen === r.count ? 'queue.label.count' : 'queue.label.bad', { pick: r.chosen + 1, pickLen: len(r.chosen), n, len: len(r.truth) }), color: RESULT.bad.color };
+}
+function drawQueue(r, y, weighted) {                        // sloupce vozidel, podklad, emoji a budky mýtné brány; r.y je konec front u auta
+  const lay = queueLayout(r.queues, weighted, (QUEUE_SPAN - QUEUE_BOOTH) * CELL), colH = (QUEUE_SPAN - QUEUE_BOOTH) * CELL, bh = QUEUE_BOOTH * CELL;
+  const hw = LW * 0.4;
+  lay.lanes.forEach((chips, lane) => {
+    const x = (lane + 0.5) * LW;
+    ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#2b333c';
+    ctx.fillRect(x - hw, y - colH, 2 * hw, colH);
+    for (const c of chips) {
+      ctx.fillStyle = c.heavy ? '#e69f00' : '#8b9aa8';
+      ctx.fillRect(x - hw + 1, y - c.y1 + 1, 2 * hw - 2, c.y1 - c.y0 - 1);
+      if (c.y1 - c.y0 >= 13) {
+        ctx.font = `${Math.round(Math.min(c.y1 - c.y0 - 2, 2 * hw - 4, 18))}px "Segoe UI Emoji", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#0b1016'; ctx.fillText(QUEUE_GLYPH[c.vehicle], x, y - (c.y0 + c.y1) / 2 + 1);
+      }
+    }
+    ctx.fillStyle = '#161d25'; ctx.fillRect(x - hw, y - colH - bh, 2 * hw, bh);            // budka mýtné brány a pod ní břevno
+    ctx.fillStyle = '#d29922'; ctx.fillRect(x - hw, y - colH - 2, 2 * hw, 2);
+  });
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
 
 const queue = {
   __proto__: rowBase,
   id: 'queue', lanesFree: true, weighted: false,
   gap: QUEUE_GAP, keep: QUEUE_SPAN + 1.5,                  // řada zmizí, až je i budka pod spodním okrajem plátna
   get about() { return t('scenario.queue.about'); },
-  panels: ['confPanel'], get extraTitle() { return t('scenario.queue.extraTitle'); },
+  panels: ['confPanel', 'legend'], legend: [['#8b9aa8', 'legend.queue.queue'], ['#4cc2ff', 'legend.queue.pick'], ['#3fb950', 'legend.queue.out']],
+  get extraTitle() { return t('scenario.queue.extraTitle'); },
   get extraTip() { return t('scenario.queue.extraTip'); },
   get matchTip() { return t('scenario.queue.tip.match'); },
   lanes: () => +$('lanes').value,
@@ -2338,7 +2387,29 @@ const queue = {
     }
     return g.summary;
   },
-  drawItems(g) { for (const r of g.rows) this.drawRing(r, CAR_Y - r.y * CELL, 12); },      // zatím jen kroužek u konce fronty
+  drawItems(g) {
+    const hw = LW * 0.4, colH = (QUEUE_SPAN - QUEUE_BOOTH) * CELL, bh = QUEUE_BOOTH * CELL;
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      drawQueue(r, y, this.weighted);
+      ctx.globalAlpha = 1;
+      if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES) {      // volba modelu před průjezdem: obrys sloupce a budky
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - colH - bh, 2 * hw, colH + bh);
+      }
+      this.drawRing(r, y, Math.min(LW * 0.26, 12));
+      if (r.result) {                                          // po průjezdu délky front nad budkami, správný pruh zeleně, a dokud řada není pod autem, štítek
+        ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        r.queues.forEach((q, lane) => {
+          ctx.fillStyle = lane === r.truth ? '#3fb950' : '#e6edf3';
+          ctx.fillText(String(queueLength(q, this.weighted)), (lane + 0.5) * LW, y - colH - bh - 4);
+        });
+        ctx.textAlign = 'start';
+        if (r.y > -QUEUE_LABEL) { const lab = queueLabel(r, this.weighted); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
+      }
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    }
+  },
   describeLast(task, res) {                                // fronty s délkou podle otázky (s vahami vážená), volba a správný pruh
     const name = i => i >= 0 ? laneName(i) : t('answer.invalid');
     const queues = task.queues.map((q, i) => `${i + 1}: ${q.join(' ')} (${queueLength(q, this.weighted)})`).join('  ·  ');
@@ -2366,7 +2437,7 @@ const queue = {
     $('conf').replaceChildren(head, ...rows, foot);
   },
 };
-const queueWeighted = { __proto__: queue, id: 'queueWeighted', weighted: true, get about() { return t('scenario.queueWeighted.about'); } };
+const queueWeighted = { __proto__: queue, id: 'queueWeighted', weighted: true, get about() { return t('scenario.queueWeighted.about'); }, legend: [['#8b9aa8', 'legend.queue.queue'], ['#e69f00', 'legend.queue.heavy'], ['#4cc2ff', 'legend.queue.pick'], ['#3fb950', 'legend.queue.out']] };
 
 // ---------- scénář: veřejná sada (jen benchmark bez hry) ----------
 // Sady s desítkami tříd nebo s vlastními štítky u každé úlohy: pruhů je nejvýš 8 a auto by nemělo kudy jet,

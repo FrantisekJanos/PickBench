@@ -451,6 +451,62 @@ class Page(unittest.TestCase):              # scénář ve stránce; počítán�
         self.assertEqual(heavy.split("\n")[0], "fronty:  1: car truck (4)  ·  2: bus (3)")
         self.assertEqual(run_js(code, None, "en")[0].split("\n")[1], "chosen:  lane 1  (correct: lane 2)")
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_layout_keeps_the_rule(self):          # délka sloupce = (vážená) délka fronty × jednotka; nejkratší fronta je nejkratší sloupec; vejde se
+        from test_parity import run_js
+        data = [[[list(q) for q in c[0]], w] for w in (False, True) for k in (2, 4, 8) for c in bench.queue_cases(15, k, w, seed=k)]
+        data += [[[["truck"] * 12, ["car"]], True], [[["car"] * 12, ["bus"] * 11], False]]       # vážená délka 36: jednotka ~4,9 px
+        line = re.search(r"\nconst QUEUE_BOOTH = [^\n]*\n", page_source()).group(0)
+        got = run_js("(() => {" + line + page_function("queueLayout") + "return arg.map(([qs, w]) => queueLayout(qs, w, 176)); })()", data)
+        for (queues, weighted), lay in zip(data, got):
+            lengths = [bench.queue_length(q, weighted) for q in queues]
+            unit = lay["unit"]
+            with self.subTest(queues=queues, weighted=weighted):
+                self.assertAlmostEqual(unit, min(16, 176 / max(lengths)))
+                for q, chips, length in zip(queues, lay["lanes"], lengths):
+                    self.assertEqual([c["vehicle"] for c in chips], list(q))                      # pořadí fronty, vozidlo 0 u budky
+                    self.assertAlmostEqual(chips[0]["y1"], length * unit)
+                    self.assertAlmostEqual(chips[-1]["y0"], 0, places=9)
+                    self.assertLessEqual(chips[0]["y1"], 176 + 1e-9)
+                    for a, b in zip(chips, chips[1:]):
+                        self.assertAlmostEqual(a["y0"], b["y1"])                                   # souvislý sloupec
+                    for c in chips:
+                        w = bench.QUEUE_WEIGHTS.get(c["vehicle"], 1) if weighted else 1
+                        self.assertAlmostEqual(c["y1"] - c["y0"], w * unit)                        # těžké 3× jen s vahami
+                        self.assertEqual(c["heavy"], weighted and w > 1)
+                tops = [chips[0]["y1"] for chips in lay["lanes"]]
+                answer = lengths.index(min(lengths))
+                self.assertTrue(all(top > tops[answer] for i, top in enumerate(tops) if i != answer), tops)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):          # štítek: nejkratší fronta, jiný pruh, nejméně vozidel bez vah, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        code = "(() => {" + re.search(r"\nconst RESULT = [^\n]*\n", page).group(0) + page_function("queueLabel") + (
+            "const Q = [['car', 'car', 'car', 'car'], ['truck', 'bus'], ['van', 'van', 'car']];"      # bez vah 4, 2, 3; s vahami 4, 6, 3
+            "const r = (result, chosen, truth) => ({ queues: Q, result, chosen, truth, count: 1 });"
+            "return [[r('ok', 2, 2), true], [r('bad', 1, 2), true], [r('bad', 0, 2), true], [r('bad', -1, 2), true], [r('late', undefined, 2), true],"
+            " [r('bad', 0, 1), false]].map(([row, w]) => queueLabel(row, w)); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ pruh 3: nejkratší fronta (3)", "✗ pruh 2: nejméně vozidel, ale váha 6; nejkratší pruh 3 (3)",
+                                                   "✗ pruh 1 (4), nejkratší je pruh 3 (3)", "✗ neplatná odpověď", "⏱ nestihl",
+                                                   "✗ pruh 1 (4), nejkratší je pruh 2 (2)"])
+        self.assertEqual(en[1]["text"], "✗ lane 2: the fewest vehicles, but weight 6; the shortest is lane 3 (3)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8", "#f85149"])
+
+    def test_drawing_writes_only_through_t_and_shows_pick_and_legend(self):
+        for literal in ("fillText('", 'fillText("', "fillText(`"):
+            self.assertNotIn(literal, page_function("drawQueue"))                                # fronta bez textu, emoji a čísla bez písmen
+            self.assertNotIn(literal, queue_body())
+        body = queue_body()
+        for part in ("drawQueue(r, y, this.weighted)", "queueLabel(r, this.weighted)", "drawRowLabel(", "strokeRect(", "r.y > -QUEUE_LABEL",
+                     "panels: ['confPanel', 'legend']", "'legend.queue.queue'", "'legend.queue.pick'", "'legend.queue.out'"):
+            self.assertIn(part, body)
+        self.assertIn("queueLayout(r.queues, weighted, (QUEUE_SPAN - QUEUE_BOOTH) * CELL)", page_function("drawQueue"))
+        weighted = re.search(r"\nconst queueWeighted = [^\n]*\n", page_source()).group(0)
+        self.assertIn("'legend.queue.heavy'", weighted)
+        self.assertNotIn("'legend.queue.heavy'", body)                                           # bez vah oranžová vozidla nejsou
+
 
 if __name__ == "__main__":
     unittest.main()
