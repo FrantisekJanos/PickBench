@@ -10,6 +10,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -23,6 +24,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
           python bench.py 100 --cruise tev1
+          python bench.py 100 --timetable tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -85,6 +87,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             and inside a band, ±1 level, MAE (an invalid answer counts as 6), too fast, too slow and the errors: distance
             only, condition left out, each condition as 1 level, neighboring band, other, invalid. Cheap shortcuts (a fixed
             level, a guess by the number of digits) get at most about a third of the road, fog and both tasks right. Not with --lanes.
+--timetable:  timetable: a parcel has a ZIP code (10000 to 99999) and a service; the table routes has 3 to 12 rows, and each
+            row sends the parcels with a ZIP code from zip_from to zip_to (both ends included) to its depot; an exception for
+            a service (exceptions) comes first. The model picks one of six depots. N tasks (default 100), spread evenly by table
+            size (3–5, 6–8, 9–12 rows), ZIP position (inside a row, close to a boundary, exactly on a boundary) and exception
+            (none, applies, is for another service). After the model row, the accuracy by table size; below it the accuracy
+            by position (only tasks without an exception that applies) and by exception, and the errors: neighboring row,
+            exception missed, exception wrongly applied, other, invalid. Close to a boundary the answer is always one of two
+            neighboring rows, so chance is 50% there; on a boundary the ZIP code stands in the table as it is. Not with --lanes.
+--sorted, --shuffled:  only with --timetable: the form of the state; the tasks are the same in both. sorted = the rows of
+            the table by ZIP code; shuffled = the rows in random order. Without the option: sorted.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

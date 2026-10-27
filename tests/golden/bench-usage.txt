@@ -10,6 +10,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -23,6 +24,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
           python bench.py 100 --cruise tev1
+          python bench.py 100 --timetable tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -85,6 +87,16 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             odpověď = 6), příliš rychle, příliš pomalu a chyby: jen vzdálenost, vynechaná podmínka, každá podmínka
             za 1 stupeň, sousední pásmo, jiné, neplatné. Levné zkratky (stálý stupeň, odhad podle počtu číslic) trefí
             ve třídách povrch, mlha a obojí nejvýš asi třetinu úloh. S --lanes se nekombinuje.
+--timetable:  jízdní řád: zásilka má PSČ (10000 až 99999) a službu, tabulka routes má 3 až 12 řádků a každý řádek posílá
+            zásilky s PSČ od zip_from do zip_to (oba kraje včetně) do svého depa; výjimka pro službu (exceptions) má přednost.
+            Model volí jedno ze šesti dep. N úloh (výchozí 100), rovnoměrně podle velikosti tabulky (3–5, 6–8, 9–12 řádků),
+            polohy PSČ (uvnitř řádku, těsně u hranice, přesně na hranici) a výjimky (žádná, platí, je pro jinou službu).
+            Za řádkem modelu přesnost podle velikosti tabulky, pod ním přesnost podle polohy (jen úlohy bez platné výjimky)
+            a podle výjimky a chyby: sousední řádek, výjimka přehlédnutá, výjimka navíc, jiné, neplatné. Těsně u hranice
+            je správně vždy jeden ze dvou sousedních řádků, náhoda je tam 50 %; na hranici stojí PSČ v tabulce doslova.
+            S --lanes se nekombinuje.
+--sorted, --shuffled:  jen s --timetable: podoba stavu, úlohy jsou v obou stejné. sorted = řádky tabulky podle PSČ;
+            shuffled = řádky v náhodném pořadí. Bez volby platí sorted.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.

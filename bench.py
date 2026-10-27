@@ -10,6 +10,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -23,6 +24,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
           python bench.py 100 --cruise tev1
+          python bench.py 100 --timetable tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -85,6 +87,16 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             odpověď = 6), příliš rychle, příliš pomalu a chyby: jen vzdálenost, vynechaná podmínka, každá podmínka
             za 1 stupeň, sousední pásmo, jiné, neplatné. Levné zkratky (stálý stupeň, odhad podle počtu číslic) trefí
             ve třídách povrch, mlha a obojí nejvýš asi třetinu úloh. S --lanes se nekombinuje.
+--timetable:  jízdní řád: zásilka má PSČ (10000 až 99999) a službu, tabulka routes má 3 až 12 řádků a každý řádek posílá
+            zásilky s PSČ od zip_from do zip_to (oba kraje včetně) do svého depa; výjimka pro službu (exceptions) má přednost.
+            Model volí jedno ze šesti dep. N úloh (výchozí 100), rovnoměrně podle velikosti tabulky (3–5, 6–8, 9–12 řádků),
+            polohy PSČ (uvnitř řádku, těsně u hranice, přesně na hranici) a výjimky (žádná, platí, je pro jinou službu).
+            Za řádkem modelu přesnost podle velikosti tabulky, pod ním přesnost podle polohy (jen úlohy bez platné výjimky)
+            a podle výjimky a chyby: sousední řádek, výjimka přehlédnutá, výjimka navíc, jiné, neplatné. Těsně u hranice
+            je správně vždy jeden ze dvou sousedních řádků, náhoda je tam 50 %; na hranici stojí PSČ v tabulce doslova.
+            S --lanes se nekombinuje.
+--sorted, --shuffled:  jen s --timetable: podoba stavu, úlohy jsou v obou stejné. sorted = řádky tabulky podle PSČ;
+            shuffled = řádky v náhodném pořadí. Bez volby platí sorted.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -122,6 +134,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -135,6 +148,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
           python bench.py 100 --cruise tev1
+          python bench.py 100 --timetable tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -197,6 +211,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             and inside a band, ±1 level, MAE (an invalid answer counts as 6), too fast, too slow and the errors: distance
             only, condition left out, each condition as 1 level, neighboring band, other, invalid. Cheap shortcuts (a fixed
             level, a guess by the number of digits) get at most about a third of the road, fog and both tasks right. Not with --lanes.
+--timetable:  timetable: a parcel has a ZIP code (10000 to 99999) and a service; the table routes has 3 to 12 rows, and each
+            row sends the parcels with a ZIP code from zip_from to zip_to (both ends included) to its depot; an exception for
+            a service (exceptions) comes first. The model picks one of six depots. N tasks (default 100), spread evenly by table
+            size (3–5, 6–8, 9–12 rows), ZIP position (inside a row, close to a boundary, exactly on a boundary) and exception
+            (none, applies, is for another service). After the model row, the accuracy by table size; below it the accuracy
+            by position (only tasks without an exception that applies) and by exception, and the errors: neighboring row,
+            exception missed, exception wrongly applied, other, invalid. Close to a boundary the answer is always one of two
+            neighboring rows, so chance is 50% there; on a boundary the ZIP code stands in the table as it is. Not with --lanes.
+--sorted, --shuffled:  only with --timetable: the form of the state; the tasks are the same in both. sorted = the rows of
+            the table by ZIP code; shuffled = the rows in random order. Without the option: sorted.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -2367,6 +2391,9 @@ def parse_args(argv):
     p.add_argument("--queue", action="store_true")
     p.add_argument("--weighted", action="store_true")
     p.add_argument("--bet", action="store_true")                 # výchozí 4 brány dosadí níže (Úprava 11.5b)
+    p.add_argument("--timetable", action="store_true")
+    p.add_argument("--sorted", action="store_true")
+    p.add_argument("--shuffled", action="store_true")
     p.add_argument("--cruise", action="store_true")              # tempomat: pruhy ani brány nemá, --lanes končí hláškou
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
@@ -2582,9 +2609,10 @@ def print_public(r, worst=5):
 def main(argv):
     args = parse_args(argv)
     scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue,
-                 args.bet, args.cruise)
+                 args.bet, args.cruise, args.timetable)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
-            or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
+            or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
+            or (args.sorted and args.shuffled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -2602,6 +2630,10 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesRule"))
     if args.weighted and not args.queue:
         sys.exit(i18n.t("bench.err.weightedQueue"))
+    if (args.sorted or args.shuffled) and not args.timetable:
+        sys.exit(i18n.t("bench.err.formTimetable"))
+    if args.timetable and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesTimetable"))
     if args.cruise and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesCruise"))
     if args.barrier and args.lanes_given:
@@ -2734,6 +2766,20 @@ def main(argv):
                 r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms)
                 print_row(r, cruise_note(r))
                 print_cruise(r)
+    elif args.timetable:
+        form = "shuffled" if args.shuffled else "sorted" if args.sorted else TIMETABLE_FORM
+        cases = timetable_cases(args.n or 100)           # úlohy jsou v obou podobách stejné, podoba mění jen pořadí řádků
+        rows = f"{min(lo for lo, _ in TIMETABLE_SIZES.values())}–{max(hi for _, hi in TIMETABLE_SIZES.values())}"
+        if form == "shuffled":
+            print(i18n.t("bench.intro.timetableShuffled", n=len(cases), rows=rows) + "\n")
+        else:
+            print(i18n.t("bench.intro.timetable", n=len(cases), rows=rows) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_timetable(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, timetable_note(r))
+                print_timetable(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

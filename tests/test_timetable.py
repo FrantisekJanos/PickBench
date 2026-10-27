@@ -404,5 +404,109 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(printed("en", bench.print_timetable, r)), 2)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--timetable", "m1"])
+        self.assertEqual((a.n, a.timetable, a.sorted, a.shuffled, a.lanes_given, a.models), (40, True, False, False, False, ["m1"]))
+        a = bench.parse_args(["--shuffled", "--timetable", "m1"])
+        self.assertEqual((a.timetable, a.sorted, a.shuffled), (True, False, True))
+        self.assertTrue(bench.parse_args(["--timetable", "--sorted", "m1"]).sorted)
+
+    def test_first_line_and_rows(self):
+        form = {"sorted": ("řádky podle PSČ", "rows sorted by ZIP"), "shuffled": ("řádky zamíchané", "rows shuffled")}
+        default = form[bench.TIMETABLE_FORM]
+        for argv, (cs, en) in ((["1", "--timetable", "m1"], ("1 úloha se směrováním zásilek podle tabulky (3–12 řádků, {})",
+                                                             "1 task routing a parcel by a table (3–12 rows, {})")),
+                               (["7", "--timetable", "--shuffled", "m1"], ("7 úloh se směrováním zásilek podle tabulky (3–12 řádků, {})",
+                                                                           "7 tasks routing a parcel by a table (3–12 rows, {})")),
+                               (["3", "--sorted", "--timetable", "m1"], ("3 úlohy se směrováním zásilek podle tabulky (3–12 řádků, {})",
+                                                                         "3 tasks routing a parcel by a table (3–12 rows, {})"))):
+            words = form["shuffled"] if "--shuffled" in argv else form["sorted"] if "--sorted" in argv else default
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs.format(words[0]) + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en.format(words[1]) + ", the same for all models")
+        self.assertTrue(self.cli("--timetable", "m1")[0].startswith("100 úloh se směrováním zásilek"))      # výchozí počet úloh
+        en = self.cli("6", "--timetable", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 6)
+        self.assertRegex(en[3], r"^m1 .*   \(3–5 rows \d+/\d+, 6–8 rows \d+/\d+, 9–12 rows \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}position: inside \d+/\d+, near a boundary \d+/\d+, on a boundary \d+/\d+; "
+                                r"exception: none \d+/\d+, applies \d+/\d+, does not apply \d+/\d+$")
+        self.assertRegex(en[5], r"^ {20}errors: neighboring row \d+, exception missed \d+, exception wrongly applied \d+, other \d+, invalid \d+$")
+        self.assertEqual(len(self.cli("1", "--timetable", "m1")[0].splitlines()), 6)          # jediná úloha: prázdné třídy 0/0
+
+    def test_option_errors_in_both_languages(self):
+        form_cs, form_en = "Volby --sorted a --shuffled jdou jen s --timetable.", "The --sorted and --shuffled options work only with --timetable."
+        for argv, cs, en in (
+                (["6", "--timetable", "--lanes", "3", "m1"], "Volba --lanes se s --timetable nekombinuje.",
+                 "The --lanes option cannot be combined with --timetable."),
+                (["6", "--shuffled", "m1"], form_cs, form_en),
+                (["--sorted", "--queue", "m1"], form_cs, form_en),
+                (["--timetable", "--rows", "m1"], "Volby --rows a --blocked jdou jen s --lookahead.", "The --rows and --blocked options work only with --lookahead."),
+                (["--timetable", "--weighted", "m1"], "Volba --weighted jde jen s --queue.", "The --weighted option works only with --queue.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--timetable", "--queue", "m1"], ["--timetable", "--bet", "m1"], ["--timetable", "--rule", "m1"],
+                     ["--timetable", "--cruise", "m1"],
+                     ["--timetable", "--sorted", "--shuffled", "m1"], ["--timetable", "--lanes", "9", "m1"], ["--timetable"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_tasks(self):
+        self.cli("6", "--timetable", "--sorted", "m1")
+        ordered, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--timetable", "--shuffled", "m1")
+        shuffled = [json.loads(body) for body in self.sent]
+        self.assertEqual((len(ordered), len(shuffled)), (7, 7))                  # zahřátí a šest úloh
+        self.assertTrue(all(list(p["questions"]) == [KEY] for p in ordered + shuffled))
+        for a, b in zip((p["state"] for p in ordered), (p["state"] for p in shuffled)):
+            self.assertEqual((a["parcel"], a["exceptions"]), (b["parcel"], b["exceptions"]))
+            self.assertEqual(sorted_rows(a), sorted_rows(b))
+            self.assertEqual([(r["zip_from"], r["zip_to"], r["depot"]) for r in a["routes"]], sorted_rows(a))
+        self.assertNotEqual([p["state"]["routes"] for p in ordered], [p["state"]["routes"] for p in shuffled])
+
+    def test_mirror_and_inject_work_with_timetable(self):
+        out, code = self.cli("8", "--timetable", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("poloha: uvnitř "), lines[6])
+        self.assertTrue(lines[7].strip().startswith("chyby: sousední řádek "), lines[7])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --timetable tev1", text)
+            self.assertIn("\n--timetable:  ", text)
+            self.assertIn("\n--sorted, --shuffled:  ", text)
+            self.assertIn(bench.TIMETABLE_FORM + ".", text)
+
+
 if __name__ == "__main__":
     unittest.main()

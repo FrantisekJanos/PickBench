@@ -122,6 +122,11 @@ TEXTS = {
     # Tempomat: {form} = podoba otázky (choice / score, nepřekládá se).
     "bench.intro.cruise": {"cs": "{n} {n|úloha|úlohy|úloh} s tempomatem (stupně 1–7, otázka {form}); sada je pro všechny modely stejná",
                            "en": "{n} {n|task|tasks} with the cruise control (levels 1–7, {form} question), the same for all models"},
+    # Jízdní řád: úvodní věta jmenuje podobu stavu; {rows} = rozsah velikosti tabulky („3–12“).
+    "bench.intro.timetable": {"cs": "{n} {n|úloha|úlohy|úloh} se směrováním zásilek podle tabulky ({rows} řádků, řádky podle PSČ); sada je pro všechny modely stejná",
+                              "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows sorted by ZIP), the same for all models"},
+    "bench.intro.timetableShuffled": {"cs": "{n} {n|úloha|úlohy|úloh} se směrováním zásilek podle tabulky ({rows} řádků, řádky zamíchané); sada je pro všechny modely stejná",
+                                      "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows shuffled), the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -241,6 +246,9 @@ TEXTS = {
                            "en": "The --matched-by and --labeled options work only with --rule."},
     "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
     "bench.err.lanesCruise": {"cs": "Volba --lanes se s --cruise nekombinuje.", "en": "The --lanes option cannot be combined with --cruise."},
+    "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
+                                "en": "The --sorted and --shuffled options work only with --timetable."},
+    "bench.err.lanesTimetable": {"cs": "Volba --lanes se s --timetable nekombinuje.", "en": "The --lanes option cannot be combined with --timetable."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",
