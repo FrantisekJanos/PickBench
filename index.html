@@ -1022,14 +1022,16 @@ const ALT = {                                              // jinak formulované
   move_blocked: 'The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.',
   gate_labeled: 'A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.',
   go: "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
+  lane: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.',
+  lane_weighted: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.',
 };
-const ALT_LANES = /\ba (\d+)-lane road\b/;                  // zadání move_blocked nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
+const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
   const key = Object.keys(q)[0];
   if (v === 1) q[key].criteria = Object.fromEntries(Object.entries(q[key].criteria).reverse());
   if (v === 2) {
     let alt = ALT[key];
-    if (alt.includes('{lanes}')) alt = alt.replaceAll('{lanes}', ALT_LANES.exec(q[key].instructions)[1]);     // dva kroky dopředu: počet pruhů z původního zadání
+    if (alt.includes('{lanes}')) { const m = ALT_LANES.exec(q[key].instructions); alt = alt.replaceAll('{lanes}', m[1] ?? m[2]); }     // dva kroky dopředu a fronta: číslo nese ta větev výrazu, která se chytila
     q[key].instructions = alt + (key === 'category' ? ' ' + q[key].instructions : '');   // pravidla sady e-mailů zůstávají
   }
   return q;
@@ -3055,6 +3057,63 @@ function ruleSummary(cases, choices, keys) {
 function ruleWarm() {
   const log = [...['color', 'shape', 'count'].flatMap(f => [[f, true], [f, true], [f, true]]), ['color', true]];
   return { log, order: ['color', 'shape', 'count'], truth: 0, cls: 'repeat', old: 2 };
+}
+// Nejkratší fronta: konstanty, počítání front, stav a otázka, stejné jako v bench.py (QUEUE_*, queue_*). Fronta je pole jmen vozidel,
+// pruh je index od nuly (pruh 1 = 0). Co jde do modelu, je anglicky.
+const laneKeys = lanes => [...Array(lanes)].map((_, i) => `lane_${i + 1}`);      // jako lane_keys v bench.py
+const QUEUE_VEHICLES = ['car', 'van', 'bus', 'truck', 'motorbike', 'tractor', 'minibus', 'pickup'];
+const QUEUE_WEIGHTS = { bus: 3, truck: 3, tractor: 3 };      // ostatní vozidla váží 1
+const QUEUE_SIZE = [1, 12];                                  // nejmenší a největší počet vozidel ve frontě
+const QUEUE_GAPS = ['gap1', 'gap2-3', 'gap4+'];              // rozdíl nejkratší a druhé nejkratší fronty: 1, 2–3, 4 a víc
+const QUEUE_COUNT_SHARE = 0.5;                               // podíl vážených úloh, kde je nejkratší podle počtu jiná
+const QUEUE_TRIES = 20000000;
+// Pruh se losuje jako dvojice (počet vozidel, z toho těžkých): počet rovnoměrně z QUEUE_SIZE, těžkých binomicky (jako v bench.py).
+const QUEUE_HEAVY = QUEUE_VEHICLES.filter(v => v in QUEUE_WEIGHTS);
+const QUEUE_LIGHT = QUEUE_VEHICLES.filter(v => !(v in QUEUE_WEIGHTS));
+const QUEUE_SHAPES = [];
+for (let size = QUEUE_SIZE[0]; size <= QUEUE_SIZE[1]; size++) for (let heavy = 0; heavy <= size; heavy++) QUEUE_SHAPES.push([size, heavy]);
+const queueComb = (n, k) => { let c = 1; for (let i = 1; i <= k; i++) c = c * (n - k + i) / i; return Math.round(c); };      // math.comb, celočíselně (malá čísla)
+const QUEUE_SHAPE_CUM = (() => {                             // průběžný součet jako itertools.accumulate, v tomtéž pořadí sčítání
+  let sum = 0;
+  return QUEUE_SHAPES.map(([size, heavy]) => sum += queueComb(size, heavy) * QUEUE_HEAVY.length ** heavy * QUEUE_LIGHT.length ** (size - heavy) / QUEUE_VEHICLES.length ** size);
+})();
+function queueFewest(values) {                               // pruhy s nejmenší hodnotou, všechny při shodě
+  const low = Math.min(...values);
+  return values.flatMap((v, i) => v === low ? [i] : []);
+}
+function queueLength(queue, weighted = false) {              // počet vozidel, s vahami součet vah
+  return weighted ? queue.reduce((s, v) => s + (QUEUE_WEIGHTS[v] ?? 1), 0) : queue.length;
+}
+function queueClass(gap) {                                   // třída rozdílu nejkratší a druhé nejkratší fronty: 1, 2-3, 4 a víc
+  if (gap < 1) throw new Error(`queueClass: gap must be at least 1, got ${gap}`);
+  return gap === 1 ? 'gap1' : gap <= 3 ? 'gap2-3' : 'gap4+';
+}
+// Pruhy s nejkratším zápisem seznamu. Délka je jako json.dumps v Pythonu (oddělovač ", "): součet délek jmen + 4 na vozidlo (dvě uvozovky, čárka, mezera);
+// JSON.stringify mezery nedává, zkratka by vyšla jinak.
+function queueText(queues) {
+  return queueFewest(queues.map(q => q.reduce((s, v) => s + v.length, 0) + 4 * q.length));
+}
+function queueCount(queues) {                                // jediný pruh s nejméně vozidly (bez vah), nebo null, když jich je víc
+  const sizes = queues.map(q => q.length), low = Math.min(...sizes);
+  return sizes.filter(s => s === low).length === 1 ? sizes.indexOf(low) : null;
+}
+function queueHeavy(queues) {                                // kontrolní zkratka: pruhy s nejméně těžkými vozidly
+  return queueFewest(queues.map(q => q.filter(v => v in QUEUE_WEIGHTS).length));
+}
+function queueTextShare(lanes) {                             // cílový podíl úloh, kde nejkratší text trefí správný pruh
+  return lanes === 2 ? 1 / 2 : 1 / 3;
+}
+function queueState(queues) {                                // stav pro model: lane_N → seznam vozidel
+  const state = {};
+  queues.forEach((q, i) => state[`lane_${i + 1}`] = [...q]);
+  return state;
+}
+function queueQuestion(lanes, weighted = false) {            // otázka choice: lane (bez vah) nebo lane_weighted (s větou o vahách)
+  const weights = weighted ? 'A truck, a bus or a tractor counts as three vehicles; any other vehicle counts as one. ' : '';
+  const instructions = `A car comes to a toll gate with ${lanes} lanes. Each lane_N lists the vehicles waiting in that lane. ${weights}Choose the lane with the shortest queue.`;
+  const criteria = {};
+  for (let i = 0; i < lanes; i++) criteria[`lane_${i + 1}`] = `Lane ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : '');
+  return { [weighted ? 'lane_weighted' : 'lane']: { type: 'choice', instructions, criteria } };
 }
 // ==== sdíleno s Pythonem: konec ====
 

@@ -941,5 +941,70 @@ class Rule(unittest.TestCase):
         self.assertGreaterEqual(len(json.dumps(state)), longest)                                    # horní odhad délky dotazu ve stepEstimate
 
 
+QUEUE_HAND = [[["car", "car"], ["truck"], ["bus", "van"]], [["car", "van"], ["bus", "car"]], [["motorbike", "tractor"], ["car", "van", "bus"]],
+              [["car"], ["van"], ["bus", "car"]], [["bus"], ["truck", "car"], ["van", "van", "van"]], [["bus", "car"], ["tractor"], ["truck", "van"]]]   # ručně ověřené fronty z tests/test_queue.py (Basics)
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Queue(unittest.TestCase):
+    def test_constants_match_bench(self):
+        import bench
+        js = run_js("({ vehicles: QUEUE_VEHICLES, weights: QUEUE_WEIGHTS, size: QUEUE_SIZE, gaps: QUEUE_GAPS, share: QUEUE_COUNT_SHARE, tries: QUEUE_TRIES,"
+                    " heavy: QUEUE_HEAVY, light: QUEUE_LIGHT, shapes: QUEUE_SHAPES, cum: QUEUE_SHAPE_CUM, keys: [2, 8].map(laneKeys),"
+                    " textShare: [2, 3, 4, 8].map(queueTextShare) })", None)
+        self.assertEqual(js["vehicles"], list(bench.QUEUE_VEHICLES))
+        self.assertEqual(json.dumps(js["weights"]), json.dumps(bench.QUEUE_WEIGHTS))                 # i pořadí klíčů
+        self.assertEqual((js["size"], js["gaps"]), (list(bench.QUEUE_SIZE), list(bench.QUEUE_GAPS)))
+        self.assertEqual((js["share"], js["tries"]), (bench.QUEUE_COUNT_SHARE, bench.QUEUE_TRIES))
+        self.assertEqual((js["heavy"], js["light"]), (list(bench.QUEUE_HEAVY), list(bench.QUEUE_LIGHT)))
+        self.assertEqual(js["shapes"], [list(s) for s in bench.QUEUE_SHAPES])                       # pořadí rozhoduje o losování
+        self.assertEqual(len(js["cum"]), len(bench.QUEUE_SHAPE_CUM))
+        for a, b in zip(js["cum"], bench.QUEUE_SHAPE_CUM):
+            self.assertTrue(math.isclose(a, b, rel_tol=1e-12), (a, b))
+        self.assertEqual(js["keys"], [bench.lane_keys(2), bench.lane_keys(8)])
+        self.assertEqual(js["textShare"], [bench.queue_text_share(k) for k in (2, 3, 4, 8)])
+
+    def test_counting_matches_bench(self):                         # délky, nejkratší text, nejméně vozidel a těžkých, shoda = všechny pruhy
+        import bench
+        cases = bench.queue_cases(60, 4, seed=3) + bench.queue_cases(60, 6, True, seed=4) + bench.queue_cases(30, 2, seed=5)
+        grids = [[list(q) for q in queues] for queues, *_ in cases] + QUEUE_HAND
+        got = run_js("arg.map(qs => [qs.map(q => queueLength(q, false)), qs.map(q => queueLength(q, true)), queueText(qs), queueCount(qs),"
+                     " queueHeavy(qs), queueFewest(qs.map(q => q.length))])", grids)
+        for qs, (plain, weighted, text, count, heavy, fewest) in zip(grids, got):
+            queues = tuple(tuple(q) for q in qs)
+            with self.subTest(queues=queues):
+                self.assertEqual(plain, [bench.queue_length(q) for q in queues])
+                self.assertEqual(weighted, [bench.queue_length(q, True) for q in queues])
+                self.assertEqual(text, list(bench.queue_text(queues)))
+                self.assertEqual(count, bench.queue_count(queues))                                   # None = víc pruhů s nejméně vozidly
+                self.assertEqual(heavy, list(bench.queue_heavy(queues)))
+                self.assertEqual(fewest, list(bench.queue_fewest([len(q) for q in queues])))
+
+    def test_class_matches_bench_and_raises(self):
+        import bench
+        got = run_js("[1, 2, 3, 4, 11].map(queueClass).concat([(() => { try { queueClass(0); return null; } catch (e) { return e.message; } })()])", None)
+        self.assertEqual(got[:5], [bench.queue_class(g) for g in (1, 2, 3, 4, 11)])
+        self.assertEqual(got[5], "queueClass: gap must be at least 1, got 0")                        # nic se neopravuje potichu
+
+    def test_state_and_question_match_bench(self):
+        import bench
+        cases = bench.queue_cases(20, 4, seed=7) + bench.queue_cases(20, 8, True, seed=8)
+        grids = [[list(q) for q in queues] for queues, *_ in cases] + QUEUE_HAND
+        for qs, state in zip(grids, run_js("arg.map(queueState)", grids)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.queue_state(tuple(tuple(q) for q in qs))), qs)     # bajtově, i pořadí klíčů
+        asked = run_js("[2, 3, 4, 5, 6, 7, 8].flatMap(k => [queueQuestion(k, false), queueQuestion(k, true)])", None)
+        want = [bench.queue_question(k, w) for k in range(2, 9) for w in (False, True)]
+        for js, py in zip(asked, want):
+            self.assertEqual(json.dumps(js), json.dumps(py), next(iter(py)))
+
+    def test_alternative_wording_and_lane_count_match_bench(self):     # ALT a ALT_LANES stojí mimo sdílený blok: čtou se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        for key in ("lane", "lane_weighted"):
+            self.assertEqual(re.findall(r"^  %s: '([^'\\]*)',$" % key, alt, re.M), [bench.ALT[key]], key)
+        self.assertEqual(re.search(r"\nconst ALT_LANES = /(.*?)/;", page).group(1), bench.ALT_LANES.pattern)      # obě větve jako v bench.py
+
+
 if __name__ == "__main__":
     unittest.main()

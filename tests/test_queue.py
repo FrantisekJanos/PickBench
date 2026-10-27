@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 EXAMPLE = (("car", "car"), ("truck",), ("bus", "van"))   # bez vah 2, 1, 2 (správně pruh 2); s vahami 2, 3, 4 (správně pruh 1)
@@ -366,6 +369,22 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --queue --weighted tev1", text)
             self.assertIn("\n--queue:    ", text)
             self.assertIn("\n--weighted:  ", text)
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; počítání front, generátor a rozbor hlídá tests/test_parity.py (Queue)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_fills_in_the_lanes_like_bench(self):        # ALT_LANES má dvě větve: fronta bere číslo z „toll gate with N lanes“, dva kroky z „a N-lane road“
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        questions = ([bench.queue_question(k, w) for k in range(2, 9) for w in (False, True)]
+                     + [bench.lookahead_question(k, "blocked") for k in (3, 8)]
+                     + [bench.number_question(4), bench.memory_question(5), bench.sign_question(3), bench.rule_question("labeled")])   # otázky bez {lanes}: beze změny
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(questions) + ";" + (
+            "process.stdout.write(JSON.stringify(Q.map(q => [0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(q)), v)))));")
+        for q, by_variant in zip(questions, run_page_js(code)):
+            for v, js in enumerate(by_variant):
+                self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))
 
 
 if __name__ == "__main__":
