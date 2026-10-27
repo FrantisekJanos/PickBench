@@ -1863,6 +1863,28 @@ def timetable_summary(cases, choices):
             "errors": timetable_errors(cases, choices)}
 
 
+# ---------- scénář: rušivá nápověda ----------
+HINT_CONDS = ("none", "congruent", "incongruent")    # bez pole nápovědy, nápověda na správné bráně, na jedné ze špatných
+HINT_FIELD = "most_popular"                          # pole stavu s nápovědou; rozhodl pokus nanečisto
+
+
+def hint_cases(n, lanes=3, seed=1):
+    """n řad čísel, každá třikrát (podmínky HINT_CONDS v náhodném pořadí uvnitř trojice).
+
+    Řady jsou stejné jako number_cases(n, lanes, seed); špatnou bránu nápovědy a pořadí trojice losuje vlastní generátor
+    (random.Random(f"hint-{seed}")). Úloha = (čísla, správná brána, třída rozdílu, podmínka, brána nápovědy nebo None, číslo řady)."""
+    rng, out = random.Random(f"hint-{seed}"), []
+    for row, (values, answer, gap) in enumerate(number_cases(n, lanes, seed)):
+        if values.count(max(values)) != 1 or values.index(max(values)) != answer:
+            raise RuntimeError("hint_cases: a row of numbers has no unique largest number")
+        wrong = rng.choice([i for i in range(lanes) if i != answer])
+        trio = [(tuple(values), answer, gap, "none", None, row), (tuple(values), answer, gap, "congruent", answer, row),
+                (tuple(values), answer, gap, "incongruent", wrong, row)]
+        rng.shuffle(trio)
+        out.extend(trio)
+    return out
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
