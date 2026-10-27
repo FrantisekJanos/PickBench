@@ -521,7 +521,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; čtení den
         self.assertEqual(page.count("  randomTask() { return this.task(ruleRow(rnd)); },"), 1)
         body = rule_body()
         for call in ("rollInject([d.truth], 3)", "ruleState(d.log, d.order)", "injectText(INJECT_NOTE, `gate_${inject + 1}`)", "variantOf(ruleQuestion(), v)",
-                     "a.gate_labeled?.choice", "ruleSummary(", "lanes: () => 3,", "panels: ['confPanel', 'trail']"):
+                     "a.gate_labeled?.choice", "ruleSummary(", "lanes: () => 3,", "panels: ['confPanel', 'trail', 'legend']"):
             self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
@@ -538,28 +538,92 @@ class Page(unittest.TestCase):              # scénář ve stránce; čtení den
     def test_feature_words_stay_centered_after_a_perseveration_row(self):   # drawRing s perseverací vrací zarovnání; další řada ho musí nastavit znovu
         body = rule_body()
         method = lambda name: re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
-        code = page_function("drawRuleFeature") + (
-            "const calls = [], LW = 100, W = 300, CAR_Y = 500, CELL = 50, RESULT = { bad: { color: '#f00' } };"
-            "const RULE_FEATURE_NAME = { color: 'rule.feature.color', shape: 'rule.feature.shape', count: 'rule.feature.count' };"
-            "const t = k => k === 'rule.persev' ? 'PERSEV' : k.startsWith('rule.feature.') ? 'F:' + k.slice(13) : k;"
+        page = page_source()
+        code = page_function("drawRuleFeature") + page_function("ruleLabel") + page_function("drawRowLabel") + (
+            "const calls = [], LW = 100, W = 300, H = 600, CAR_Y = 500, CELL = 50;" + re.search(r"\nconst RESULT = [^\n]*\n", page).group(0) +
+            "const RULE_FEATURE_NAME = { color: 'rule.feature.color', shape: 'rule.feature.shape', count: 'rule.feature.count' };" +
+            re.search(r"\nconst RULE_PICK_NAME = [^\n]*\n", page).group(0) +
+            "const t = (k, v) => k === 'rule.gate' ? 'G:' + v.name : k === 'rule.persev' ? 'PERSEV' : k.startsWith('rule.feature.') ? 'F:' + k.slice(13) : k;"
             "const ctx = new Proxy({ fillText(text) { calls.push([text, this.textAlign, this.textBaseline]); }, measureText: s => ({ width: s.length * 6 }) },"
             " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
-            "const base = { drawRing() {} }; const o = { __proto__: base," + method("drawItems") + "," + method("drawRing") + "};"
+            "const base = { drawRing() {} }; const o = { __proto__: base," + method("drawItems") + "};"
             "const row = (y, extra) => ({ y, order: ['color', 'shape', 'count'], truth: 0, inject: null, passLane: 1, result: null, cls: 'repeat', chosen: undefined, old: null, ...extra });"
             "o.drawItems({ rows: [row(1, { result: 'bad', cls: 'switch', chosen: 1, old: 1 }), row(4)] });"
             "process.stdout.write(JSON.stringify(calls));")
         calls = run_page_js(code)
-        self.assertIn(["PERSEV", "left", "middle"], calls)
-        words = [c for c in calls if c[0].startswith("F:")]
+        self.assertEqual([c for c in calls if c[0] == "PERSEV"], [])                   # perseverace je ve štítku pod řadou, ne slovo u kroužku
+        self.assertIn("rule.label.persev", [c[0] for c in calls])
+        words = [c for c in calls if c[0].startswith("G:F:")]
         self.assertEqual(len(words), 6)
         self.assertEqual({(a, b) for _, a, b in words}, {("center", "middle")})
 
     def test_drawing_writes_only_through_t_and_shows_the_log(self):
         self.assertNotIn("fillText(", page_function("drawRuleFeature"))                       # znaky bran jen kresbou
         body = rule_body()
-        for part in ("drawRing(r, y, rad) {", "drawTrail(g) {", "memoryTrailRow(g)", "ruleChanges(r.log)", "t('rule.persev')", "t('rule.logTitle')",
-                     "t(RULE_FEATURE_NAME[", "drawRuleFeature(ctx, ", "drawRuleFeature(tc, ", "r.chosen === r.old"):
+        for part in ("drawTrail(g) {", "memoryTrailRow(g)", "ruleChanges(r.log)", "t('rule.logTitle')",
+                     "t(RULE_FEATURE_NAME[", "drawRuleFeature(ctx, ", "drawRuleFeature(tc, ", "ruleLabel(r)", "t('rule.change')", "t('rule.gate'"):
             self.assertIn(part, body)
+        self.assertIn("r.chosen === r.old", page_function("ruleLabel"))
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek: platí, zvolil X a platí Y, perseverace, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "RULE_FEATURE_NAME", "RULE_PICK_NAME"))
+        code = "(() => {" + consts + page_function("ruleLabel") + (
+            "const r = (result, chosen, cls = 'repeat', old = null) => ({ order: ['color', 'shape', 'count'], truth: 2, result, chosen, cls, old });"
+            "return [r('ok', 2), r('bad', 1), r('bad', 0, 'switch', 0), r('bad', 1, 'switch', 0), r('bad', -1), r('late', undefined)].map(ruleLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ platí: počet", "✗ zvolil tvar, platí počet", "✗ perseverace: zvolil starý znak (barva), platí počet",
+                                                   "✗ zvolil tvar, platí počet", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[2]["text"], "✗ perseveration: picked the old feature (color), in force: count")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_gate_shows_the_match_and_the_pick(self):  # pod ikonou „shoda: barva“; obrys zvolené brány jen před průjezdem
+        from test_parity import run_js
+        body = rule_body()
+        method = lambda name: re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "RULE_FEATURE_NAME", "RULE_PICK_NAME"))
+        code = "(() => { const texts = [], strokes = [], LW = 100, W = 300, H = 600, CAR_Y = 540, CELL = 44;" + consts + (
+            page_function("drawRuleFeature") + page_function("ruleLabel") + page_function("drawRowLabel") +
+            "const ctx = new Proxy({ fillText(s) { texts.push(s); }, strokeRect(x) { strokes.push(Math.round(x)); }, measureText: s => ({ width: s.length * 6 }) },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const o = { drawRing() {}," + method("drawItems") + "};"
+            "const row = extra => ({ y: 3, order: ['color', 'shape', 'count'], truth: 2, inject: null, passLane: 1, result: null, cls: 'repeat', chosen: undefined, old: null, ...extra });"
+            "o.drawItems({ rows: [row({ chosen: 1 }), row({ y: 7 }), row({ y: -0.5, result: 'ok', chosen: 2 })] });"
+            "return { texts, strokes }; })()")
+        got = run_js(code, None)
+        self.assertEqual(got["texts"].count("shoda: barva"), 3)
+        self.assertIn("✓ platí: počet", got["texts"])
+        self.assertEqual(len(got["strokes"]), 1)                    # jen zvolená brána neprojeté řady s odpovědí
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_log_strip_title_change_and_question(self):  # deník: nadpis, slovo u čáry změny, otazník za posledním pokusem jen u neprojeté řady
+        from test_parity import run_js
+        drawtrail = re.search(r"\n  drawTrail\(g\) \{.*?\n  \},", rule_body(), re.S).group(0)[1:-1]
+        code = "(() => { const texts = [], W = 300; const tc = new Proxy({ fillText(s) { texts.push(s); } }, { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });" + (
+            "const c = { width: 300, height: 70, hidden: false, getContext: () => tc }, $ = () => c; let shown;"
+            "const memoryTrailRow = () => shown;" + page_function("drawRuleFeature") + "const o = {" + drawtrail + "};"
+            "shown = { log: [['color', true], ['color', true], ['color', true], ['shape', false]], result: null }; o.drawTrail({}); const a = texts.splice(0);"
+            "shown = { ...shown, result: 'ok' }; o.drawTrail({}); return [a, texts]; })()")
+        a, b = run_js(code, None)
+        self.assertEqual(a, ["deník: znak zvolené brány a výsledek, nejstarší vlevo", "změna pravidla", "?"])
+        self.assertEqual(b, ["deník: znak zvolené brány a výsledek, nejstarší vlevo", "změna pravidla"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_names_features_in_the_page_language(self):
+        from test_parity import run_js
+        page = page_source()
+        method = re.search(r"\n  describeLast\(task, res\) \{.*?\n  \},", rule_body(), re.S).group(0)[1:-1]
+        consts = re.search(r"\nconst RULE_FEATURE_NAME = [^\n]*\n", page).group(0)
+        code = "(() => {" + consts + "const o = {" + method + "};" + (
+            "return o.describeLast({ log: [['color', true], ['count', false]], order: ['count', 'color', 'shape'], truth: 1 }, { move: 0 }); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual(cs.split("\n"), ["deník:   barva ✓, počet ✗", "brány:   počet   barva   tvar", "zvoleno: brána 1 (počet)  (správně: brána 2 (barva))",
+                                          "model:   znaky dostává anglicky (color, shape, count)"])
+        self.assertEqual(en.split("\n")[0], "log:     color ✓, count ✗")
 
 
 if __name__ == "__main__":
