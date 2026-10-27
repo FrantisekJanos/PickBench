@@ -465,6 +465,19 @@ def lookahead_body():
     return page_source().split("\nconst lookahead = {", 1)[1].split("\n};\n", 1)[0]
 
 
+def route_js():
+    """Konstanty a trasa Dvou kroků ze stránky pro run_js (sdílený blok dodá lookaheadPath a spol.)."""
+    page = page_source()
+    consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("LOOKAHEAD_PITCH", "LOOKAHEAD_CLEAR"))
+    return consts + page_function("lookaheadRoute") + page_function("lookaheadAt") + page_function("lookaheadRouteOf") + (
+        "const HIT = (rows, s, lane) => rows.some((row, i) => [...row].some((c, j) => c === '#'"
+        " && Math.abs(s - i * LOOKAHEAD_PITCH) < LOOKAHEAD_CLEAR - 1e-9 && lane + 0.24 < j + 0.8 - 1e-9 && lane + 0.76 > j + 0.2 + 1e-9));")
+
+
+def lookahead_grids():
+    return [[list(rows), lane] for k in range(3, 9) for rows, lane, *_ in bench.lookahead_cases(60, k, seed=k)]
+
+
 class Page(unittest.TestCase):              # scénář ve stránce; prohledávání, generátor a rozbor hlídá tests/test_parity.py (Lookahead)
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_variant_fills_in_the_lanes_like_bench(self):
@@ -487,9 +500,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         self.assertEqual(page.count("  warmTask() { return this.task(lookaheadWarm(LANES), null, null); },"), 1)
         self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, lookaheadRow(LANES, rnd), 3)); },"), 1)
         self.assertEqual(page.count("  randomTask() { return this.task(lookaheadRow(LANES, rnd)); },"), 1)
-        steer = re.search(r"\n  steer\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)     # projetý blok, který ještě kryje auto, řídí po cestě; jinak pruh úlohy nebo cíl tahu
-        for part in ("-r.y <= (LOOKAHEAD_ROWS - 1) * LOOKAHEAD_THIN", "lookaheadCarLane(", "r.target ?? r.lane"):
-            self.assertIn(part, steer)
+        self.assertIn("this.carPose(g)", re.search(r"\n  steer\(g\) \{[^\n]*", lookahead_body()).group(0))     # pruh auta = poloha z trasy bloku
         body = lookahead_body()
         for call in ("rollInject([d.truth], 3)", "lookaheadState(d.rows, d.lane)", "injectText(INJECT_NOTE, LOOKAHEAD_MOVES[inject])",
                      "variantOf(lookaheadQuestion(LANES), v)", "a.move_blocked?.choice", "lookaheadErrorKind(", "lookaheadClass(", "laneOf: lookaheadLane"):
@@ -519,33 +530,11 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
             "[2, 0, 1, -1].forEach(m => o.tally(g, task, m)); return g; })()")
         self.assertEqual(run_js(code, None), {"byDepth": {"d1": [0, 0], "d2": [0, 0], "d3+": [1, 4]}, "errs": {"greedy": 1, "crash": 1, "other": 0, "invalid": 1}})
 
-    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
-    def test_car_drives_through_the_block_along_the_path_of_its_move(self):   # auto na plátně nejede přes kostky mimo nakreslenou cestu
-        from test_parity import run_js
-        page = page_source()
-        thin = re.search(r"\nconst LOOKAHEAD_THIN = [^\n]*\n", page).group(0)
-        steer = re.search(r"\n  steer\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)[1:-1]
-        code = "(() => {" + thin + page_function("lookaheadCarLane") + "const o = {" + steer + "};" + (
-            "const rows = " + json.dumps(list(EXAMPLE)) + ";"
-            "const done = (chosen, y) => ({ rows, lane: 1, chosen, y, result: chosen === 2 ? 'ok' : 'bad', passLane: 9 });"
-            "const lane = rows => { const g = { lane: -1, rows }; o.steer(g); return g.lane; };"
-            "const next = { rows, lane: 3, target: null, result: null, y: 2.4 };"
-            "return { path: lookaheadPath(rows, 1, 'right'), right: [0, -0.5, -1, -1.5].map(y => lane([done(2, y), next])),"
-            "  stay: lane([done(1, -0.5), next]), left: [-0.5, -1, -1.5].map(y => lane([done(0, y), next])), invalid: lane([done(-1, -1), next]),"
-            "  after: lane([done(2, -1.6), next]), answered: lane([done(2, -1.6), { ...next, target: 2 }]) }; })()")
-        out = run_js(code, None)
-        self.assertEqual(out["path"], [2, 3, 3, 3])
-        self.assertEqual(out["right"], out["path"])                     # správně: pruhy cesty lookaheadPath, tenká řada po tenké řadě
-        self.assertEqual(out["stay"], 9)                                # náraz: zůstane v passLane
-        self.assertEqual(out["left"], [0, 0, 0])                        # slepá ulička: cesta [0, 0], dál poslední pruh cesty
-        self.assertEqual(out["invalid"], 9)
-        self.assertEqual([out["after"], out["answered"]], [3, 2])       # po bloku pruh dalšího bloku, po odpovědi cíl tahu
-
     def test_drawing_writes_only_through_t_and_shows_both_paths(self):
         for name in ("drawLookahead", "drawLookaheadPath"):
             self.assertNotIn("fillText(", page_function(name), name)                          # blok a cesty bez textu
         body = lookahead_body()
-        for part in ("drawRing(r, y, rad) {", "lookaheadPath(r.rows, r.lane, r.answer)", "lookaheadPath(r.rows, r.lane, r.greedy)",
+        for part in ("drawRing(r, y, rad) {", "lookaheadRoute(r.rows, r.lane, r.answer)", "lookaheadRoute(r.rows, r.lane, r.greedy)",
                      "t('lookahead.deadEnd'", "t('answer.invalid')", "LOOKAHEAD_COLOR[lookaheadOutcome(", "drawLookahead(r, y)"):
             self.assertIn(part, body)
 
@@ -585,6 +574,75 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
                      "h = SC.carH ?? 44", "ctx.globalAlpha = pose?.alpha ?? 1;", "CAR_Y - h / 2", "CAR_Y - h * 13 / 44", "h * 10 / 44"):
             self.assertIn(part, draw)
         self.assertNotIn("CAR_Y - 22", draw)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_never_touches_a_cube_on_the_right_path(self):    # spec, bod 1: pro každou úlohu a každý okamžik průjezdu po správné cestě je auto mimo kostky
+        from test_parity import run_js
+        code = "(() => {" + route_js() + (
+            "return arg.map(([rows, lane]) => { const move = lookaheadBest(lookaheadValues(rows, lane))[0], route = lookaheadRoute(rows, lane, move);"
+            " const path = lookaheadPath(rows, lane, move); let touch = 0, wreck = 0;"
+            " for (let s = -LOOKAHEAD_CLEAR - LOOKAHEAD_TURN - 0.3; s <= LOOKAHEAD_SPAN + 0.3; s += 0.005) { const at = lookaheadAt(route, s); touch += HIT(rows, s, at.lane); wreck += at.wreck; }"
+            " return { stop: route.stop, touch, wreck, centers: path.map((_, i) => lookaheadAt(route, i * LOOKAHEAD_PITCH).lane), path }; }); })()")
+        for (rows, lane), got in zip(lookahead_grids(), run_js(code, lookahead_grids())):
+            with self.subTest(rows=rows, lane=lane):
+                self.assertIsNone(got["stop"])
+                self.assertEqual((got["touch"], got["wreck"]), (0, 0))
+                self.assertEqual(got["centers"], got["path"])             # ve středu řady i je auto v pruhu path[i]
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_wrong_move_stops_at_the_cube(self):          # náraz a slepá ulička: auto jede po tahu čistě až ke kostce, o kterou se zastaví; mimo silnici na kraji
+        from test_parity import run_js
+        code = "(() => {" + route_js() + (
+            "const out = []; for (const [rows, lane] of arg) { const v = lookaheadValues(rows, lane), best = lookaheadBest(v)[0];"
+            " for (const move of LOOKAHEAD_MOVES) { if (move === best) continue; const route = lookaheadRoute(rows, lane, move), st = route.stop; let clean = true;"
+            "  for (let s = -LOOKAHEAD_CLEAR - LOOKAHEAD_TURN - 0.3; s < st.at - 1e-6; s += 0.005) clean = clean && !HIT(rows, s, lookaheadAt(route, s).lane);"
+            "  const at = lookaheadAt(route, st.at + 0.01); out.push({ value: v[move], target: lane + LOOKAHEAD_SHIFT[move], k: rows[0].length, kind: st.kind, row: st.row, lane: st.lane,"
+            "   clean, wreck: at.wreck, touches: st.kind === 'offRoad' || (rows[st.row][st.lane] === '#' && Math.round(at.lane) === st.lane) }); } } return out; })()")
+        got = run_js(code, lookahead_grids())
+        self.assertTrue(got)
+        for x in got:
+            with self.subTest(x=x):
+                self.assertTrue(x["clean"] and x["wreck"] and x["touches"])
+                if x["value"] == 0:
+                    off = not 0 <= x["target"] < x["k"]
+                    self.assertEqual((x["kind"], x["row"], x["lane"]), ("offRoad" if off else "crash", 0, x["target"]))
+                else:
+                    self.assertEqual((x["kind"], x["row"]), ("deadEnd", x["value"]))
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_moves_between_blocks_in_the_free_gap(self):      # dva bloky po sobě (oba správně, druhý bez odpovědi): auto se kostky nedotkne ani mezi nimi
+        from test_parity import run_js
+        pose = re.search(r"\n  carPose\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)[1:-1]
+        code = "(() => {" + route_js() + "const o = {" + pose + "};" + (
+            "const out = []; for (let n = 0; n + 1 < arg.length; n += 7) { const [[r1, l1], [r2, l2]] = [arg[n], arg[n + 1]];"
+            " if (r1[0].length !== r2[0].length) continue;"
+            " for (const second of [true, false]) { let bad = 0, wreck = 0, holes = 0;"
+            "  const A = { rows: r1, lane: l1, chosen: LOOKAHEAD_MOVES.indexOf(lookaheadBest(lookaheadValues(r1, l1))[0]) };"
+            "  const B = { rows: r2, lane: l2, chosen: second ? LOOKAHEAD_MOVES.indexOf(lookaheadBest(lookaheadValues(r2, l2))[0]) : undefined };"
+            "  for (let d = -1; d <= LOOKAHEAD_GAP + LOOKAHEAD_SPAN - 0.5; d += 0.005) { A.y = -d; B.y = LOOKAHEAD_GAP - d;"
+            "   const p = o.carPose({ rows: [A, B], lane: l1 }); if (!Number.isFinite(p.lane)) holes++;"
+            "   bad += HIT(r1, d, p.lane) || (second && HIT(r2, d - LOOKAHEAD_GAP, p.lane)); wreck += p.alpha < 1 && (second || d - LOOKAHEAD_GAP < -LOOKAHEAD_CLEAR); }"
+            "  out.push([bad, wreck, holes]); } } return out; })()")
+        got = run_js(code, lookahead_grids())
+        self.assertGreater(len(got), 20)
+        self.assertEqual({tuple(x) for x in got}, {(0, 0, 0)})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_block_fits_the_gap_of_the_scenario(self):           # rozestup bloků pojme blok, dotyk auta a dvě změny pruhu (z konce bloku na pruh úlohy, na cíl tahu)
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("LOOKAHEAD_PITCH", "LOOKAHEAD_CLEAR"))
+        got = run_js("(() => {" + consts + "return [LOOKAHEAD_PITCH - 2 * LOOKAHEAD_CLEAR, LOOKAHEAD_GAP - LOOKAHEAD_SPAN - LOOKAHEAD_CLEAR - LOOKAHEAD_TURN,"
+                     " LOOKAHEAD_SPAN - ((LOOKAHEAD_ROWS - 1) * LOOKAHEAD_PITCH + LOOKAHEAD_CLEAR)]; })()", None)
+        self.assertGreaterEqual(got[0], 0.4)                         # mezera mezi řadami bloku na změnu pruhu
+        self.assertGreaterEqual(got[1], 0.5)                         # mezera mezi bloky
+        self.assertEqual(got[2], 0)                                  # SPAN počítá s LOOKAHEAD_ROWS řadami (sdílený blok stojí ve skriptu níž, číslo je opsané)
+        body = lookahead_body()
+        for part in ("gap: LOOKAHEAD_GAP,", "passAt: LOOKAHEAD_CLEAR,", "keep: LOOKAHEAD_SPAN + 1.6,", "carH: LOOKAHEAD_CAR * CELL,",
+                     "steer(g) { g.lane = Math.round(this.carPose(g).lane); }", "Math.max(0, task.row.y) + LOOKAHEAD_SPAN + 0.2"):
+            self.assertIn(part, body)
+        self.assertNotIn("LOOKAHEAD_THIN", page)
+        self.assertNotIn("lookaheadCarLane", page)
 
 
 if __name__ == "__main__":

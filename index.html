@@ -1891,52 +1891,79 @@ const barrier = {
 
 // ---------- scénář: dva kroky dopředu ----------
 // Každá řada je blok LOOKAHEAD_ROWS tenkých řad s překážkami (lookaheadRow ve sdíleném bloku), auto stojí v pruhu úlohy a model volí tah
-// pro nejbližší řadu: 0 left, 1 stay, 2 right, −1 neplatná odpověď. r.y je nejbližší tenká řada; blok se vyhodnotí, když dojede k autu.
-const LOOKAHEAD_THIN = 0.5;                                // výška tenké řady v polích: blok 2 pole, mezi bloky rozestup scénáře
+// pro nejbližší řadu: 0 left, 1 stay, 2 right, −1 neplatná odpověď. r.y je nejbližší tenká řada; blok se vyhodnotí, když se ho auto dotkne.
+// Souřadnice bloku s (pole) = −r.y: střed tenké řady i je v s = i · LOOKAHEAD_PITCH, auto má střed v s. Mezi řadami je mezera, ve které auto mění pruh.
+const LOOKAHEAD_PITCH = 1.25, LOOKAHEAD_CUBE = 0.35, LOOKAHEAD_CAR = 0.45, LOOKAHEAD_TURN = 0.6, LOOKAHEAD_GAP = 6;     // rozteč řad, výška kostky a auta, úsek na změnu pruhu před blokem, rozestup bloků (pole)
+const LOOKAHEAD_CLEAR = (LOOKAHEAD_CUBE + LOOKAHEAD_CAR) / 2, LOOKAHEAD_SPAN = 3 * LOOKAHEAD_PITCH + LOOKAHEAD_CLEAR;      // auto se dotkne řady o CLEAR před jejím středem; blok kryje auto do SPAN (3 = LOOKAHEAD_ROWS − 1: sdílený blok stojí ve skriptu níž)
 // jméno tahu v TEXTS (komentář nad řádkem: test čte řádek až po „};“ na jeho konci)
 const LOOKAHEAD_MOVE_NAME = { left: 'lookahead.move.left', stay: 'lookahead.move.stay', right: 'lookahead.move.right' };
-function lookaheadLane(r, move) {                          // pruh po tahu; mimo silnici zůstane auto na kraji (náraz ukáže kroužek)
+function lookaheadLane(r, move) {                          // pruh po tahu; mimo silnici zůstane auto na kraji
   return Math.min(r.rows[0].length - 1, Math.max(0, r.lane + LOOKAHEAD_SHIFT[LOOKAHEAD_MOVES[move]]));
 }
-// Pruh auta v projetém bloku r (r.y ≤ 0): pruh tenké řady, nad kterou auto právě je, na cestě lookaheadPath zvoleného tahu; za koncem kratší
-// cesty (slepá ulička) její poslední pruh. Náraz, tah mimo silnici, neplatná a pozdní odpověď: r.passLane (auto zůstane, kudy blokem vjelo).
-function lookaheadCarLane(r) {
-  const valid = Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LOOKAHEAD_MOVES.length;
-  const path = valid ? lookaheadPath(r.rows, r.lane, LOOKAHEAD_MOVES[r.chosen]) : [];
-  if (!path.length) return r.passLane;
-  const i = Math.floor(Math.max(0, -r.y) / LOOKAHEAD_THIN + 1e-9);      // 1e-9: −1,5 / 0,5 se po odečítání kroků nesmí zaokrouhlit pod 3
-  return path[Math.min(i, path.length - 1)];
+// Trasa auta blokem: uzly [s, pruh] (mezi nimi se pruh mění lineárně) a místo, kde auto skončí (stop), nebo null, když projede celý blok.
+// Tah se provede v úseku LOOKAHEAD_TURN před dotykem první řady; mezi řadami i − 1 a i auto přejede z pruhu cesty do dalšího v mezeře
+// od (i − 1)·P + CLEAR do i·P − CLEAR, kde se s kostkami nepřekrývá. move null (neplatná, pozdní, zatím bez odpovědi): auto zůstane v pruhu.
+// stop.kind: 'offRoad' tah mimo silnici, 'crash' kostka v první řadě, 'deadEnd' cesta končí před řadou stop.row, 'none' bez tahu.
+function lookaheadRoute(rows, lane, move) {
+  const c = LOOKAHEAD_CLEAR, P = LOOKAHEAD_PITCH, K = rows[0].length;
+  if (move === null) return { knots: [[-c, lane]], stop: { kind: 'none', row: null, lane, at: -c } };
+  const target = lane + LOOKAHEAD_SHIFT[move], car = Math.min(K - 1, Math.max(0, target)), path = lookaheadPath(rows, lane, move);
+  const knots = [[-c - LOOKAHEAD_TURN, lane], [-c, car]];
+  if (target !== car) return { knots, stop: { kind: 'offRoad', row: 0, lane: target, at: -c } };
+  if (!path.length) return { knots, stop: { kind: 'crash', row: 0, lane: target, at: -c } };
+  for (let i = 1; i < path.length; i++) knots.push([(i - 1) * P + c, path[i - 1]], [i * P - c, path[i]]);
+  const L = path.length;
+  return { knots, stop: L < LOOKAHEAD_ROWS ? { kind: 'deadEnd', row: L, lane: path[L - 1], at: L * P - c } : null };
+}
+// Poloha auta na trase v bodě s: pruh (lineárně mezi uzly, před prvním a za posledním drží) a vrak = auto už stojí za místem srážky.
+function lookaheadAt(route, s) {
+  const k = route.knots;
+  let lane = k[k.length - 1][1];
+  if (s <= k[0][0]) lane = k[0][1];
+  else for (let i = 1; i < k.length; i++) {
+    if (s > k[i][0]) continue;
+    const [s0, l0] = k[i - 1], [s1, l1] = k[i];
+    lane = s1 > s0 ? l0 + (l1 - l0) * (s - s0) / (s1 - s0) : l1;
+    break;
+  }
+  return { lane, wreck: route.stop !== null && s >= route.stop.at };
+}
+function lookaheadRouteOf(r) {                             // trasa bloku podle odpovědi modelu (neplatná, pozdní a zatím žádná = bez tahu)
+  return lookaheadRoute(r.rows, r.lane, Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 3 ? LOOKAHEAD_MOVES[r.chosen] : null);
 }
 
-// Podklad bloku a kostky překážek; tenká řada i má střed y − i · LOOKAHEAD_THIN · CELL (rows[0] nejblíž autu). Bez textu; globalAlpha nastaví volající.
+// Podklad bloku, pásy tenkých řad (mezi nimi podklad = mezera) a kostky; tenká řada i má střed y − i · LOOKAHEAD_PITCH · CELL (rows[0] nejblíž autu).
+// Bez textu; globalAlpha nastaví volající.
 function drawLookahead(r, y) {
-  const h = LOOKAHEAD_THIN * CELL;
-  ctx.fillStyle = '#2b333c'; ctx.fillRect(0, y - (LOOKAHEAD_ROWS - 0.5) * h, W, LOOKAHEAD_ROWS * h);
-  ctx.fillStyle = '#f85149';
+  const P = LOOKAHEAD_PITCH * CELL, h = LOOKAHEAD_CUBE * CELL;
+  ctx.fillStyle = '#2b333c'; ctx.fillRect(0, y - (LOOKAHEAD_SPAN + 0.3) * CELL, W, (LOOKAHEAD_SPAN + LOOKAHEAD_CLEAR + 0.6) * CELL);
   r.rows.forEach((row, i) => {
-    const cy = y - i * h;
+    const cy = y - i * P;
+    ctx.fillStyle = '#3a4450'; ctx.fillRect(0, cy - h / 2 - 2, W, h + 4);
+    ctx.fillStyle = '#f85149';
     [...row].forEach((c, j) => {
       if (c !== '#') return;
-      ctx.beginPath(); ctx.roundRect((j + 0.2) * LW, cy - 0.4 * h, 0.6 * LW, 0.8 * h, 4); ctx.fill();
+      ctx.beginPath(); ctx.roundRect((j + 0.2) * LW, cy - h / 2, 0.6 * LW, h, 3); ctx.fill();
     });
   });
 }
 
 const LOOKAHEAD_COLOR = { ok: '#3fb950', crash: '#f85149', deadEnd: '#8b9aa8', invalid: '#8b9aa8', late: '#8b9aa8' };     // kroužek podle lookaheadOutcome
 
-// Cesta bloku (lookaheadPath): od středu pruhu auta pod blokem středy polí cesty, posunutá o dx px (dvě cesty se na společném úseku nepřekryjí). Bez textu.
-function drawLookaheadPath(r, y, path, color, dx = 0) {
-  if (!path.length) return;
-  const h = LOOKAHEAD_THIN * CELL;
+// Trasa bloku (lookaheadRoute) jako lomená čára po uzlech, posunutá o dx px (dvě cesty se na společném úseku nepřekryjí); končí v místě srážky. Bez textu.
+function drawLookaheadPath(r, y, route, color, dx = 0) {
+  const end = route.stop ? route.stop.at : Infinity, pt = (s, lane) => [(lane + 0.5) * LW + dx, y - s * CELL];
+  const pts = route.knots.filter(([s]) => s < end).map(([s, lane]) => pt(s, lane));
+  if (route.stop) pts.push(pt(end, lookaheadAt(route, end).lane));
   ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo((r.lane + 0.5) * LW + dx, y + h);
-  path.forEach((lane, i) => ctx.lineTo((lane + 0.5) * LW + dx, y - i * h));
+  ctx.beginPath(); pts.forEach(([x, py], i) => ctx[i ? 'lineTo' : 'moveTo'](x, py));
   ctx.stroke(); ctx.lineJoin = 'miter';
 }
 
 const lookahead = {
   __proto__: rowBase,
   id: 'lookahead', lanesFree: true, minLanes: 3,
+  gap: LOOKAHEAD_GAP, passAt: LOOKAHEAD_CLEAR, keep: LOOKAHEAD_SPAN + 1.6, carH: LOOKAHEAD_CAR * CELL,      // bloky po 6 polích, vyhodnocení při dotyku, nižší auto
   get about() { return t('scenario.lookahead.about'); },
   panels: ['confPanel'], get extraTitle() { return t('scenario.lookahead.extraTitle'); },
   get extraTip() { return t('scenario.lookahead.extraTip'); },
@@ -1952,14 +1979,23 @@ const lookahead = {
   },
   rowTask(r) { return this.task(r, r); },
   laneOf: lookaheadLane,
-  // Dokud projetý blok kryje auto (jeho tenké řady ještě nedojely za auto), jede auto po cestě zvoleného tahu (lookaheadCarLane);
-  // jinak nejbližší neprojetý blok: před odpovědí pruh úlohy, po ní cíl tahu.
-  steer(g) {
-    const done = g.rows.find(r => r.result !== null && -r.y <= (LOOKAHEAD_ROWS - 1) * LOOKAHEAD_THIN);
-    if (done) { g.lane = lookaheadCarLane(done); return; }
-    const r = g.rows.find(r => r.result === null);
-    if (r) g.lane = r.target ?? r.lane;
+  // Poloha auta: v bloku (od úseku tahu po konec) po trase odpovědi, za srážkou vrak (poloprůhledně); mezi bloky plynule z konce projetého
+  // bloku do pruhu úlohy dalšího. Bez this: test ji vkládá do holého objektu.
+  carPose(g) {
+    const c = LOOKAHEAD_CLEAR, from = -c - LOOKAHEAD_TURN;
+    const cur = g.rows.find(r => -r.y >= from && -r.y <= LOOKAHEAD_SPAN);
+    if (cur) { const at = lookaheadAt(lookaheadRouteOf(cur), -cur.y); return { lane: at.lane, alpha: at.wreck ? 0.4 : 1 }; }
+    const prev = g.rows.filter(r => -r.y > LOOKAHEAD_SPAN).reduce((a, b) => a && a.y >= b.y ? a : b, null);
+    const next = g.rows.filter(r => -r.y < from).reduce((a, b) => a && a.y <= b.y ? a : b, null);
+    const a = prev && lookaheadAt(lookaheadRouteOf(prev), LOOKAHEAD_SPAN).lane, b = next && next.lane;
+    if (prev && next) {
+      const d1 = -prev.y - LOOKAHEAD_SPAN, d2 = next.y - c - LOOKAHEAD_TURN;
+      return { lane: a + (b - a) * d1 / (d1 + d2), alpha: 1 };
+    }
+    return { lane: prev ? a : next ? b : g.lane, alpha: 1 };
   },
+  steer(g) { g.lane = Math.round(this.carPose(g).lane); },
+  turnCells: (g, task) => Math.max(0, task.row.y) + LOOKAHEAD_SPAN + 0.2,      // po tazích projede auto celý blok, než přijde další otázka
   spawnRow(g, y) { g.rows.push(this.newRow(g, y, lookaheadRow(LANES, rnd), 3)); },
   randomTask() { return this.task(lookaheadRow(LANES, rnd)); },
   warmTask() { return this.task(lookaheadWarm(LANES), null, null); },
@@ -1979,8 +2015,8 @@ const lookahead = {
       drawLookahead(r, y);
       ctx.globalAlpha = 1;
       if (r.result !== null) {
-        drawLookaheadPath(r, y, lookaheadPath(r.rows, r.lane, r.answer), '#3fb950');
-        if (r.result === 'bad' && r.greedy !== r.answer) drawLookaheadPath(r, y, lookaheadPath(r.rows, r.lane, r.greedy), '#e69f00', 5);
+        drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.answer), '#3fb950');
+        if (r.result === 'bad' && r.greedy !== r.answer) drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.greedy), '#e69f00', 5);
       }
       this.drawRing(r, y, Math.min(LW * 0.26, 15));
     }
