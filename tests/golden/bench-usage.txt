@@ -9,6 +9,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -21,6 +22,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
+          python bench.py 100 --cruise tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -76,6 +78,13 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             odměnou je správná v třetině úloh, brána s nejvyšší šancí také; při 3 branách dá vyloučení obou skoro polovinu).
             Za řádkem modelu přesnost podle úrovně, pod ním regret = průměrná ztráta očekávané výplaty proti nejlepší
             bráně (neplatná odpověď 100 %) a chyby: nejvyšší odměna, nejvyšší šance, jiné, neplatné.
+--cruise:   tempomat: model volí stupeň rychlosti 1 až 7 podle tabulky v zadání. Stupeň určí vzdálenost překážky
+            (sedm pásem, 8 až 300 m), mokrá vozovka ho sníží o 1, náledí o 2, slabá mlha o 1, hustá o 2. N úloh
+            (výchozí 100), rovnoměrně ve čtyřech třídách: jen tabulka, povrch, mlha, obojí; polovina úloh leží u hranice pásma.
+            Za řádkem modelu přesnost podle třídy, pod ním přesnost u hranice a uvnitř pásma, ±1 stupeň, MAE (neplatná
+            odpověď = 6), příliš rychle, příliš pomalu a chyby: jen vzdálenost, vynechaná podmínka, každá podmínka
+            za 1 stupeň, sousední pásmo, jiné, neplatné. Levné zkratky (stálý stupeň, odhad podle počtu číslic) trefí
+            ve třídách povrch, mlha a obojí nejvýš asi třetinu úloh. S --lanes se nekombinuje.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.

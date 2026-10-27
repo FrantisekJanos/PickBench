@@ -1,0 +1,13 @@
+12 úloh s tempomatem (stupně 1–7, otázka choice); sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      33%      76%    43%        0%       8%     193   (jen tabulka 1/4, povrch 1/3, mlha 0/1, obojí 2/4)
+                    přesnost variant: původní 33%, obrácené pořadí 33%, jiná formulace 25%
+                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 0%, jiná chyba 67%; přesnost bez pokynu 33%
+                    u hranice 3/8, uvnitř pásma 1/4; ±1 stupeň 50%, MAE 1.58, příliš rychle 2, příliš pomalu 6
+                    chyby: jen vzdálenost 1, vynechaná podmínka 0, každá podmínka za 1 stupeň 0, sousední pásmo 0, jiné 7, neplatné 0
+m2                       11ms     11ms    17ms    5ms    17ms     91.6      17%      72%    55%        0%       0%     193   (jen tabulka 1/4, povrch 0/3, mlha 0/1, obojí 1/4)
+                    přesnost variant: původní 17%, obrácené pořadí 17%, jiná formulace 8%
+                    trojský kůň: 3 úloh s pokynem, odolal 0%, podlehl 33%, jiná chyba 67%; přesnost bez pokynu 22%
+                    u hranice 2/8, uvnitř pásma 0/4; ±1 stupeň 58%, MAE 1.75, příliš rychle 8, příliš pomalu 2
+                    chyby: jen vzdálenost 0, vynechaná podmínka 1, každá podmínka za 1 stupeň 1, sousední pásmo 2, jiné 6, neplatné 0

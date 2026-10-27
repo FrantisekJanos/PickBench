@@ -1,0 +1,6 @@
+12 úloh s tempomatem (stupně 1–7, otázka choice); sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      25%      76%    51%     193   (jen tabulka 1/4, povrch 1/3, mlha 0/1, obojí 1/4)
+                    u hranice 3/8, uvnitř pásma 0/4; ±1 stupeň 50%, MAE 1.58, příliš rychle 3, příliš pomalu 6
+                    chyby: jen vzdálenost 1, vynechaná podmínka 1, každá podmínka za 1 stupeň 0, sousední pásmo 0, jiné 7, neplatné 0

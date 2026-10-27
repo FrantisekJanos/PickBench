@@ -302,5 +302,88 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(lines), 2)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--cruise", "m1"])
+        self.assertEqual((a.n, a.cruise, a.lanes_given, a.models), (40, True, False, ["m1"]))
+        self.assertFalse(bench.parse_args(["m1"]).cruise)
+
+    def test_first_line_and_rows(self):
+        form = bench.CRUISE_FORM
+        for argv, cs, en in ((["1", "--cruise", "m1"], f"1 úloha s tempomatem (stupně 1–7, otázka {form})",
+                              f"1 task with the cruise control (levels 1–7, {form} question)"),
+                             (["7", "--cruise", "m1"], f"7 úloh s tempomatem (stupně 1–7, otázka {form})",
+                              f"7 tasks with the cruise control (levels 1–7, {form} question)"),
+                             (["3", "--cruise", "m1"], f"3 úlohy s tempomatem (stupně 1–7, otázka {form})",
+                              f"3 tasks with the cruise control (levels 1–7, {form} question)")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--cruise", "m1")[0].startswith("100 úloh s tempomatem"))          # výchozí počet úloh
+        en = self.cli("6", "--cruise", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 6)
+        self.assertRegex(en[3], r"^m1 .*   \(table only \d+/\d+, road \d+/\d+, fog \d+/\d+, both \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}near a boundary \d+/\d+, inside a band \d+/\d+; ±1 level \d+%, MAE \d+\.\d\d, "
+                                r"too fast \d+, too slow \d+$")
+        self.assertRegex(en[5], r"^ {20}errors: distance only \d+, condition left out \d+, each condition as 1 level \d+, "
+                                r"neighboring band \d+, other \d+, invalid \d+$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv, cs, en in ((["--cruise", "--lanes", "4", "m1"], "Volba --lanes se s --cruise nekombinuje.",
+                              "The --lanes option cannot be combined with --cruise."),
+                             (["--cruise", "--weighted", "m1"], "Volba --weighted jde jen s --queue.",
+                              "The --weighted option works only with --queue."),
+                             (["--cruise", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        others = ["--numbers", "--signs", "--memory", "--barrier", "--lookahead", "--rule", "--queue", "--bet"]
+        if "--hint" in bench.__doc__:                                     # Rozpory 10: --hint, jen když už je postavený
+            others.append("--hint")
+        for argv in ([["--cruise", other, "m1"] for other in others] + [["--cruise", "--lanes", "9", "m1"], ["--cruise"]]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_mirror_and_inject_work_with_cruise(self):
+        out, code = self.cli("8", "--cruise", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("u hranice "), lines[6])
+        self.assertTrue(lines[7].strip().startswith("chyby: jen vzdálenost "), lines[7])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py 100 --cruise tev1", text)
+            self.assertIn("\n--cruise:   ", text)
+            self.assertRegex(text, r"python bench\.py \[N\] --cruise .*\[--mirror\] \[--inject\] \[--deadline-ms L\] model1 model2 \.\.\.")
+
+
 if __name__ == "__main__":
     unittest.main()

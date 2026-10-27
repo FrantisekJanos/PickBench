@@ -9,6 +9,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -21,6 +22,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
+          python bench.py 100 --cruise tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -76,6 +78,13 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             odměnou je správná v třetině úloh, brána s nejvyšší šancí také; při 3 branách dá vyloučení obou skoro polovinu).
             Za řádkem modelu přesnost podle úrovně, pod ním regret = průměrná ztráta očekávané výplaty proti nejlepší
             bráně (neplatná odpověď 100 %) a chyby: nejvyšší odměna, nejvyšší šance, jiné, neplatné.
+--cruise:   tempomat: model volí stupeň rychlosti 1 až 7 podle tabulky v zadání. Stupeň určí vzdálenost překážky
+            (sedm pásem, 8 až 300 m), mokrá vozovka ho sníží o 1, náledí o 2, slabá mlha o 1, hustá o 2. N úloh
+            (výchozí 100), rovnoměrně ve čtyřech třídách: jen tabulka, povrch, mlha, obojí; polovina úloh leží u hranice pásma.
+            Za řádkem modelu přesnost podle třídy, pod ním přesnost u hranice a uvnitř pásma, ±1 stupeň, MAE (neplatná
+            odpověď = 6), příliš rychle, příliš pomalu a chyby: jen vzdálenost, vynechaná podmínka, každá podmínka
+            za 1 stupeň, sousední pásmo, jiné, neplatné. Levné zkratky (stálý stupeň, odhad podle počtu číslic) trefí
+            ve třídách povrch, mlha a obojí nejvýš asi třetinu úloh. S --lanes se nekombinuje.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -112,6 +121,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -124,6 +134,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
+          python bench.py 100 --cruise tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -179,6 +190,13 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             (the gate with the highest reward is right in a third of the tasks, and so is the gate with the highest chance; with
             3 gates ruling both out gives almost half). After the model row, the accuracy by level; below it regret = the mean
             loss of expected payout against the best gate (an invalid answer counts as 100%) and the errors: highest reward, highest chance, other, invalid.
+--cruise:   cruise control: the model picks a speed level from 1 to 7 by the table in the prompt. The distance to the
+            obstacle sets the level (seven bands, 8 to 300 m); a wet road takes 1 off, an icy road 2, light fog 1, dense
+            fog 2. N tasks (default 100), spread evenly over four classes: table only, road, fog, both; half of the tasks
+            lie near a band boundary. After the model row, the accuracy by class; below it the accuracy near a boundary
+            and inside a band, ±1 level, MAE (an invalid answer counts as 6), too fast, too slow and the errors: distance
+            only, condition left out, each condition as 1 level, neighboring band, other, invalid. Cheap shortcuts (a fixed
+            level, a guess by the number of digits) get at most about a third of the road, fog and both tasks right. Not with --lanes.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -2166,6 +2184,7 @@ def parse_args(argv):
     p.add_argument("--queue", action="store_true")
     p.add_argument("--weighted", action="store_true")
     p.add_argument("--bet", action="store_true")                 # výchozí 4 brány dosadí níže (Úprava 11.5b)
+    p.add_argument("--cruise", action="store_true")              # tempomat: pruhy ani brány nemá, --lanes končí hláškou
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -2368,7 +2387,7 @@ def print_public(r, worst=5):
 def main(argv):
     args = parse_args(argv)
     scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue,
-                 args.bet)
+                 args.bet, args.cruise)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
@@ -2388,6 +2407,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesRule"))
     if args.weighted and not args.queue:
         sys.exit(i18n.t("bench.err.weightedQueue"))
+    if args.cruise and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesCruise"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -2509,6 +2530,15 @@ def main(argv):
                 r = run_bet(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
                 print_row(r, bet_note(r))
                 print_bet(r)
+    elif args.cruise:
+        cases = cruise_cases(args.n or 100)
+        print(i18n.t("bench.intro.cruise", n=len(cases), form=CRUISE_FORM) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms)
+                print_row(r, cruise_note(r))
+                print_cruise(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")
