@@ -1052,6 +1052,7 @@ RULE_STICK = 0.8                                     # skript pokusů: po správ
 RULE_FORMS = ("labeled", "matched_by")
 RULE_FORM = "labeled"                                # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-26
 RULE_TRIES = 10000                                   # mez pokusů na jednu úlohu
+RULE_SWITCH_KINDS = ("crossed", "plain")             # přepnutí: staré pravidlo po změně dostalo ✗ (stačí vyloučení), nedostalo
 RULE_INSERT = 0.5                                    # skript ve třídě switch: před změnou místo náhodného znaku budoucí pravidlo
 
 
@@ -1090,6 +1091,21 @@ def rule_read(log):
     if len(candidates) != 1:
         return candidates, old, None
     return candidates, old, "repeat" if any(ok for _, ok, *_ in tail) else "switch" if old else "eliminate"
+
+
+def rule_switch_kind(log):
+    """Druh deníku se změnou: crossed, když znak starého pravidla dostal ✗ po poslední změně (nové pravidlo pak plyne
+    z ✗ samotných, bez pravidla o změně), jinak plain (staré pravidlo vyřadí jen pravidlo „mění se po třech správných“).
+    Deník bez změny vrací None."""
+    streak, change = 0, -1
+    for i, (feature, ok, *_) in enumerate(log):
+        streak = streak + 1 if ok else 0
+        if streak == RULE_STREAK:
+            change, streak = i, 0
+    if change < 0:
+        return None
+    old = log[change][0]
+    return "crossed" if any(f == old and not ok for f, ok, *_ in log[change + 1:]) else "plain"
 
 
 def rule_least(log):
@@ -1238,10 +1254,14 @@ def rule_summary(cases, choices, keys):
     """Přesnost podle třídy a podle délky deníku ({třída: [správně, celkem]}) a perseverace = [kolikrát model ve třídě
     switch zvolil bránu starého pravidla, počet úloh switch]. Neplatná odpověď se do perseverace nepočítá."""
     switch = [(old, choice) for (_, _, _, _, cls, old), choice in zip(cases, choices) if cls == "switch"]
+    at = [(case, choice) for case, choice in zip(cases, choices) if case[4] == "switch"]
+    kind = {k: [(case, choice) for case, choice in at if rule_switch_kind(case[0]) == k] for k in RULE_SWITCH_KINDS}
     return {"by_class": class_tally(RULE_CLASSES, [(top, cls) for _, _, _, top, cls, _ in cases], choices, keys),
             "by_length": class_tally(RULE_LENGTHS, [(top, "short" if len(log) <= RULE_SHORT else "long") for log, _, _, top, _, _ in cases],
                                      choices, keys),
-            "persev": [sum(choice == keys[old] for old, choice in switch), len(switch)]}
+            "persev": [sum(choice == keys[old] for old, choice in switch), len(switch)],
+            "by_switch": {k: [sum(choice == keys[case[3]] for case, choice in v), len(v)] for k, v in kind.items()},
+            "persev_by_switch": {k: [sum(choice == keys[case[5]] for case, choice in v), len(v)] for k, v in kind.items()}}
 
 
 # ---------- scénář: nejkratší fronta ----------
@@ -2536,6 +2556,9 @@ def print_rule(r):
     frac = lambda counts: f"{counts[0]}/{counts[1]}"
     print(" " * 20 + i18n.t("bench.rule.line", short=frac(r["by_length"]["short"]), long=frac(r["by_length"]["long"]),
                             persev=frac(r["persev"])), flush=True)
+    s, p = r["by_switch"], r["persev_by_switch"]
+    print(" " * 20 + i18n.t("bench.rule.switchLine", crossed=frac(s["crossed"]), crossedPersev=frac(p["crossed"]),
+                            plain=frac(s["plain"]), plainPersev=frac(p["plain"])), flush=True)
 
 
 def queue_note(r):

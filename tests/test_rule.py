@@ -334,6 +334,9 @@ class RunRule(unittest.TestCase):
                 self.assertEqual(sum(n for _, n in r["by_length"].values()), 120)
                 self.assertEqual(r["by_length"]["short"][1], sum(len(x[0]) <= 5 for x in c))
                 self.assertEqual(r["persev"], [0, switch])
+                kinds = [bench.rule_switch_kind(x[0]) for x in c if x[4] == "switch"]
+                self.assertEqual(r["by_switch"], {k: [kinds.count(k), kinds.count(k)] for k in bench.RULE_SWITCH_KINDS})
+                self.assertEqual(r["persev_by_switch"], {k: [0, kinds.count(k)] for k in bench.RULE_SWITCH_KINDS})
 
     def test_last_correct_model_perseverates(self):
         c = cases(120)
@@ -344,7 +347,21 @@ class RunRule(unittest.TestCase):
                 r = self.run_with(last_correct, "m", c, form=form)
                 self.assertEqual(r["by_class"]["switch"], [0, switch])
                 self.assertEqual(r["persev"], [switch, switch])
+                kinds = [bench.rule_switch_kind(x[0]) for x in c if x[4] == "switch"]
+                self.assertTrue(all(kinds.count(k) for k in bench.RULE_SWITCH_KINDS))   # v sadě jsou oba druhy
+                self.assertEqual(r["by_switch"], {k: [0, kinds.count(k)] for k in bench.RULE_SWITCH_KINDS})
+                self.assertEqual(r["persev_by_switch"], {k: [kinds.count(k), kinds.count(k)] for k in bench.RULE_SWITCH_KINDS})
                 self.assertEqual(r["by_class"]["repeat"][0], r["by_class"]["repeat"][1])
+
+    def test_switch_kind(self):          # crossed: staré pravidlo dostalo ✗ po poslední změně (stačí vyloučení podle ✗); plain: nedostalo
+        S = lambda f, n: [(f, True)] * n
+        self.assertEqual(bench.RULE_SWITCH_KINDS, ("crossed", "plain"))
+        self.assertEqual(bench.rule_switch_kind(S("shape", 3) + [("count", False), ("shape", False)]), "crossed")
+        self.assertEqual(bench.rule_switch_kind(S("shape", 3) + [("shape", False), ("count", False)]), "crossed")
+        self.assertEqual(bench.rule_switch_kind(S("shape", 3) + [("count", False)]), "plain")
+        self.assertEqual(bench.rule_switch_kind([("shape", False)] + S("color", 3) + [("count", False)]), "plain")   # ✗ tvaru je před změnou
+        self.assertEqual(bench.rule_switch_kind(S("color", 3) + S("shape", 3) + [("color", False), ("count", False)]), "plain")   # staré je až shape
+        self.assertIsNone(bench.rule_switch_kind([("color", False), ("shape", False)]))      # bez změny
 
     def test_invalid_answers_are_not_perseveration(self):
         c = cases(30)
@@ -392,15 +409,20 @@ class Lines(unittest.TestCase):
                 self.assertEqual(bench.rule_note(r), want)
 
     def test_line_in_both_languages(self):
-        r = {"by_length": {"short": [14, 40], "long": [30, 60]}, "persev": [21, 35]}
-        self.assertEqual(printed("cs", bench.print_rule, r), [" " * 20 + "deník krátký 14/40, dlouhý 30/60; perseverace 21/35"])
-        self.assertEqual(printed("en", bench.print_rule, r), [" " * 20 + "log short 14/40, long 30/60; perseveration 21/35"])
+        r = {"by_length": {"short": [14, 40], "long": [30, 60]}, "persev": [21, 35],
+             "by_switch": {"crossed": [2, 20], "plain": [1, 15]}, "persev_by_switch": {"crossed": [12, 20], "plain": [9, 15]}}
+        self.assertEqual(printed("cs", bench.print_rule, r), [" " * 20 + "deník krátký 14/40, dlouhý 30/60; perseverace 21/35",
+                                                             " " * 20 + "přepnutí, starý znak po změně s ✗: správně 2/20, perseverace 12/20; bez ✗: správně 1/15, perseverace 9/15"])
+        self.assertEqual(printed("en", bench.print_rule, r), [" " * 20 + "log short 14/40, long 30/60; perseveration 21/35",
+                                                             " " * 20 + "switch, old feature with ✗ after the change: correct 2/20, perseveration 12/20; without ✗: correct 1/15, perseveration 9/15"])
 
     def test_line_with_empty_classes(self):
-        r = {"by_class": {"repeat": [1, 1], "switch": [0, 0], "eliminate": [0, 0]}, "by_length": {"short": [1, 1], "long": [0, 0]}, "persev": [0, 0]}
+        r = {"by_class": {"repeat": [1, 1], "switch": [0, 0], "eliminate": [0, 0]}, "by_length": {"short": [1, 1], "long": [0, 0]}, "persev": [0, 0],
+             "by_switch": {"crossed": [0, 0], "plain": [0, 0]}, "persev_by_switch": {"crossed": [0, 0], "plain": [0, 0]}}
         with i18n.process("en"):
             self.assertEqual(bench.rule_note(r), "(repeat 1/1, switch 0/0, eliminate 0/0)")
-        self.assertEqual(printed("en", bench.print_rule, r), [" " * 20 + "log short 1/1, long 0/0; perseveration 0/0"])
+        self.assertEqual(printed("en", bench.print_rule, r), [" " * 20 + "log short 1/1, long 0/0; perseveration 0/0",
+                                                             " " * 20 + "switch, old feature with ✗ after the change: correct 0/0, perseveration 0/0; without ✗: correct 0/0, perseveration 0/0"])
 
 
 class Cli(unittest.TestCase):
@@ -445,10 +467,11 @@ class Cli(unittest.TestCase):
                 self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
         self.assertTrue(self.cli("--rule", "m1")[0].startswith("100 úloh se skrytým pravidlem"))      # výchozí počet úloh
         en = self.cli("6", "--rule", "m1", "--lang", "en")[0].splitlines()
-        self.assertEqual(len(en), 5)
+        self.assertEqual(len(en), 6)
         self.assertRegex(en[3], r"^m1 .*   \(repeat \d+/\d+, switch \d+/\d+, eliminate \d+/\d+\)$")
         self.assertRegex(en[4], r"^ {20}log short \d+/\d+, long \d+/\d+; perseveration \d+/\d+$")
-        self.assertEqual(len(self.cli("1", "--rule", "m1")[0].splitlines()), 5)            # jediná úloha: prázdné třídy 0/0
+        self.assertRegex(en[5], r"^ {20}switch, old feature with ✗ after the change: correct \d+/\d+, perseveration \d+/\d+; without ✗: correct \d+/\d+, perseveration \d+/\d+$")
+        self.assertEqual(len(self.cli("1", "--rule", "m1")[0].splitlines()), 6)            # jediná úloha: prázdné třídy 0/0
 
     def test_option_errors_in_both_languages(self):
         form_cs, form_en = "Volby --matched-by a --labeled jdou jen s --rule.", "The --matched-by and --labeled options work only with --rule."

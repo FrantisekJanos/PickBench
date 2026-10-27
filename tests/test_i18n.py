@@ -660,6 +660,7 @@ class PageTexts(unittest.TestCase):
                 self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.rule." + cls][code], (key, code))
                 self.assertIn(self.texts[key][code] + " = ", self.texts["scenario.rule.extraTip"][code], (key, code))
             self.assertEqual(self.texts["rule.line"][code], i18n.TEXTS["bench.rule.line"][code], code)
+            self.assertEqual(self.texts["rule.switchLine"][code], i18n.TEXTS["bench.rule.switchLine"][code], code)
             self.assertIn(self.texts["opt.scenario.rule"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.rule.extraTitle"][code], self.texts["scenario.rule.about"][code], code)
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami

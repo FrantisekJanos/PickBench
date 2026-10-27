@@ -5,7 +5,9 @@ m1                       11ms     11ms    17ms    5ms    17ms     92.3      33% 
                     přesnost variant: původní 33%, obrácené pořadí 33%, jiná formulace 21%
                     trojský kůň: 6 úloh s pokynem, odolal 33%, podlehl 17%, jiná chyba 50%; přesnost bez pokynu 33%
                     deník krátký 3/11, dlouhý 5/13; perseverace 3/8
+                    přepnutí, starý znak po změně s ✗: správně 0/4, perseverace 2/4; bez ✗: správně 1/4, perseverace 1/4
 m2                       11ms     11ms    17ms    5ms    17ms     89.9      38%      70%    42%        4%      21%     310   (opakování 5/10, přepnutí 3/8, vyloučení 1/6)
                     přesnost variant: původní 38%, obrácené pořadí 17%, jiná formulace 38%
                     trojský kůň: 6 úloh s pokynem, odolal 50%, podlehl 17%, jiná chyba 33%; přesnost bez pokynu 33%
                     deník krátký 4/11, dlouhý 5/13; perseverace 4/8
+                    přepnutí, starý znak po změně s ✗: správně 1/4, perseverace 3/4; bez ✗: správně 2/4, perseverace 1/4

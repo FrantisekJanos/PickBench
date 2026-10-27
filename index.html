@@ -653,6 +653,7 @@ const TEXTS = {
   'rule.class.switch': { cs: 'přepnutí', en: 'switch' },
   'rule.class.eliminate': { cs: 'vyloučení', en: 'eliminate' },
   'rule.line': { cs: 'deník krátký {short}, dlouhý {long}; perseverace {persev}', en: 'log short {short}, long {long}; perseveration {persev}' },
+  'rule.switchLine': { cs: 'přepnutí, starý znak po změně s ✗: správně {crossed}, perseverace {crossedPersev}; bez ✗: správně {plain}, perseverace {plainPersev}', en: 'switch, old feature with ✗ after the change: correct {crossed}, perseveration {crossedPersev}; without ✗: correct {plain}, perseveration {plainPersev}' },
   'rule.feature.color': { cs: 'barva', en: 'color' },
   'rule.feature.shape': { cs: 'tvar', en: 'shape' },
   'rule.feature.count': { cs: 'počet', en: 'count' },
@@ -2262,7 +2263,10 @@ const rule = {
     });
     const foot = el('tr'), cell = el('td', '', t('rule.line', { short: frac(sum.by_length.short), long: frac(sum.by_length.long), persev: frac(sum.persev) }));
     cell.colSpan = 3; foot.append(cell);
-    $('conf').replaceChildren(head, ...rows, foot);
+    const foot2 = el('tr'), cell2 = el('td', '', t('rule.switchLine', { crossed: frac(sum.by_switch.crossed), crossedPersev: frac(sum.persev_by_switch.crossed),
+      plain: frac(sum.by_switch.plain), plainPersev: frac(sum.persev_by_switch.plain) }));
+    cell2.colSpan = 3; foot2.append(cell2);
+    $('conf').replaceChildren(head, ...rows, foot, foot2);
   },
 };
 
@@ -2898,6 +2902,7 @@ const RULE_STREAK = 3;                                     // po tolika správn�
 const RULE_LOG = [3, 10];                                  // nejkratší a nejdelší deník
 const RULE_SHORT = 5;                                      // krátký deník: nejvýš tolik pokusů
 const RULE_LENGTHS = ['short', 'long'];
+const RULE_SWITCH_KINDS = ['crossed', 'plain'];               // přepnutí: staré pravidlo po změně dostalo ✗ (stačí vyloučení), nedostalo
 const RULE_STICK = 0.8;                                    // skript pokusů: po správném pokusu s touto pravděpodobností stejný znak
 const RULE_TRIES = 10000;                                  // mez pokusů na jednu úlohu
 const RULE_INSERT = 0.5;                                   // skript ve třídě switch: před změnou místo náhodného znaku budoucí pravidlo
@@ -2920,6 +2925,13 @@ function ruleRead(log) {
   }
   if (candidates.size !== 1) return [ordered(), old, null];
   return [ordered(), old, tail.some(([, ok]) => ok) ? 'repeat' : old ? 'switch' : 'eliminate'];
+}
+// Druh deníku se změnou: crossed = znak starého pravidla dostal ✗ po poslední změně, plain = nedostal; bez změny null.
+function ruleSwitchKind(log) {
+  const changes = ruleChanges(log);
+  if (!changes.length) return null;
+  const change = changes[changes.length - 1], old = log[change][0];
+  return log.slice(change + 1).some(([f, ok]) => f === old && !ok) ? 'crossed' : 'plain';
 }
 function ruleLeast(log) {                                  // zkratka „nejméně častý znak“ (shoda → pořadí RULE_FEATURES)
   const counts = f => log.filter(([feature]) => feature === f).length;
@@ -3032,7 +3044,11 @@ function ruleSummary(cases, choices, keys) {
   const switchAt = cases.map((c, i) => [c, choices[i]]).filter(([c]) => c.cls === 'switch');
   return { by_class: tally(RULE_CLASSES, c => c.cls),
            by_length: tally(RULE_LENGTHS, c => c.log.length <= RULE_SHORT ? 'short' : 'long'),
-           persev: [switchAt.filter(([c, choice]) => choice === keys[c.old]).length, switchAt.length] };
+           persev: [switchAt.filter(([c, choice]) => choice === keys[c.old]).length, switchAt.length],
+           by_switch: Object.fromEntries(RULE_SWITCH_KINDS.map(k => { const v = switchAt.filter(([c]) => ruleSwitchKind(c.log) === k);
+             return [k, [v.filter(([c, choice]) => choice === keys[c.truth]).length, v.length]]; })),
+           persev_by_switch: Object.fromEntries(RULE_SWITCH_KINDS.map(k => { const v = switchAt.filter(([c]) => ruleSwitchKind(c.log) === k);
+             return [k, [v.filter(([c, choice]) => choice === keys[c.old]).length, v.length]]; })) };
 }
 // Jen pro stránku, bench.py ji nemá: zahřívací úloha bez rand. 10 správných pokusů (nejdelší deník, „correct“ je delší než „wrong“):
 // color ×3, shape ×3, count ×3, color; platí color (brána 1), staré pravidlo count (brána 3), třída repeat. Odhad délky dotazu ve stepEstimate je horní.

@@ -3,3 +3,4 @@
 model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
 m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      78%    50%     253   (repeat 2/4, switch 0/2, eliminate 2/6)
                     log short 1/7, long 3/5; perseveration 2/2
+                    switch, old feature with ✗ after the change: correct 0/1, perseveration 1/1; without ✗: correct 0/1, perseveration 1/1

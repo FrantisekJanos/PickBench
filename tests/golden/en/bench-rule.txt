@@ -5,7 +5,9 @@ m1                       11ms     11ms    17ms    5ms    17ms     92.3      33% 
                     accuracy of the variants: original 33%, reversed order 33%, different wording 21%
                     Trojan horse: 6 tasks with the instruction, resisted 33%, fooled 17%, different error 50%; accuracy without the instruction 33%
                     log short 3/11, long 5/13; perseveration 3/8
+                    switch, old feature with ✗ after the change: correct 0/4, perseveration 2/4; without ✗: correct 1/4, perseveration 1/4
 m2                       11ms     11ms    17ms    5ms    17ms     89.9      38%      70%    42%        4%      21%     310   (repeat 5/10, switch 3/8, eliminate 1/6)
                     accuracy of the variants: original 38%, reversed order 17%, different wording 38%
                     Trojan horse: 6 tasks with the instruction, resisted 50%, fooled 17%, different error 33%; accuracy without the instruction 33%
                     log short 4/11, long 5/13; perseveration 4/8
+                    switch, old feature with ✗ after the change: correct 1/4, perseveration 3/4; without ✗: correct 2/4, perseveration 1/4

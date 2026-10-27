@@ -175,6 +175,9 @@ TEXTS = {
     "bench.rule.eliminate": {"cs": "vyloučení", "en": "eliminate"},
     "bench.rule.line": {"cs": "deník krátký {short}, dlouhý {long}; perseverace {persev}",
                         "en": "log short {short}, long {long}; perseveration {persev}"},
+    # Přepnutí podle druhu: starý znak dostal po změně ✗ (stačí vyloučení podle ✗), nebo ne (nutné pravidlo o změně).
+    "bench.rule.switchLine": {"cs": "přepnutí, starý znak po změně s ✗: správně {crossed}, perseverace {crossedPersev}; bez ✗: správně {plain}, perseverace {plainPersev}",
+                              "en": "switch, old feature with ✗ after the change: correct {crossed}, perseveration {crossedPersev}; without ✗: correct {plain}, perseveration {plainPersev}"},
     # Nejkratší fronta (--queue): popisek třídy v poznámce za řádkem modelu ({d} = 1, 2–3, 4+) a řádek chyb pod ním;
     # vážená věta (--weighted) má navíc volbu nejkratší fronty podle počtu vozidel.
     "bench.queue.gap": {"cs": "rozdíl {d}", "en": "difference {d}"},
