@@ -1947,6 +1947,64 @@ def hint_summary(cases, choices, keys):
             "pull": pull / pairs if pairs else float("nan"), "errors": errors, "flipped": flipped, "pairs": pairs}
 
 
+# ---------- scénář: co se změnilo ----------
+# Dva snímky stejné řady K pruhů (before, after), mezi nimi se změnil právě jeden pruh. Hodnoty v řadě jsou jednoho typu
+# (čísla 1000–9999, nebo slova o čtyřech písmenech), typ určuje třída; všechny mají stejnou délku zápisu.
+DIFF_WORDS = tuple("""
+road load toad goad read roar roam foam loan lean mean meat heat beat seat sent rent bent tent test best nest west vest rest
+boat coat goat moat most mist mast fast last list lost cost host hose nose rose rise wise wide ride rode code cope hope rope
+ripe pipe wipe wine mine fine line lane late gate game tame time tile tale sale male mile mole hole pole pile file fire hire
+wire wore more mare care cave wave save gave pave pale bale bake lake make take wake cake came same name tape cape
+farm form fork cork corn horn born barn bark park part dart dark hard harm warm worm word ward wand band hand land sand bend
+lend mend tend fend find kind mind bind wind wild mild bolt colt cold bold gold hold fold told toll tall ball call hall
+wall fall fill hill mill will well bell tell sell cell dell deer peer pear bear gear year near wear hear dear fear tear team
+beam seam ship shop stop step stem item
+""".split())
+DIFF_NUMBERS = (1000, 9999)
+DIFF_CLASSES = ("num1", "numnew", "word1", "wordnew")      # číslo o 1, jiné číslo, slovo o písmeno, jiné slovo
+DIFF_MODES = ("plain", "repeat")                           # řada bez opakování / hodnoty ze zásoby dvojic, opakují se
+DIFF_FORMS = ("dicts", "lists")
+DIFF_FORM = "lists"                                        # výchozí podoba stavu (plán, Volby po pokusu)
+DIFF_LANES = 8                                             # výchozí počet pruhů (plán, Volby po pokusu)
+DIFF_REPEAT_SHARE = 0.5                                    # podíl úloh v podobě repeat (plán, Volby po pokusu)
+DIFF_TRIES = 1000                                          # mez pokusů na jednu úlohu
+
+
+def diff_distance(a, b):
+    """Hammingova vzdálenost zápisu dvou hodnot stejné délky (počet míst, kde se znaky liší)."""
+    return sum(x != y for x, y in zip(str(a), str(b)))
+
+
+DIFF_NEIGHBOURS = {w: tuple(v for v in DIFF_WORDS if diff_distance(w, v) == 1) for w in DIFF_WORDS}     # slova o písmeno
+DIFF_FAR = {w: tuple(v for v in DIFF_WORDS if diff_distance(w, v) == 4) for w in DIFF_WORDS}           # slova bez společného písmene na místě
+
+
+def diff_pair(rng, cls):
+    """Dvojice příbuzných hodnot (stará, nová) třídy cls v náhodném pořadí."""
+    if cls == "num1":
+        x = 10 * rng.randrange(100, 1000) + rng.randrange(9)        # poslední číslice 0–8: +1 nemá přenos
+        pair = (x, x + 1)
+    elif cls == "numnew":
+        x = rng.randint(*DIFF_NUMBERS)
+        digits = str(x)
+        y = "".join(rng.choice([d for d in ("123456789" if i == 0 else "0123456789") if d != digits[i]]) for i in range(4))
+        pair = (x, int(y))
+    elif cls == "word1":
+        x = rng.choice(DIFF_WORDS)
+        pair = (x, rng.choice(DIFF_NEIGHBOURS[x]))
+    elif cls == "wordnew":
+        x = rng.choice(DIFF_WORDS)
+        pair = (x, rng.choice(DIFF_FAR[x]))
+    else:
+        raise RuntimeError(f"diff_pair: unknown class {cls}")
+    return pair if rng.random() < 0.5 else pair[::-1]
+
+
+def diff_pool_pairs(lanes):
+    """Počet dvojic v zásobě podoby repeat; zásoba má aspoň K + 2 hodnot."""
+    return (lanes + 3) // 2
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
