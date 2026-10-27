@@ -273,5 +273,88 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(printed("en", bench.print_queue, r)), 1)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--queue", "m1"])
+        self.assertEqual((a.n, a.queue, a.weighted, a.lanes, a.models), (40, True, False, 4, ["m1"]))
+        a = bench.parse_args(["--weighted", "--queue", "--lanes", "2", "m1"])
+        self.assertEqual((a.queue, a.weighted, a.lanes), (True, True, 2))
+        self.assertEqual(bench.parse_args(["m1"]).lanes, 3)
+
+    def test_first_line_and_rows(self):
+        for argv, cs, en in ((["1", "--queue", "m1"], "1 úloha u mýtné brány (fronty bez vah), 4 pruhy",
+                              "1 task at a toll gate (unweighted queues), 4 lanes"),
+                             (["7", "--queue", "--weighted", "--lanes", "2", "m1"], "7 úloh u mýtné brány (vážené fronty), 2 pruhy",
+                              "7 tasks at a toll gate (weighted queues), 2 lanes"),
+                             (["3", "--lanes", "5", "--queue", "m1"], "3 úlohy u mýtné brány (fronty bez vah), 5 pruhů",
+                              "3 tasks at a toll gate (unweighted queues), 5 lanes")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--queue", "m1")[0].startswith("100 úloh u mýtné brány"))          # výchozí počet úloh
+        en = self.cli("6", "--queue", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 5)
+        self.assertRegex(en[3], r"^m1 .*   \(difference 1 \d+/\d+, difference 2–3 \d+/\d+, difference 4\+ \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}errors: shortest text \d+, other \d+, invalid \d+$")
+        en = self.cli("6", "--queue", "--weighted", "m1", "--lang", "en")[0].splitlines()
+        self.assertRegex(en[4], r"^ {20}errors: shortest by count \(unweighted\) \d+, shortest text \d+, other \d+, invalid \d+$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv in (["6", "--weighted", "m1"], ["--weighted", "--numbers", "m1"], ["--lookahead", "--weighted", "m1"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", "Volba --weighted jde jen s --queue."))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", "The --weighted option works only with --queue."))
+        for argv, cs, en in ((["--queue", "--rows", "m1"], "Volby --rows a --blocked jdou jen s --lookahead.",
+                              "The --rows and --blocked options work only with --lookahead."),
+                             (["--queue", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--queue", "--numbers", "m1"], ["--queue", "--lookahead", "m1"], ["--queue", "--rule", "m1"],
+                     ["--queue", "--lanes", "1", "m1"], ["--queue", "--lanes", "9", "m1"], ["--queue"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_mirror_and_inject_work_with_queue(self):
+        out, code = self.cli("8", "--queue", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("chyby: nejkratší text "), lines[6])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --queue --weighted tev1", text)
+            self.assertIn("\n--queue:    ", text)
+            self.assertIn("\n--weighted:  ", text)
+
+
 if __name__ == "__main__":
     unittest.main()

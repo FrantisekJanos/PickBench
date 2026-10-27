@@ -7,6 +7,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -17,6 +18,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
+          python bench.py 100 --queue --weighted tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -57,6 +59,14 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --labeled, --matched-by:  only with --rule: the form of the state; the log is the same in both. labeled = each gate
             says only the feature it shares with the sample, the model sees no cards; matched_by = the sample card and the
             cards of the gates, so the model has to find the shared feature itself. Without the option: labeled.
+--queue:    shortest queue: a car comes to a toll gate with K lanes (default 4, 2 to 8), 1 to 12 vehicles wait in each lane,
+            and the model picks the lane with the shortest queue; it is always unique. N tasks (default 100), spread evenly
+            by the difference between the shortest and the second shortest queue (1, 2–3, 4+). After the model row, the
+            accuracy by difference; below it the errors: shortest text (the lane whose list of vehicles is shortest as text),
+            other, invalid. At differences 1 and 2–3 the shortest text is right in a third of the tasks (half with 2 lanes), at 4+ almost always.
+--weighted:  only with --queue: a truck, a bus and a tractor count as three vehicles each, any other vehicle as one;
+            in half of the tasks the shortest queue by the number of vehicles is another lane. The error line also counts
+            picks of the shortest queue by count (unweighted). The tasks differ from those without the option.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

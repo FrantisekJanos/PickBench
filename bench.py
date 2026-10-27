@@ -7,6 +7,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -17,6 +18,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
+          python bench.py 100 --queue --weighted tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -57,6 +59,14 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --labeled, --matched-by:  jen s --rule: podoba stavu, deník je v obou stejný. labeled = každá brána říká jen znak,
             ve kterém se shoduje se vzorem, karty model nevidí; matched_by = karta vzoru a karty bran, znak shody
             musí model najít sám. Bez volby platí labeled.
+--queue:    nejkratší fronta: auto přijíždí k mýtné bráně s K pruhy (výchozí 4, 2 až 8), v každém pruhu čeká 1 až 12 vozidel
+            a model volí pruh s nejkratší frontou; ta je vždy jediná. N úloh (výchozí 100), rovnoměrně podle rozdílu
+            nejkratší a druhé nejkratší fronty (1, 2–3, 4+). Za řádkem modelu přesnost podle rozdílu, pod ním chyby:
+            nejkratší text (pruh, jehož seznam vozidel je jako text nejkratší), jiné, neplatné. U rozdílů 1 a 2–3 je
+            nejkratší text správně v třetině úloh (při 2 pruzích v polovině), u rozdílu 4+ skoro vždy.
+--weighted:  jen s --queue: nákladní auto (truck), autobus (bus) a traktor (tractor) se počítají za tři vozidla, ostatní
+            za jedno; v polovině úloh je nejkratší fronta podle počtu vozidel jiný pruh. Řádek chyb navíc počítá volbu
+            nejkratší fronty podle počtu (bez vah). Úlohy jsou jiné než bez volby.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -91,6 +101,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -101,6 +112,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
+          python bench.py 100 --queue --weighted tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -141,6 +153,14 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --labeled, --matched-by:  only with --rule: the form of the state; the log is the same in both. labeled = each gate
             says only the feature it shares with the sample, the model sees no cards; matched_by = the sample card and the
             cards of the gates, so the model has to find the shared feature itself. Without the option: labeled.
+--queue:    shortest queue: a car comes to a toll gate with K lanes (default 4, 2 to 8), 1 to 12 vehicles wait in each lane,
+            and the model picks the lane with the shortest queue; it is always unique. N tasks (default 100), spread evenly
+            by the difference between the shortest and the second shortest queue (1, 2–3, 4+). After the model row, the
+            accuracy by difference; below it the errors: shortest text (the lane whose list of vehicles is shortest as text),
+            other, invalid. At differences 1 and 2–3 the shortest text is right in a third of the tasks (half with 2 lanes), at 4+ almost always.
+--weighted:  only with --queue: a truck, a bus and a tractor count as three vehicles each, any other vehicle as one;
+            in half of the tasks the shortest queue by the number of vehicles is another lane. The error line also counts
+            picks of the shortest queue by count (unweighted). The tasks differ from those without the option.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -1804,6 +1824,8 @@ def parse_args(argv):
     p.add_argument("--rule", action="store_true")
     p.add_argument("--matched-by", action="store_true")
     p.add_argument("--labeled", action="store_true")
+    p.add_argument("--queue", action="store_true")
+    p.add_argument("--weighted", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -1815,7 +1837,7 @@ def parse_args(argv):
     a.models = a.rest
     a.lanes_given = a.lanes is not None              # závora pruhy ani brány nemá: --lanes s --barrier končí hláškou
     if a.lanes is None:
-        a.lanes = 4 if a.memory or a.lookahead else 3      # paměťová stopa: 4 brány, dva kroky dopředu: 4 pruhy (spec)
+        a.lanes = 4 if a.memory or a.lookahead or a.queue else 3      # paměťová stopa: 4 brány, dva kroky dopředu a fronta: 4 pruhy (spec)
     return a
 
 
@@ -1980,7 +2002,7 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule)
+    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
@@ -1998,6 +2020,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.formRule"))
     if args.rule and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesRule"))
+    if args.weighted and not args.queue:
+        sys.exit(i18n.t("bench.err.weightedQueue"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -2098,6 +2122,18 @@ def main(argv):
                 r = run_rule(m, cases, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, rule_note(r))
                 print_rule(r)
+    elif args.queue:
+        cases = queue_cases(args.n or 100, args.lanes, args.weighted)     # vážené fronty jsou jiné úlohy: třída plyne z vážené délky
+        if args.weighted:
+            print(i18n.t("bench.intro.queueWeighted", n=len(cases), lanes=args.lanes) + "\n")
+        else:
+            print(i18n.t("bench.intro.queue", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_queue(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.weighted)
+                print_row(r, queue_note(r))
+                print_queue(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

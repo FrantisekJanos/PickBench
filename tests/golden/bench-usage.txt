@@ -7,6 +7,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -17,6 +18,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --barrier tev1
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
+          python bench.py 100 --queue --weighted tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -57,6 +59,14 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --labeled, --matched-by:  jen s --rule: podoba stavu, deník je v obou stejný. labeled = každá brána říká jen znak,
             ve kterém se shoduje se vzorem, karty model nevidí; matched_by = karta vzoru a karty bran, znak shody
             musí model najít sám. Bez volby platí labeled.
+--queue:    nejkratší fronta: auto přijíždí k mýtné bráně s K pruhy (výchozí 4, 2 až 8), v každém pruhu čeká 1 až 12 vozidel
+            a model volí pruh s nejkratší frontou; ta je vždy jediná. N úloh (výchozí 100), rovnoměrně podle rozdílu
+            nejkratší a druhé nejkratší fronty (1, 2–3, 4+). Za řádkem modelu přesnost podle rozdílu, pod ním chyby:
+            nejkratší text (pruh, jehož seznam vozidel je jako text nejkratší), jiné, neplatné. U rozdílů 1 a 2–3 je
+            nejkratší text správně v třetině úloh (při 2 pruzích v polovině), u rozdílu 4+ skoro vždy.
+--weighted:  jen s --queue: nákladní auto (truck), autobus (bus) a traktor (tractor) se počítají za tři vozidla, ostatní
+            za jedno; v polovině úloh je nejkratší fronta podle počtu vozidel jiný pruh. Řádek chyb navíc počítá volbu
+            nejkratší fronty podle počtu (bez vah). Úlohy jsou jiné než bez volby.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
