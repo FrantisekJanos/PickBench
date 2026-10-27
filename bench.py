@@ -1885,6 +1885,19 @@ def hint_cases(n, lanes=3, seed=1):
     return out
 
 
+def hint_state(values, hint):
+    """Stav jako u číselných duelů; s nápovědou navíc pole HINT_FIELD s klíčem brány jako poslední klíč."""
+    state = dict(zip(gate_keys(len(values)), values))
+    if hint is not None:
+        state[HINT_FIELD] = f"gate_{hint + 1}"
+    return state
+
+
+def hint_question(lanes):
+    """Otázka podoby silent: stejná jako u číselných duelů, pole nápovědy nezmiňuje."""
+    return number_question(lanes)
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",

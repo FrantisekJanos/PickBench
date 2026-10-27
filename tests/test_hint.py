@@ -117,5 +117,24 @@ class Generator(unittest.TestCase):
             bench.hint_cases(1)
 
 
+class StateAndQuestion(unittest.TestCase):
+    def test_state_without_a_hint_is_the_numbers_state(self):
+        for values in ((10, 30, 20), (1, 2), tuple(range(1, 9))):
+            with self.subTest(values=values):
+                self.assertEqual(json.dumps(bench.hint_state(values, None)), json.dumps(dict(zip(bench.gate_keys(len(values)), values))))
+
+    def test_hint_is_the_last_key(self):
+        self.assertEqual(json.dumps(bench.hint_state((4120, 3987, 1203), 1)),
+                         '{"gate_1": 4120, "gate_2": 3987, "gate_3": 1203, "most_popular": "gate_2"}')
+
+    def test_question_is_the_numbers_question(self):
+        for lanes in range(2, 9):
+            with self.subTest(lanes=lanes):
+                q = bench.hint_question(lanes)
+                self.assertEqual(json.dumps(q), json.dumps(bench.number_question(lanes)))
+                self.assertEqual(bench.variant(q, 2)["largest"]["instructions"], bench.ALT["largest"])
+                self.assertEqual(list(bench.variant(q, 1)["largest"]["criteria"]), bench.gate_keys(lanes)[::-1])
+
+
 if __name__ == "__main__":
     unittest.main()
