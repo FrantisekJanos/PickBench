@@ -1269,6 +1269,28 @@ def queue_question(lanes, weighted=False):
     return {key: {"type": "choice", "instructions": instructions, "criteria": position_criteria(lane_keys(lanes), "Lane")}}
 
 
+def queue_errors(cases, choices, keys, weighted=False):
+    """Rozbor chybných voleb; správná volba se nepočítá nikam.
+
+    count (jen s vahami): zvolený je jediný pruh s nejméně vozidly podle počtu bez vah.
+    text: zvolený je pruh s nejkratším zápisem seznamu.
+    other: ostatní chybné volby.
+    invalid: volba, která není řetězec z keys (None, jiný řetězec, jiný typ)."""
+    counts = {"count": 0, "text": 0, "other": 0, "invalid": 0} if weighted else {"text": 0, "other": 0, "invalid": 0}
+    for (_, answer, _, text, count), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in keys):
+            counts["invalid"] += 1
+        elif choice == keys[answer]:
+            continue
+        elif weighted and count is not None and choice == keys[count]:
+            counts["count"] += 1
+        elif choice == keys[text]:
+            counts["text"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1720,6 +1742,19 @@ def run_rule(model, cases, mirror=False, inject=False, deadline=None, form=None)
     items = [(with_note(rule_state(case, form), note), {keys[case[3]]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(rule_summary(cases, choices, keys))                 # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_queue(model, cases, lanes=4, mirror=False, inject=False, deadline=None, weighted=False):
+    keys, question = lane_keys(lanes), queue_question(lanes, weighted)
+    ask(model, queue_state(cases[0][0]), question)               # zahřátí, nepočítá se
+    targets = inject_plan([{keys[answer]} for _, answer, _, _, _ in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(queue_state(queues), note), {keys[answer]}, "")
+             for (queues, answer, _, _, _), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_gap"] = class_tally(QUEUE_GAPS, [(answer, cls) for _, answer, cls, _, _ in cases], choices, keys)
+    r["errors"] = queue_errors(cases, choices, keys, weighted)   # z původní varianty zadání, jako přesnost
     return r
 
 

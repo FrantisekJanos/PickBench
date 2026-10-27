@@ -185,5 +185,67 @@ class StateAndQuestion(unittest.TestCase):
                 self.assertEqual(bench.variant(q, 2)[key]["instructions"], bench.ALT[key].format(lanes=lanes))
 
 
+class RunQueue(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_queue(*args, **kw)
+
+    def test_perfect_model(self):
+        for weighted in (False, True):
+            with self.subTest(weighted=weighted):
+                r = self.run_with(solver(weighted), "m", cases(120, 4, weighted), 4, weighted=weighted)
+                self.assertEqual(r["acc"], 1)
+                self.assertEqual(list(r["by_gap"]), list(bench.QUEUE_GAPS))
+                self.assertEqual(sum(n for _, n in r["by_gap"].values()), 120)
+                self.assertTrue(all(ok == n > 0 for ok, n in r["by_gap"].values()))
+                zero = {"count": 0, "text": 0, "other": 0, "invalid": 0} if weighted else {"text": 0, "other": 0, "invalid": 0}
+                self.assertEqual(json.dumps(r["errors"]), json.dumps(zero))          # i pořadí klíčů
+
+    def test_shortest_text_model(self):
+        c = cases(120, 4)
+        r = self.run_with(lambda state: f"lane_{bench.queue_text(queues_of(state)) + 1}", "m", c, 4)
+        wrong = sum(text != answer for _, answer, _, text, _ in c)
+        self.assertGreater(wrong, 0)
+        self.assertEqual(r["errors"], {"text": wrong, "other": 0, "invalid": 0})
+        self.assertEqual(r["acc"], (120 - wrong) / 120)
+
+    def test_counting_without_weights_in_a_weighted_run(self):           # nejkratší podle počtu má přednost před nejkratším textem
+        c = cases(120, 4, True)
+        r = self.run_with(solver(False), "m", c, 4, weighted=True)
+        differ = sum(count != answer for _, answer, _, _, count in c)
+        self.assertGreater(differ, 0)
+        self.assertEqual(r["errors"], {"count": differ, "text": 0, "other": 0, "invalid": 0})
+        self.assertEqual(r["acc"], (120 - differ) / 120)
+
+    def test_invalid_answers(self):
+        c = cases(30, 4)
+        for answer in (None, "lane_9", "gate_1", ["lane_1"]):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", c, 4)
+                self.assertEqual((r["acc"], r["errors"]), (0, {"text": 0, "other": 0, "invalid": 30}))
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c, sent = bench.queue_cases(5, 6, True), []
+
+        def post(model, payload):
+            sent.append(payload)
+            return {"answers": {next(iter(payload["questions"])): {"choice": "lane_1", "confidence": 0.5}}}, 10.0
+        with mock.patch.object(bench, "post", post):
+            bench.run_queue("m", c, 6, weighted=True)
+        self.assertEqual(len(sent), 6)                                          # zahřátí a pět úloh
+        self.assertEqual([p["state"] for p in sent], [bench.queue_state(c[0][0])] + [bench.queue_state(q) for q, *_ in c])
+        self.assertTrue(all(p["questions"] == bench.queue_question(6, True) for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40, 4)
+        r = self.run_with(solver(False), "m", c, 4, mirror=True)
+        self.assertEqual((r["stab"], r["acc"]), (1, 1))
+        r = self.run_with(obedient(solver(False)), "m", c, 4, inject=True)
+        self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+        self.assertEqual(r["acc"], 0.75)
+        e = r["errors"]
+        self.assertEqual((e["text"] + e["other"], e["invalid"]), (10, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
