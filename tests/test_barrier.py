@@ -574,7 +574,7 @@ class Page(unittest.TestCase):                                         # scéná
     def test_scenario_is_offered_selected_and_wired(self):
         page = page_source()
         self.assertEqual(page.count('<option value="barrier" data-i18n="opt.scenario.barrier"></option>'), 1)
-        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead }[v];"), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"), 1)
         self.assertEqual(page.count("// ---------- scénář: závora ----------"), 1)
         # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
         self.assertEqual(page.count("  warmTask() { return this.task(BARRIER_WARM, null, null); },"), 1)

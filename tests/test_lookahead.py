@@ -458,7 +458,7 @@ class Cli(unittest.TestCase):
             self.assertIn(bench.LOOKAHEAD_FORM + ".", text)
 
 
-REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead }[v];"   # úkol B4 přidá „, rule“
+REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"
 
 
 def lookahead_body():

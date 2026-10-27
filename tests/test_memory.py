@@ -474,7 +474,7 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertEqual(page.count('<div id="stage"><div id="road-col"><canvas id="road" width="300" height="600"></canvas>'
                                     '<canvas id="trail" width="300" height="70" hidden></canvas></div>'), 1)
         self.assertEqual(page.count("#road-col:has(#trail:not([hidden])) canvas#road { height:calc((min(600px, 100vh - 96px) - 8px) * 600 / 670); }"), 1)
-        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead }[v];"), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"), 1)
         self.assertEqual(page.count("['queue', 'legend', 'confPanel', 'trail'].forEach("), 1)        # pás se schovává jako ostatní panely scénáře
         self.assertEqual(page.count("SC.drawTrail?.(g);"), 1)
         self.assertEqual(page.count("drawTrail(g) {"), 1)                                         # háček má jen tento scénář

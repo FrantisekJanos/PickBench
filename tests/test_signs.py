@@ -411,7 +411,7 @@ class Page(unittest.TestCase):                                         # scéná
     def test_scenario_is_offered_selected_and_draws_its_vehicle(self):
         page = (ROOT / "index.html").read_text(encoding="utf-8")
         self.assertEqual(page.count('<option value="signs" data-i18n="opt.scenario.signs"></option>'), 1)
-        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead }[v];"), 1)
+        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"), 1)
         self.assertEqual(page.count("SC.drawVehicle?.(g, x, w);"), 1)
         self.assertEqual(page.count("drawVehicle(g, x, w) {"), 2)                    # háček mají zákazy (štítek vozidla) a závora (brzdová světla)
         body = page.replace("\r\n", "\n").split("\nconst signs = {", 1)[1].split("\n  warmTask() {", 1)[1].split("\n  },", 1)[0].split("\n", 1)[1]
