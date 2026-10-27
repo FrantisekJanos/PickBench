@@ -1208,6 +1208,53 @@ def queue_text_share(lanes):
     return 1 / 2 if lanes == 2 else 1 / 3
 
 
+def queue_case(rng, lanes, cls, weighted=False):
+    """Jedna úloha: (fronty, správný pruh, třída, pruh nejkratšího textu, jediný pruh s nejméně vozidly nebo None).
+    Předem se losuje, jestli má nejkratší text trefit správný pruh (queue_text_share, mimo gap4+), s vahami, jestli
+    má být nejkratší fronta podle počtu jiná (QUEUE_COUNT_SHARE), a s vahami při K >= 3 mimo gap4+, jestli má trefit
+    pruh s nejméně těžkými vozidly (queue_text_share). Při K = 2 se těžká nehlídají: „počet jiný“ tam vynucuje,
+    že pruh s méně těžkými vozidly je správný, takže vylosování „počet jiný, těžká netrefí“ nejde splnit."""
+    if not 2 <= lanes <= 8 or cls not in QUEUE_GAPS:
+        raise RuntimeError(f"queue_case: unsupported lanes {lanes} or class {cls!r}")
+    hit = rng.random() < queue_text_share(lanes) if cls != "gap4+" else None
+    differ = rng.random() < QUEUE_COUNT_SHARE if weighted else None
+    heavy = rng.random() < queue_text_share(lanes) if weighted and lanes >= 3 and cls != "gap4+" else None
+    for _ in range(QUEUE_TRIES):
+        sizes = [rng.randint(*QUEUE_SIZE) for _ in range(lanes)]
+        if not weighted:                             # bez vah je délka počet vozidel: třída se zamítne dřív, než se losují vozidla
+            low = sorted(sizes)
+            if low[0] == low[1] or queue_class(low[1] - low[0]) != cls:
+                continue
+        queues = tuple(tuple(rng.choice(QUEUE_VEHICLES) for _ in range(size)) for size in sizes)
+        lengths = [queue_length(q, weighted) for q in queues]
+        order = sorted(range(lanes), key=lengths.__getitem__)
+        gap = lengths[order[1]] - lengths[order[0]]
+        if gap == 0 or queue_class(gap) != cls:
+            continue
+        answer, text, count = order[0], queue_text(queues), queue_count(queues)
+        if hit is not None and (text == answer) != hit:
+            continue
+        if weighted and (count is None or (count != answer) != differ):
+            continue
+        if heavy is not None and (queue_heavy(queues) == answer) != heavy:
+            continue
+        break
+    else:
+        raise RuntimeError(f"queue_case: no {cls} task for {lanes} lanes after {QUEUE_TRIES} tries")
+    # záruky se kontrolují znovu; porušení je chyba generátoru a nic se neopravuje potichu
+    rest = sorted(lengths[:answer] + lengths[answer + 1:])
+    if (len(queues) != lanes or lengths[answer] >= rest[0] or queue_class(rest[0] - lengths[answer]) != cls
+            or (not weighted and count != answer) or (weighted and count is None)):
+        raise RuntimeError("queue_case: generated task breaks its guarantees")
+    return queues, answer, cls, text, count
+
+
+def queue_cases(n, lanes=4, weighted=False, seed=1):
+    """n úloh ze semínka; třída rozdílu se losuje rovnoměrně na každou úlohu."""
+    rng = random.Random(seed)
+    return [queue_case(rng, lanes, rng.choice(QUEUE_GAPS), weighted) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
