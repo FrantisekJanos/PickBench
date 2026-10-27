@@ -458,6 +458,13 @@ class Cli(unittest.TestCase):
             self.assertIn(bench.LOOKAHEAD_FORM + ".", text)
 
 
+REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead }[v];"   # úkol B4 přidá „, rule“
+
+
+def lookahead_body():
+    return page_source().split("\nconst lookahead = {", 1)[1].split("\n};\n", 1)[0]
+
+
 class Page(unittest.TestCase):              # scénář ve stránce; prohledávání, generátor a rozbor hlídá tests/test_parity.py (Lookahead)
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_variant_fills_in_the_lanes_like_bench(self):
@@ -470,6 +477,45 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         for q, by_variant in zip(questions, run_page_js(code)):
             for v, js in enumerate(by_variant):
                 self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))     # varianta 2 s počtem pruhů z původního zadání
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="lookahead" data-i18n="opt.scenario.lookahead"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: dva kroky dopředu ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(lookaheadWarm(LANES), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, lookaheadRow(LANES, rnd), 3)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(lookaheadRow(LANES, rnd)); },"), 1)
+        self.assertEqual(page.count("  steer(g) { const r = g.rows.find(r => r.result === null); if (r) g.lane = r.target ?? r.lane; },"), 1)
+        body = lookahead_body()
+        for call in ("rollInject([d.truth], 3)", "lookaheadState(d.rows, d.lane)", "injectText(INJECT_NOTE, LOOKAHEAD_MOVES[inject])",
+                     "variantOf(lookaheadQuestion(LANES), v)", "a.move_blocked?.choice", "lookaheadErrorKind(", "lookaheadClass(", "laneOf: lookaheadLane"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    def test_road_has_at_least_three_lanes(self):                  # volič stojí na 2 (jiný scénář, uložené nastavení, krok fronty): silnice má 3 pruhy
+        page = page_source()
+        self.assertIn("  id: 'lookahead', lanesFree: true, minLanes: 3,", lookahead_body())
+        self.assertEqual(page.count("  lanes: () => Math.max(3, +$('lanes').value),"), 1)
+        self.assertEqual(page.count("  for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);"), 1)
+        self.assertEqual(page.count("  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;"), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_takes_the_lane_of_the_task_and_moves_one_lane(self):
+        code = ("const LOOKAHEAD_MOVES = ['left', 'stay', 'right'], LOOKAHEAD_SHIFT = { left: -1, stay: 0, right: 1 };" + page_function("lookaheadLane") +
+                "const r = (lane, k) => ({ lane, rows: ['.'.repeat(k)] });"
+                "process.stdout.write(JSON.stringify([[0, 4, 0], [0, 4, 1], [0, 4, 2], [3, 4, 2], [3, 4, 0], [1, 3, 2]].map(([l, k, m]) => lookaheadLane(r(l, k), m))));")
+        self.assertEqual(run_page_js(code), [0, 0, 1, 3, 2, 2])         # mimo silnici zůstane na kraji; náraz ukáže kroužek a rozbor
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_counts_depth_and_errors(self):                   # počítají se všechny odpovědi; správně, hladový, náraz, neplatná
+        from test_parity import run_js                              # sdílený blok přes soubor: v node -e je na Windows příkazová řádka příliš dlouhá
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", lookahead_body(), re.S).group(0)[1:-1]
+        code = "(() => { const base = { tally() {} }; const o = { __proto__: base," + tally + "};" + (
+            "const g = { byDepth: { d1: [0, 0], d2: [0, 0], 'd3+': [0, 0] }, errs: { greedy: 0, crash: 0, other: 0, invalid: 0 } };"
+            "const task = { rows: ['.#..', '..#.', '###.', '....'], lane: 1, answer: 'right', depth: 3, greedy: 'left', truth: 2 };"
+            "[2, 0, 1, -1].forEach(m => o.tally(g, task, m)); return g; })()")
+        self.assertEqual(run_js(code, None), {"byDepth": {"d1": [0, 0], "d2": [0, 0], "d3+": [1, 4]}, "errs": {"greedy": 1, "crash": 1, "other": 0, "invalid": 1}})
 
 
 if __name__ == "__main__":
