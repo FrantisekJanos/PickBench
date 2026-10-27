@@ -5,6 +5,7 @@ Použití:  python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates
 Příklad:  python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
+          python hwbench.py quant nimble:9b-q4_K_M nimble:latest
 
 Testy:
   latency      N dotazů po sobě (výchozí 1000): p50, p90, p95, p99, max, rozh./s
@@ -25,6 +26,8 @@ Testy:
                p50 opakování, p50 jiných stavů a poměr stejný ÷ jiný (pod 1 = opakovaný stav je rychlejší)
   repeat       20 stavů, každý N× (výchozí 10), po kolech: u kolika stavů byla volba pokaždé stejná, u kolika i jistota,
                a největší rozptyl jistoty (opakovatelnost odpovědí)
+  quant        N dotazů (výchozí 100): kvantizace a parametry modelu, GB na disku a v paměti podle Ollamy (/api/show,
+               /api/tags, /api/ps), p50, p95 a správně proti ideálnímu řidiči; dva tagy téhož modelu = dva modely v příkazu
 
 Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
 server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.
@@ -33,7 +36,7 @@ Dotaz je vždy stejný a malý: překážky, 3 pruhy (stejné úlohy jako bench.
 Před každým testem kromě cold jde zahřívací dotaz, který se nepočítá.
 --lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
 Hostovaný model (jev:jev-1.13.0, cf:clef-flash, cf:clef — viz bench.py) běží u poskytovatele a stojí peníze:
-testy cold, concurrency a server ho přeskočí; soak běží jen s přepínačem --hosted-soak a nevzorkuje GPU;
+testy cold, concurrency, server a quant ho přeskočí; soak běží jen s přepínačem --hosted-soak a nevzorkuje GPU;
 pod tabulkou je útrata a odhad sítě a latence zahrnuje síť. --max-usd a --max-hosted jsou strop útraty jako v bench.py.
 Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu).
 """
@@ -44,6 +47,7 @@ Usage:    python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a
 Examples: python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
+          python hwbench.py quant nimble:9b-q4_K_M nimble:latest
 
 Tests:
   latency      N requests one after another (default 1000): p50, p90, p95, p99, max, dec./s
@@ -64,6 +68,8 @@ Tests:
                p50 of the repeats, p50 of the different states and the ratio same ÷ different (below 1 = the repeated state is faster)
   repeat       20 states, each N times (default 10), in rounds: for how many states the choice was the same every time, for how many
                also the confidence, and the largest spread of the confidence (repeatability of the answers)
+  quant        N requests (default 100): the quantization and parameters of the model, GB on disk and in memory as Ollama reports them
+               (/api/show, /api/tags, /api/ps), p50, p95 and correct against the ideal driver; two tags of one model = two models in the command
 
 The names follow MLPerf: latency = SingleStream (reports p90), concurrency = Offline (the highest throughput),
 server = Server. This is a measurement in the style of MLPerf, not a result submitted under the MLCommons rules.
@@ -72,7 +78,7 @@ The request is always the same small one: obstacles, 3 lanes (the same tasks as 
 Before every test except cold a warm-up request goes first, and it does not count.
 --lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
 A hosted model (jev:jev-1.13.0, cf:clef-flash, cf:clef — see bench.py) runs at the provider and costs money:
-the cold, concurrency and server tests skip it; soak runs only with the --hosted-soak option and does not sample the GPU;
+the cold, concurrency, server and quant tests skip it; soak runs only with the --hosted-soak option and does not sample the GPU;
 below the table are the spend and the network estimate, and the latency includes the network. --max-usd and --max-hosted are the spend cap as in bench.py.
 The game must not run in the browser during the measurement (the requests would compete for the GPU).
 """
@@ -85,19 +91,23 @@ import statistics
 import subprocess
 import sys
 import threading
+import json
 import time
 import urllib.error
+import urllib.request
 
 import bench
 import gpu
 import i18n
 import providers
 
-TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server", "cache", "repeat")
+TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server", "cache", "repeat", "quant")
 SERVER_SHARES = (0.25, 0.5, 0.7, 0.85, 1.0, 1.25, 1.5, 2.0)      # stupně tempa testu server jako podíl sériové rychlosti (1000 ÷ medián latence)
 SERVER_SLACK, SERVER_DRAIN = 30.0, 120.0                         # s: rezerva stupně nad poslední příchod; čekání na dotazy, které po stupni ještě běží
 CACHE_ROUNDS = 3                                                 # test cache: kola (nový stav N× po sobě, pak N jiných stavů)
 REPEAT_STATES = 20                                               # test repeat: počet stavů, každý se ptá N× po kolech
+GB = 1e9                                                         # test quant: GB jako Ollama (10⁹ B)
+NO_INFO = {"quant": None, "params": None, "disk_gb": None, "mem_gb": None}      # údaje o modelu, které se nezjistily
 NAN = float("nan")
 KEYS = bench.lane_keys(3)
 QUESTION = bench.lane_question(3)
@@ -371,6 +381,53 @@ def run_repeat(model, n=10, states=REPEAT_STATES, post=None):
             "same_conf": sum(None not in cs and len(set(cs)) == 1 for cs in confs), "spread": max(spreads) if spreads else NAN}
 
 
+def ollama_info(model, base=None, opener=None, timeout=10):
+    """Kvantizace, počet parametrů a velikost modelu podle Ollamy: POST /api/show (details.quantization_level,
+    details.parameter_size), GET /api/tags (size na disku), GET /api/ps (size_vram v paměti; po zahřátí).
+
+    Jméno bez tagu se hledá i jako „:latest“. Co Ollama nevrátí nebo co nejde přečíst (Ollama neběží, starší verze), je None.
+    opener se bere při volání, ne při importu: testy podstrkují urllib.request.urlopen."""
+    base, opener = base or bench.OLLAMA, opener or urllib.request.urlopen
+    names = {model, model if ":" in model else model + ":latest"}
+
+    def ask(path, body=None):
+        req = urllib.request.Request(base + path, data=None if body is None else json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with opener(req, timeout=timeout) as r:
+                doc = json.loads(r.read())
+        except Exception:                            # Ollama neběží, nezná cestu, odpověď není JSON
+            return {}
+        return doc if isinstance(doc, dict) else {}
+
+    def entry(doc):
+        models = doc.get("models") if isinstance(doc.get("models"), list) else []
+        return next((m for m in models if isinstance(m, dict) and (m.get("name") in names or m.get("model") in names)), {})
+    details = ask("/api/show", {"model": model}).get("details")
+    details = details if isinstance(details, dict) else {}
+    text = lambda v: v if isinstance(v, str) and v else None
+    gb = lambda v: round(v / GB, 1) if type(v) in (int, float) and v > 0 else None
+    return {"quant": text(details.get("quantization_level")), "params": text(details.get("parameter_size")),
+            "disk_gb": gb(entry(ask("/api/tags")).get("size")), "mem_gb": gb(entry(ask("/api/ps")).get("size_vram"))}
+
+
+def run_quant(model, n=100, post=None, info=None):
+    """Srovnání tagů téhož modelu: zahřátí, údaje o modelu (info, výchozí ollama_info; po zahřátí ho už zná /api/ps),
+    pak n dotazů na úlohy bench.make_cases(n, 3): p50, p95 a correct = počet odpovědí, které vybral i ideální řidič."""
+    post = post or bench.post
+    warm(model, post)
+    facts = (info or ollama_info)(model)
+    lat, ok = [], 0
+    for (lane, dists), p in zip(bench.make_cases(n, 3), payloads(n)):
+        out, ms = post(model, p)
+        lat.append(ms)
+        answers = out.get("answers") if isinstance(out, dict) else None
+        a = answers.get("target") if isinstance(answers, dict) else None
+        choice = a.get("choice") if isinstance(a, dict) else None
+        ok += isinstance(choice, str) and choice in {KEYS[i] for i in bench.oracle(lane, dists)}
+    return {"n": n, "p50": percentile(lat, .5), "p95": percentile(lat, .95), "correct": ok, **NO_INFO, **facts}
+
+
 class GpuSampler:
     """Vlákno, které po dobu měření čte stav GPU. Vzorek = (čas od startu v s, teplota, příkon, takt)."""
 
@@ -502,6 +559,9 @@ def heads(test):
         head = [model, n, i18n.t("hw.col.first"), i18n.t("hw.col.sameP50"), i18n.t("hw.col.freshP50"), i18n.t("hw.col.ratio")]
     elif test == "repeat":
         head = [model, i18n.t("hw.col.states"), n, i18n.t("hw.col.sameChoice"), i18n.t("hw.col.sameConf"), i18n.t("hw.col.confSpread")]
+    elif test == "quant":
+        head = [model, i18n.t("hw.col.quant"), i18n.t("hw.col.params"), i18n.t("hw.col.diskGb"), i18n.t("hw.col.memGb"),
+                i18n.t("hw.col.p50"), i18n.t("hw.col.p95"), i18n.t("hw.col.correct")]
     else:                                            # soak
         card = [i18n.t("hw.col.temp"), i18n.t("hw.col.power"), i18n.t("hw.col.clock")]
         return ([model, i18n.t("hw.col.minute"), n, i18n.t("hw.col.p50"), i18n.t("hw.col.p95"), *card],
@@ -525,7 +585,7 @@ def noted(lines, interrupted):
 
 def hosted_skip(a):
     """Test, který hostovaný model vůbec nepouští (a nic za něj neplatí)."""
-    return a.test in ("cold", "concurrency", "server") or (a.test == "soak" and not a.hosted_soak)
+    return a.test in ("cold", "concurrency", "server", "quant") or (a.test == "soak" and not a.hosted_soak)
 
 
 def spent_notes(model, before, net):
@@ -534,7 +594,7 @@ def spent_notes(model, before, net):
     return [f"{model}: {text}" for text in (spent, net) if text]
 
 
-def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf_counter):
+def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf_counter, info=None):
     """Jeden test pro jeden model. Vrací (záhlaví, řádky tabulky, záhlaví CSV, řádky CSV, řádky textu pod tabulku)."""
     local = not providers.hosted(model)
     head, csv_head = heads(a.test)
@@ -580,6 +640,14 @@ def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf
         r = run_repeat(model, a.n or 10, post=post)
         rows = [[model, r["states"], r["n"], f"{r['same_choice']}/{r['states']}", f"{r['same_conf']}/{r['states']}", num(r["spread"], 3)]]
         return head, rows, csv_head, rows, []
+    if a.test == "quant":
+        if not local:
+            return head, [], csv_head, [], [i18n.t("hw.skip.quant", model=model)]
+        facts = info or (ollama_info if post is None else (lambda m: NO_INFO))      # s podstrčeným post (testy) se na Ollamu nesahá
+        r = run_quant(model, a.n or 100, post, facts)
+        rows = [[model, r["quant"] or "—", r["params"] or "—", num(r["disk_gb"], 1), num(r["mem_gb"], 1), num(r["p50"], 1), num(r["p95"], 1),
+                 f"{r['correct']}/{r['n']}"]]
+        return head, rows, csv_head, rows, []
     if not local and not a.hosted_soak:
         return head, [], csv_head, [], [i18n.t("hw.skip.soak", model=model)]
     r = run_soak(model, a.minutes, post, clock, (sampler or GpuSampler()) if local else None)
@@ -611,7 +679,7 @@ def line(cells, head):
     return f"{cells[0]:<20}" + "".join(f"{str(c):>{max(len(h) + 2, 10, len(str(c)) + 1)}}" for c, h in zip(cells[1:], head[1:]))
 
 
-def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out=print, clock=time.perf_counter):
+def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out=print, clock=time.perf_counter, info=None):
     """Celý běh nástroje v jazyce, který už platí (volbu --lang vyjímá main)."""
     try:
         a = parse_args(argv)
@@ -641,7 +709,7 @@ def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out
                 providers.resolve(model)             # model, který nejde zavolat (není v seznamu, chybí klíč), skončí větou před prvním dotazem
             before, net = providers.BUDGET.state(), providers.net_line(model) if paid else None
             try:
-                head, rows, csv_head, csv_rows, notes = measure(a, model, post, sampler, stop, clock)
+                head, rows, csv_head, csv_rows, notes = measure(a, model, post, sampler, stop, clock, info)
             except BaseException:                    # i po chybě nebo Ctrl+C: co se utratilo, se vypíše
                 for text in spent_notes(model, before, net):
                     out(text)

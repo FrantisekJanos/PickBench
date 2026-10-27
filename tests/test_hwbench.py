@@ -2,6 +2,7 @@ import ast
 import contextlib
 import csv
 import io
+import json
 import os
 import re
 import subprocess
@@ -19,6 +20,7 @@ import bench
 import hwbench
 import i18n
 import providers
+from test_golden import FakeResponse
 
 LANG_ENV = "PICKBENCH_LANG"
 CZECH = re.compile(r"[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“]")
@@ -411,6 +413,67 @@ class Repeat(unittest.TestCase):
     def test_row(self):
         head, rows, csv_head, csv_rows, notes = hwbench.measure(hwbench.parse_args(["repeat", "m"]), "m", FakePost())
         self.assertEqual((rows, csv_rows, notes), ([["m", 20, 10, "20/20", "20/20", "0.000"]], rows, []))
+
+
+class Quant(unittest.TestCase):
+    INFO = {"quant": "Q4_K_M", "params": "9.0B", "disk_gb": 5.6, "mem_gb": 6.1}
+
+    def test_accuracy_against_the_ideal_driver(self):
+        keys = bench.lane_keys(3)
+        right = [keys[min(bench.oracle(lane, dists))] for lane, dists in bench.make_cases(6, 3, 1)]
+        post = replying([("lane_1", 0.5)] + [(k, 0.9) for k in right[:4]] + [("nonsense", 0.9), (None, None)])
+        r = hwbench.run_quant("m", n=6, post=post, info=lambda model: self.INFO)
+        self.assertEqual((r["n"], r["correct"], r["quant"], r["params"], r["disk_gb"], r["mem_gb"], r["p50"]), (6, 4, "Q4_K_M", "9.0B", 5.6, 6.1, 10.0))
+
+    def test_ollama_info_reads_show_tags_and_ps(self):
+        seen = []
+        replies = {"/api/show": {"details": {"quantization_level": "Q8_0", "parameter_size": "9.7B"}},
+                   "/api/tags": {"models": [{"name": "tev1:latest", "size": 1}, {"name": "nimble:latest", "size": 9_500_000_000}]},
+                   "/api/ps": {"models": [{"name": "nimble:latest", "model": "nimble:latest", "size_vram": 10_200_000_000}]}}
+
+        def opener(req, timeout=None):
+            path = req.full_url.split("11434")[1]
+            seen.append((path, req.data))
+            return FakeResponse(json.dumps(replies[path]).encode())
+        want = {"quant": "Q8_0", "params": "9.7B", "disk_gb": 9.5, "mem_gb": 10.2}
+        self.assertEqual(hwbench.ollama_info("nimble:latest", opener=opener), want)
+        self.assertEqual(seen[0], ("/api/show", b'{"model": "nimble:latest"}'))
+        self.assertEqual([path for path, _ in seen], ["/api/show", "/api/tags", "/api/ps"])
+        self.assertEqual(hwbench.ollama_info("nimble", opener=opener), want)          # jméno bez tagu = :latest
+
+    def test_ollama_info_survives_a_missing_server_or_field(self):
+        def down(req, timeout=None):
+            raise urllib.error.URLError("refused")
+        self.assertEqual(hwbench.ollama_info("m", opener=down), hwbench.NO_INFO)
+        self.assertEqual(hwbench.NO_INFO, {"quant": None, "params": None, "disk_gb": None, "mem_gb": None})
+
+        def empty(req, timeout=None):
+            return FakeResponse(b'{"models": [{"name": "m:latest"}], "details": "x"}')
+        self.assertEqual(hwbench.ollama_info("m", opener=empty), hwbench.NO_INFO)
+
+    def test_row_and_hosted_model(self):
+        keys = bench.lane_keys(3)
+        ok = sum("lane_1" in {keys[i] for i in bench.oracle(lane, dists)} for lane, dists in bench.make_cases(8, 3, 1))
+        a = hwbench.parse_args(["quant", "--n", "8", "m"])
+        head, rows, csv_head, csv_rows, notes = hwbench.measure(a, "m", FakePost(), info=lambda model: self.INFO)
+        self.assertEqual((rows, csv_rows, notes), ([["m", "Q4_K_M", "9.0B", "5.6", "6.1", "10.0", "10.0", f"{ok}/8"]], rows, []))
+        post = FakePost()
+        head, rows, _, csv_rows, notes = hwbench.measure(hwbench.parse_args(["quant", "cf:x"]), "cf:x", post, info=lambda m: self.fail("info"))
+        self.assertEqual((rows, csv_rows, post.calls), ([], [], []))
+        self.assertEqual(notes, ["cf:x: test quant je jen pro lokální modely (velikost a kvantizaci hlásí Ollama)"])
+        with i18n.process("en"):
+            notes = hwbench.measure(hwbench.parse_args(["quant", "cf:x"]), "cf:x", FakePost())[4]
+        self.assertEqual(notes, ["cf:x: the quant test is only for local models (Ollama reports the size and the quantization)"])
+
+    def test_injected_post_never_asks_ollama(self):
+        with mock.patch.object(urllib.request, "urlopen", side_effect=AssertionError("test sahá na Ollamu")):
+            rows = hwbench.measure(hwbench.parse_args(["quant", "--n", "4", "m"]), "m", FakePost())[1]
+        self.assertEqual(rows[0][1:5], ["—", "—", "—", "—"])
+
+    def test_default_number_of_requests(self):
+        post = FakePost()
+        hwbench.measure(hwbench.parse_args(["quant", "m"]), "m", post, info=lambda model: self.INFO)
+        self.assertEqual(len(post.calls), 1 + 100)                     # zahřátí a 100 dotazů
 
 
 class Cli(unittest.TestCase):
@@ -922,6 +985,8 @@ class Language(unittest.TestCase):
         "cache": (["model", "N", "první ms", "stejný p50 ms", "jiný p50 ms", "poměr"], ["model", "N", "first ms", "same p50 ms", "fresh p50 ms", "ratio"]),
         "repeat": (["model", "stavů", "N", "stejná volba", "stejná jistota", "rozptyl jistoty"],
                    ["model", "states", "N", "same choice", "same confidence", "confidence spread"]),
+        "quant": (["model", "kvantizace", "parametrů", "GB na disku", "GB v paměti", "p50 ms", "p95 ms", "správně"],
+                  ["model", "quantization", "parameters", "GB on disk", "GB in memory", "p50 ms", "p95 ms", "correct"]),
     }
     SOAK_CSV = (["model", "čas s", "ms", "°C", "W", "MHz"], ["model", "time s", "ms", "°C", "W", "MHz"])
     SAMPLES = [(float(t), 50, 40.0, 1500) for t in range(0, 81, 5)]      # vzorky GPU přes celý běh testu soak s hodinami FakeClock(20.0)

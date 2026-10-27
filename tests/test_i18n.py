@@ -52,7 +52,7 @@ SAME_PY = {"bench.col.model", "bench.col.p95", "bench.col.min", "bench.col.max",
 # Slova, která má české a anglické záhlaví tabulek nástroje společná; jiné společné slovo je zapomenutý překlad bez diakritiky.
 # U hwbench.py navíc „start“ (studený start = cold start: slovo je v obou jazycích stejné) a jednotka „s“ (čas s = time s).
 HEAD_SAME = {"bench.py": {"model", "p95", "min", "max", "ECE", "goodput"},
-             "hwbench.py": {"model", "N", "p50", "p90", "p95", "p99", "max", "ms", "start", "°C", "W", "MHz", "s"}}
+             "hwbench.py": {"model", "N", "p50", "p90", "p95", "p99", "max", "ms", "start", "°C", "W", "MHz", "s", "GB"}}
 # Hotový modul → předpony klíčů, které mu patří: každý takový klíč modul používá a každý klíč, který používá, v i18n.TEXTS je.
 MODULE_KEYS = {"bench.py": ("bench.", "vd.", "vp."), "hwbench.py": ("hw.",), "fetch_datasets.py": ("fetch.",),
                "providers.py": ("prov.",), "store.py": ("store.",), "server.py": ("srv.",)}

@@ -296,6 +296,12 @@ TEXTS = {
     "hw.col.sameChoice": {"cs": "stejná volba", "en": "same choice"},
     "hw.col.sameConf": {"cs": "stejná jistota", "en": "same confidence"},
     "hw.col.confSpread": {"cs": "rozptyl jistoty", "en": "confidence spread"},
+    # Test quant: údaje Ollamy o modelu (kvantizace, parametry, GB na disku a v paměti), p50, p95, správně proti ideálnímu řidiči (k/N).
+    "hw.col.quant": {"cs": "kvantizace", "en": "quantization"},
+    "hw.col.params": {"cs": "parametrů", "en": "parameters"},
+    "hw.col.diskGb": {"cs": "GB na disku", "en": "GB on disk"},
+    "hw.col.memGb": {"cs": "GB v paměti", "en": "GB in memory"},
+    "hw.col.correct": {"cs": "správně", "en": "correct"},
     # Buňky tabulky: stupeň, který server odmítl; podíl dotazů včas (česky s mezerou jako dosud, anglicky bez ní jako ve stránce).
     "hw.didNotFit": {"cs": "nevešlo se", "en": "did not fit"},
     "hw.pct": {"cs": "{value:.0f} %", "en": "{value:.0f}%"},
@@ -312,6 +318,8 @@ TEXTS = {
                             "en": "{model}: the concurrency test is only for local models (hwbench.py does not measure concurrent requests to a hosted model)"},
     "hw.skip.server": {"cs": "{model}: test server je jen pro lokální modely (souběžné dotazy na hostovaný model jsou mimo rozsah)",
                        "en": "{model}: the server test is only for local models (hwbench.py does not measure concurrent requests to a hosted model)"},
+    "hw.skip.quant": {"cs": "{model}: test quant je jen pro lokální modely (velikost a kvantizaci hlásí Ollama)",
+                      "en": "{model}: the quant test is only for local models (Ollama reports the size and the quantization)"},
     "hw.skip.soak": {"cs": "{model}: test soak u hostovaného modelu stojí peníze po celou dobu běhu — spusťte ho výslovně s --hosted-soak",
                      "en": "{model}: the soak test with a hosted model costs money for the whole run duration — run it explicitly with --hosted-soak"},
     "hw.note.truncation": {"cs": "{model}: hostovaný model dlouhý vstup nemusí odmítnout — Clef ho podle dokumentace tiše ořízne; "
