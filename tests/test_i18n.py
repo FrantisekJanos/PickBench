@@ -696,7 +696,7 @@ class PageTexts(unittest.TestCase):
             self.assertIn("sázk", self.texts[key]["cs"], key)
             self.assertIn("bet on a lane", self.texts[key]["en"], key)
 
-    def test_statistics_and_storage_texts_count_in_the_right_number(self):   # anglicky jednotné i množné číslo, česky beze změny
+    def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
                  ["cal.head", {"ece": "X", "n": 1}], ["cal.head", {"ece": "X", "n": 30}], ["db.unsaved", {"n": 1}], ["db.unsaved", {"n": 2}]]
         text = "arg.map(([key, vars]) => t(key, vars))"
