@@ -370,6 +370,24 @@ class Cli(unittest.TestCase):
                 self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
         self.assertEqual(self.sent, [])
 
+    def test_the_form_reaches_the_model(self):
+        keys = bench.lane_keys(bench.DIFF_LANES)
+        for argv, dicts in ((["2", "--diff", "--dicts", "m1"], True), (["2", "--diff", "m1"], False), (["2", "--diff", "--lists", "m1"], False)):
+            with self.subTest(argv=argv):
+                self.sent.clear()
+                self.assertIsNone(self.cli(*argv)[1])
+                states = [json.loads(body)["state"] for body in self.sent]
+                states = [s for s in states if isinstance(s, dict) and {"before", "after"} <= set(s)]
+                self.assertEqual(len(states), 3)                                 # zahřátí a dvě úlohy
+                for state in states:
+                    for snapshot in (state["before"], state["after"]):
+                        if dicts:
+                            self.assertIsInstance(snapshot, dict)
+                            self.assertEqual(list(snapshot), keys)
+                        else:
+                            self.assertIsInstance(snapshot, list)
+                            self.assertEqual(len(snapshot), bench.DIFF_LANES)
+
     def test_mirror_and_inject_work_with_diff(self):
         out, code = self.cli("8", "--diff", "--mirror", "--inject", "--deadline-ms", "9", "m1")
         self.assertIsNone(code)
