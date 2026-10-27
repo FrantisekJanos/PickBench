@@ -8,6 +8,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -19,6 +20,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
+          python bench.py 100 --bet tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -67,6 +69,13 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --weighted:  jen s --queue: nákladní auto (truck), autobus (bus) a traktor (tractor) se počítají za tři vozidla, ostatní
             za jedno; v polovině úloh je nejkratší fronta podle počtu vozidel jiný pruh. Řádek chyb navíc počítá volbu
             nejkratší fronty podle počtu (bez vah). Úlohy jsou jiné než bez volby.
+--bet:      sázka na bránu: každá z K bran (výchozí 4, 3 až 8) vyplatí s danou šancí v procentech svou odměnu (20 až 390),
+            jinak nic. Model volí bránu s nejvyšší očekávanou výplatou (odměna krát šance), ta je aspoň o 5 % vyšší než
+            u kterékoli jiné brány. N úloh (výchozí 100), rovnoměrně ve třech úrovních: stejná šance u všech bran;
+            50 nebo 100 % (brána se 100 % je špatně, správná je tím vždy brána s nejvyšší odměnou); obecná (brána s nejvyšší
+            odměnou je správná v třetině úloh, brána s nejvyšší šancí také; při 3 branách dá vyloučení obou skoro polovinu).
+            Za řádkem modelu přesnost podle úrovně, pod ním regret = průměrná ztráta očekávané výplaty proti nejlepší
+            bráně (neplatná odpověď 100 %) a chyby: nejvyšší odměna, nejvyšší šance, jiné, neplatné.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -102,6 +111,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -113,6 +123,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
+          python bench.py 100 --bet tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -161,6 +172,13 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --weighted:  only with --queue: a truck, a bus and a tractor count as three vehicles each, any other vehicle as one;
             in half of the tasks the shortest queue by the number of vehicles is another lane. The error line also counts
             picks of the shortest queue by count (unweighted). The tasks differ from those without the option.
+--bet:      bet on a gate: each of K gates (default 4, 3 to 8) pays its reward (20 to 390) with the given chance in percent,
+            otherwise nothing. The model picks the gate with the highest expected payout (reward times chance), at least
+            5% higher than at any other gate. N tasks (default 100), spread evenly over three levels: the same chance at
+            every gate; 50 or 100% (the gate with 100% is wrong, so the gate with the highest reward is always right); general
+            (the gate with the highest reward is right in a third of the tasks, and so is the gate with the highest chance; with
+            3 gates ruling both out gives almost half). After the model row, the accuracy by level; below it regret = the mean
+            loss of expected payout against the best gate (an invalid answer counts as 100%) and the errors: highest reward, highest chance, other, invalid.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -1950,6 +1968,7 @@ def parse_args(argv):
     p.add_argument("--labeled", action="store_true")
     p.add_argument("--queue", action="store_true")
     p.add_argument("--weighted", action="store_true")
+    p.add_argument("--bet", action="store_true")                 # výchozí 4 brány dosadí níže (Úprava 11.5b)
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -1961,7 +1980,7 @@ def parse_args(argv):
     a.models = a.rest
     a.lanes_given = a.lanes is not None              # závora pruhy ani brány nemá: --lanes s --barrier končí hláškou
     if a.lanes is None:
-        a.lanes = 4 if a.memory or a.lookahead or a.queue else 3      # paměťová stopa: 4 brány, dva kroky dopředu a fronta: 4 pruhy (spec)
+        a.lanes = 4 if a.memory or a.lookahead or a.queue or a.bet else 3      # paměťová stopa a sázka: 4 brány, dva kroky dopředu a fronta: 4 pruhy
     return a
 
 
@@ -2137,9 +2156,10 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue)
+    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue,
+                 args.bet)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
-            or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
+            or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -2269,6 +2289,15 @@ def main(argv):
                 r = run_queue(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.weighted)
                 print_row(r, queue_note(r))
                 print_queue(r)
+    elif args.bet:
+        cases = bet_cases(args.n or 100, args.lanes)
+        print(i18n.t("bench.intro.bet", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_bet(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
+                print_row(r, bet_note(r))
+                print_bet(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

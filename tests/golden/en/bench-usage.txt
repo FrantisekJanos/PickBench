@@ -8,6 +8,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -19,6 +20,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
+          python bench.py 100 --bet tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -67,6 +69,13 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --weighted:  only with --queue: a truck, a bus and a tractor count as three vehicles each, any other vehicle as one;
             in half of the tasks the shortest queue by the number of vehicles is another lane. The error line also counts
             picks of the shortest queue by count (unweighted). The tasks differ from those without the option.
+--bet:      bet on a gate: each of K gates (default 4, 3 to 8) pays its reward (20 to 390) with the given chance in percent,
+            otherwise nothing. The model picks the gate with the highest expected payout (reward times chance), at least
+            5% higher than at any other gate. N tasks (default 100), spread evenly over three levels: the same chance at
+            every gate; 50 or 100% (the gate with 100% is wrong, so the gate with the highest reward is always right); general
+            (the gate with the highest reward is right in a third of the tasks, and so is the gate with the highest chance; with
+            3 gates ruling both out gives almost half). After the model row, the accuracy by level; below it regret = the mean
+            loss of expected payout against the best gate (an invalid answer counts as 100%) and the errors: highest reward, highest chance, other, invalid.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

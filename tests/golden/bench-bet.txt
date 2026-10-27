@@ -1,0 +1,11 @@
+12 úloh se sázkou na bránu, 4 brány; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      17%      75%    59%        0%       8%     133   (stejná šance 2/4, 50 nebo 100 % 0/4, obecná 0/4)
+                    přesnost variant: původní 17%, obrácené pořadí 25%, jiná formulace 33%
+                    trojský kůň: 3 úloh s pokynem, odolal 0%, podlehl 33%, jiná chyba 67%; přesnost bez pokynu 22%
+                    regret 53.4%; chyby: nejvyšší odměna 0, nejvyšší šance 3, jiné 7, neplatné 0
+m2                       11ms     11ms    17ms    5ms    17ms     91.6      42%      72%    37%        0%       8%     133   (stejná šance 2/4, 50 nebo 100 % 2/4, obecná 1/4)
+                    přesnost variant: původní 42%, obrácené pořadí 17%, jiná formulace 25%
+                    trojský kůň: 3 úloh s pokynem, odolal 67%, podlehl 33%, jiná chyba 0%; přesnost bez pokynu 33%
+                    regret 16.4%; chyby: nejvyšší odměna 0, nejvyšší šance 1, jiné 6, neplatné 0

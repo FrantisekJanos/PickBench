@@ -1,0 +1,5 @@
+12 tasks with a bet on a gate, 5 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      76%    43%     149   (same chance 2/3, 50 or 100% 2/6, general 0/3)
+                    regret 27.5%; errors: highest reward 1, highest chance 3, other 4, invalid 0

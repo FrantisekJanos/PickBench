@@ -251,5 +251,77 @@ class Lines(unittest.TestCase):
         self.assertEqual(printed("en", bench.print_bet, r), [" " * 20 + "regret 0.0%; errors: highest reward 0, highest chance 0, other 0, invalid 0"])
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--bet", "m1"])
+        self.assertEqual((a.n, a.bet, a.lanes, a.models), (40, True, 4, ["m1"]))
+        self.assertEqual(bench.parse_args(["--bet", "--lanes", "8", "m1"]).lanes, 8)
+        self.assertEqual(bench.parse_args(["--bet", "--lanes", "3", "m1"]).lanes, 3)
+
+    def test_first_line_and_rows(self):
+        for argv, cs, en in ((["1", "--bet", "m1"], "1 úloha se sázkou na bránu, 4 brány", "1 task with a bet on a gate, 4 gates"),
+                             (["7", "--bet", "--lanes", "5", "m1"], "7 úloh se sázkou na bránu, 5 bran", "7 tasks with a bet on a gate, 5 gates"),
+                             (["2", "--lanes", "3", "--bet", "m1"], "2 úlohy se sázkou na bránu, 3 brány", "2 tasks with a bet on a gate, 3 gates")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en + ", the same for all models")
+        self.assertTrue(self.cli("--bet", "m1")[0].startswith("100 úloh se sázkou na bránu"))
+        en = self.cli("6", "--bet", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 5)
+        self.assertRegex(en[3], r"^m1 .*   \(same chance \d+/\d+, 50 or 100% \d+/\d+, general \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}regret \d+\.\d%; errors: highest reward \d+, highest chance \d+, other \d+, invalid \d+$")
+
+    def test_option_errors_in_both_languages(self):
+        for argv, cs, en in ((["--bet", "--weighted", "m1"], "Volba --weighted jde jen s --queue.", "The --weighted option works only with --queue."),
+                             (["--bet", "--count", "m1"], "Volba --count jde jen s --memory.", "The --count option works only with --memory."),
+                             (["--bet", "--labeled", "m1"], "Volby --matched-by a --labeled jdou jen s --rule.",
+                              "The --matched-by and --labeled options work only with --rule.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--bet", "--queue", "m1"], ["--bet", "--rule", "m1"], ["--bet", "--numbers", "m1"],
+                     ["--bet", "--lanes", "2", "m1"], ["--bet", "--lanes", "9", "m1"], ["--bet"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_mirror_and_inject_work_with_bet(self):
+        out, code = self.cli("8", "--bet", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("regret "), lines[6])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --bet tev1", text)
+            self.assertIn("\n--bet:      ", text)
+
+
 if __name__ == "__main__":
     unittest.main()

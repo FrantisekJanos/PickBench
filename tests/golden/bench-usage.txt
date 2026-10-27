@@ -8,6 +8,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -19,6 +20,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --lookahead tev1
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
+          python bench.py 100 --bet tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -67,6 +69,13 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --weighted:  jen s --queue: nákladní auto (truck), autobus (bus) a traktor (tractor) se počítají za tři vozidla, ostatní
             za jedno; v polovině úloh je nejkratší fronta podle počtu vozidel jiný pruh. Řádek chyb navíc počítá volbu
             nejkratší fronty podle počtu (bez vah). Úlohy jsou jiné než bez volby.
+--bet:      sázka na bránu: každá z K bran (výchozí 4, 3 až 8) vyplatí s danou šancí v procentech svou odměnu (20 až 390),
+            jinak nic. Model volí bránu s nejvyšší očekávanou výplatou (odměna krát šance), ta je aspoň o 5 % vyšší než
+            u kterékoli jiné brány. N úloh (výchozí 100), rovnoměrně ve třech úrovních: stejná šance u všech bran;
+            50 nebo 100 % (brána se 100 % je špatně, správná je tím vždy brána s nejvyšší odměnou); obecná (brána s nejvyšší
+            odměnou je správná v třetině úloh, brána s nejvyšší šancí také; při 3 branách dá vyloučení obou skoro polovinu).
+            Za řádkem modelu přesnost podle úrovně, pod ním regret = průměrná ztráta očekávané výplaty proti nejlepší
+            bráně (neplatná odpověď 100 %) a chyby: nejvyšší odměna, nejvyšší šance, jiné, neplatné.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
