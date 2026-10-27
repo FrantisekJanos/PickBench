@@ -76,6 +76,46 @@ class Goodput(unittest.TestCase):
         self.assertIsNone(metrics.goodput([], 100))
 
 
+class Calibration(unittest.TestCase):               # Brierovo skóre a práh jistoty (bench.py --defer, panel Kalibrace ve stránce)
+    PAIRS = [(0.9, True), (0.8, False), (0.6, True), (0.95, True)]
+
+    def test_brier(self):
+        self.assertAlmostEqual(metrics.brier(self.PAIRS), (0.1 ** 2 + 0.8 ** 2 + 0.4 ** 2 + 0.05 ** 2) / 4)
+        self.assertEqual(metrics.brier([(1.0, True), (0.0, False)]), 0.0)
+        self.assertEqual(metrics.brier([(1.0, False)]), 1.0)
+        self.assertIsNone(metrics.brier([]))
+
+    def test_coverage_above_the_threshold(self):
+        c = metrics.coverage(self.PAIRS, 5, 0.8)                      # pátá úloha jistotu nemá: jde pod práh
+        self.assertEqual((c["threshold"], c["n"], c["covered"], c["handed"]), (0.8, 5, 3, 2))   # jistota rovná prahu je nad prahem
+        self.assertAlmostEqual(c["coverage"], 3 / 5)
+        self.assertAlmostEqual(c["acc"], 2 / 3)                       # 0.9 správně, 0.8 špatně, 0.95 správně
+        high = metrics.coverage(self.PAIRS, 4, 0.96)
+        self.assertEqual((high["covered"], high["coverage"], high["acc"], high["handed"]), (0, 0.0, None, 4))
+        self.assertEqual(metrics.coverage([], 0, 0.5), {"threshold": 0.5, "n": 0, "covered": 0, "coverage": None, "acc": None, "handed": 0})
+
+    def test_threshold_one_keeps_only_full_confidence(self):
+        self.assertEqual(metrics.coverage([(1.0, True), (0.999, True)], 2, 1.0)["covered"], 1)
+
+
+class Lengths(unittest.TestCase):                   # třídy délky textu (bench.py --by-length, řádek ve stránce)
+    def test_thirds_by_rank(self):
+        self.assertEqual(metrics.LENGTH_CLASSES, ("short", "medium", "long"))
+        got = metrics.length_classes([5, 1, 9, 3, 7, 2])               # pořadí podle délky: 1, 2 | 3, 5 | 7, 9
+        self.assertEqual(got["classes"], ["medium", "short", "long", "medium", "long", "short"])
+        self.assertEqual(got["ranges"], {"short": [1, 2], "medium": [3, 5], "long": [7, 9]})
+
+    def test_ties_go_by_the_order_in_the_dataset(self):
+        got = metrics.length_classes([4, 4, 4, 4])                     # hranice 4 // 3 = 1 a 8 // 3 = 2
+        self.assertEqual(got["classes"], ["short", "medium", "long", "long"])
+        self.assertEqual(got["ranges"], {"short": [4, 4], "medium": [4, 4], "long": [4, 4]})
+
+    def test_small_sets_leave_classes_empty(self):
+        self.assertEqual(metrics.length_classes([]), {"classes": [], "ranges": {"short": None, "medium": None, "long": None}})
+        self.assertEqual(metrics.length_classes([3]), {"classes": ["long"], "ranges": {"short": None, "medium": None, "long": [3, 3]}})
+        self.assertEqual(metrics.length_classes([3, 8])["classes"], ["medium", "long"])
+
+
 class Barrier(unittest.TestCase):                   # AUROC a nejlepší práh otázky noul; případy z tests/test_barrier.py (Quality)
     def test_auroc(self):
         self.assertEqual(metrics.auroc([0.9, 0.8, 0.2, 0.1], [True, True, False, False]), 1)
