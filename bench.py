@@ -1573,6 +1573,59 @@ def cruise_question():
                       "criteria": {f"level_{k}": label for k, label in labels.items()}}}
 
 
+def cruise_errors(cases, levels):
+    """Druhy chyb tempomatu; levels = zvolené stupně, None = neplatná odpověď.
+
+    Pořadí přiřazení (první, který sedí): invalid (neplatná) → správná se nepočítá → distance (jen pásmo vzdálenosti)
+    → omitted (vynechaná jedna podmínka: pásmo − povrch, nebo pásmo − mlha) → flat (každá platná podmínka za 1 stupeň)
+    → neighbor (jen u hranice: stupeň sousedního pásma − obě srážky) → other. Odhady se neořezávají do 1–CRUISE_TOP."""
+    errors = {"distance": 0, "omitted": 0, "flat": 0, "neighbor": 0, "other": 0, "invalid": 0}
+    for (m, road, fog, answer, _, _), level in zip(cases, levels):
+        if level is None:
+            errors["invalid"] += 1
+            continue
+        if level == answer:
+            continue
+        band, p, f = band_level(m), CRUISE_ROAD[road], CRUISE_FOG[fog]
+        if level == band:
+            errors["distance"] += 1
+        elif level in (band - p, band - f):
+            errors["omitted"] += 1
+        elif level == band - (p > 0) - (f > 0):
+            errors["flat"] += 1
+        elif near_edge(m) and level == neighbor_level(m) - p - f:
+            errors["neighbor"] += 1
+        else:
+            errors["other"] += 1
+    return errors
+
+
+def cruise_summary(cases, levels):
+    """Přesnost podle třídy a polohy, škála a druhy chyb ze zvolených stupňů (None = neplatná).
+
+    scale: within = podíl úloh s platnou odpovědí nejvýš o 1 stupeň vedle, mae = průměrná odchylka (neplatná = CRUISE_TOP − 1),
+    fast / slow = počet platných odpovědí nad / pod správným stupněm."""
+    by_class = {c: [0, 0] for c in CRUISE_CLASSES}
+    by_place = {p: [0, 0] for p in CRUISE_PLACES}
+    within = mae = fast = slow = 0
+    for (_, _, _, answer, cls, place), level in zip(cases, levels):
+        ok = level == answer
+        for tally in (by_class[cls], by_place[place]):
+            tally[0] += ok
+            tally[1] += 1
+        if level is None:
+            mae += CRUISE_TOP - 1
+            continue
+        mae += abs(level - answer)
+        within += abs(level - answer) <= 1
+        fast += level > answer
+        slow += level < answer
+    n = len(cases)
+    return {"by_class": by_class, "by_place": by_place,
+            "scale": {"within": within / n, "mae": mae / n, "fast": fast, "slow": slow},
+            "errors": cruise_errors(cases, levels)}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2050,6 +2103,17 @@ def run_bet(model, cases, gates=4, mirror=False, inject=False, deadline=None):
     items = [(with_note(bet_state(*case[:2]), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(bet_summary(cases, choices, keys))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_cruise(model, cases, mirror=False, inject=False, deadline=None):
+    keys, question = level_keys(), cruise_question()
+    ask(model, cruise_state(*cases[0][:3]), question)            # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[3] - 1]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(cruise_state(*case[:3]), note), {keys[case[3] - 1]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(cruise_summary(cases, [choice_level(c) for c in choices]))     # z původní varianty zadání, jako přesnost
     return r
 
 

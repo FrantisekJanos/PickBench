@@ -199,5 +199,78 @@ class StateAndQuestion(unittest.TestCase):
                 self.assertIsNone(bench.choice_level(bad))
 
 
+HAND_A = (130, "wet", "dense", 2, "both", "middle")     # pásmo 5; bez mlhy 4, bez povrchu 3, každá za 1 také 3
+HAND_B = (101, "icy", "none", 3, "road", "edge")        # pásmo 5; každá za 1 4, sousední pásmo 4 − 2 = 2
+HAND_C = (19, "dry", "none", 1, "table", "edge")        # pásmo 1; sousední pásmo 2
+HAND = [HAND_A] * 5 + [HAND_B] * 5 + [HAND_C] * 2
+HAND_LEVELS = [2, 5, 4, 3, None, 3, 5, 4, 2, 7, 1, 2]
+ZERO = {"distance": 0, "omitted": 0, "flat": 0, "neighbor": 0, "other": 0, "invalid": 0}
+
+
+class RunCruise(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_cruise(*args, **kw)
+
+    def test_summary_by_hand(self):
+        s = bench.cruise_summary(HAND, HAND_LEVELS)
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"distance": 2, "omitted": 2, "flat": 1, "neighbor": 2, "other": 1, "invalid": 1}))
+        self.assertEqual(s["by_class"], {"table": [1, 2], "road": [1, 5], "fog": [0, 0], "both": [1, 5]})
+        self.assertEqual(s["by_place"], {"edge": [2, 7], "middle": [1, 5]})
+        self.assertAlmostEqual(s["scale"]["within"], 7 / 12)
+        self.assertAlmostEqual(s["scale"]["mae"], 21 / 12)                 # neplatná odpověď počítá 6
+        self.assertEqual((s["scale"]["fast"], s["scale"]["slow"]), (7, 1))
+
+    def test_perfect_model(self):
+        r = self.run_with(solver, "m", cases(120))
+        self.assertEqual(r["acc"], 1)
+        self.assertEqual(list(r["by_class"]), list(bench.CRUISE_CLASSES))
+        self.assertEqual(list(r["by_place"]), list(bench.CRUISE_PLACES))
+        self.assertTrue(all(ok == n > 0 for ok, n in [*r["by_class"].values(), *r["by_place"].values()]))
+        self.assertEqual(r["scale"], {"within": 1, "mae": 0, "fast": 0, "slow": 0})
+        self.assertEqual(json.dumps(r["errors"]), json.dumps(ZERO))                  # i pořadí klíčů
+
+    def test_distance_only_model(self):
+        c = cases(120)
+        r = self.run_with(lambda state: f"level_{band_level_check(state['obstacle_m'])}", "m", c)
+        wrong = sum(x[4] != "table" for x in c)
+        self.assertEqual(r["errors"], {**ZERO, "distance": wrong})
+        self.assertEqual(r["acc"], (120 - wrong) / 120)
+        self.assertEqual(r["by_class"]["table"][0], r["by_class"]["table"][1])
+        self.assertEqual(r["scale"]["slow"], 0)                                        # bez srážek vždy příliš rychle
+        self.assertEqual(r["scale"]["fast"], wrong)
+
+    def test_invalid_answers(self):
+        c = cases(30)
+        for answer in (None, "level_8", "level_0", ["level_1"]):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", c)
+                self.assertEqual(r["acc"], 0)
+                self.assertEqual(r["errors"], {**ZERO, "invalid": 30})
+                self.assertEqual(r["scale"], {"within": 0, "mae": 6, "fast": 0, "slow": 0})
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c, sent = bench.cruise_cases(5), []
+
+        def post(model, payload):
+            sent.append(payload)
+            return {"answers": {next(iter(payload["questions"])): {"choice": "level_1", "confidence": 0.5}}}, 10.0
+        with mock.patch.object(bench, "post", post):
+            bench.run_cruise("m", c)
+        self.assertEqual(len(sent), 6)                                                 # zahřátí a pět úloh
+        self.assertEqual([p["state"] for p in sent], [bench.cruise_state(*c[0][:3])] + [bench.cruise_state(*x[:3]) for x in c])
+        self.assertTrue(all(p["questions"] == bench.cruise_question() for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40)
+        r = self.run_with(solver, "m", c, mirror=True)
+        self.assertEqual((r["stab"], r["acc"]), (1, 1))
+        r = self.run_with(obedient(solver), "m", c, inject=True)
+        self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+        self.assertEqual(r["acc"], 0.75)
+        e = r["errors"]
+        self.assertEqual((sum(e.values()) - e["invalid"], e["invalid"]), (10, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
