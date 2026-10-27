@@ -85,6 +85,21 @@ class Lanes(unittest.TestCase):
         self.assertEqual(r["tokens"], 50)
 
 
+class MalformedAnswers(unittest.TestCase):
+    """Odpověď ve špatném tvaru je neplatná odpověď, běh nespadne (stejně jako ask_noul u Závory)."""
+
+    def test_ask_and_measure_take_a_malformed_answer_as_invalid(self):
+        question = {"gate": {"type": "choice", "instructions": "x", "criteria": {"a": "A", "b": "B"}}}
+        bad = [{"answers": "x"}, {"answers": 5}, {"answers": [{"choice": "a"}]}, {"answers": {"gate": "a"}},
+               {"answers": {"gate": ["a"]}}, {"answers": {"gate": {"choice": ["a"]}}}, {"answers": {"gate": {"choice": {"a": 1}}}},
+               {"answers": {"gate": {"choice": 1, "confidence": "high"}}}, {}]
+        for out in bad:
+            with self.subTest(out=out), mock.patch.object(bench, "post", lambda m, p, out=out: (out, 7.0)):
+                self.assertEqual(bench.ask("m", {}, question)[0], None)
+                r, choices = bench.measure("m", [({}, {"a"}, ""), ({}, {"b"}, "")], question, mirror=True)
+                self.assertEqual((r["acc"], choices), (0, [None, None]))
+
+
 class Emails(unittest.TestCase):
     def test_validate_fills_defaults(self):
         ds = bench.validate_dataset(DS)

@@ -1272,9 +1272,13 @@ def ask(model, state, questions, label=""):
         out, ms = post(model, {"state": state, "questions": questions})
     except Exception as e:
         raise RuntimeError(f"{e} ({label})" if label else str(e)) from e
-    a = (out.get("answers") or {}).get(next(iter(questions))) or {}
+    answers = out.get("answers")
+    a = answers.get(next(iter(questions))) if isinstance(answers, dict) else None
+    if not isinstance(a, dict):                       # poškozená odpověď = neplatná (choice None), běh nespadne; jako ask_noul
+        a = {}
+    choice = a.get("choice")
     usage = out.get("usage")                         # „usage“: null nebo cokoli, co není objekt, nesmí po zaplaceném dotazu shodit běh
-    return a.get("choice"), ms, a.get("confidence"), usage.get("input_tokens") if isinstance(usage, dict) else None
+    return (choice if isinstance(choice, str) else None), ms, a.get("confidence"), usage.get("input_tokens") if isinstance(usage, dict) else None
 
 
 def measure(model, items, question, mirror=False, targets=None, deadline=None):
