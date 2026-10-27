@@ -1516,6 +1516,32 @@ def cruise_level(m, road, fog):
     return band_level(m) - CRUISE_ROAD[road] - CRUISE_FOG[fog]
 
 
+def cruise_case(rng, cls, place):
+    """Vrací úlohu (m, road, fog, answer, cls, place) dané třídy a polohy (edge = u hranice, middle = uvnitř pásma).
+
+    Generátor nezamítá: kombinaci (stupeň ze vzdálenosti, srážka povrch, srážka mlha) losuje podle CRUISE_WEIGHTS[cls],
+    pak vzdálenost z pásma toho stupně se správnou polohou. Pořadí volání rng je dané prototypem (stojí na něm naměřená čísla).
+    Porušená záruka (stupeň mimo 1–CRUISE_TOP, vzdálenost mimo pásmo) vyvolá RuntimeError, nic se neopravuje potichu."""
+    if cls not in CRUISE_WEIGHTS or place not in CRUISE_PLACES:
+        raise RuntimeError(f"cruise_case: unsupported class {cls} or place {place}")
+    combos = CRUISE_WEIGHTS[cls]
+    level, p, f = rng.choices(list(combos), weights=list(combos.values()))[0]
+    lo, hi = band_range(level)
+    m = rng.choice([m for m in range(lo, hi + 1) if near_edge(m) == (place == "edge")])
+    road = next(k for k, v in CRUISE_ROAD.items() if v == p)
+    fog = next(k for k, v in CRUISE_FOG.items() if v == f)
+    answer = cruise_level(m, road, fog)
+    if not 1 <= answer <= CRUISE_TOP or band_level(m) != level:
+        raise RuntimeError("cruise_case: generated task breaks its guarantees")
+    return m, road, fog, answer, cls, place
+
+
+def cruise_cases(n, seed=1):
+    """n úloh ze semínka; na každou úlohu se losuje třída, pak poloha (rovnoměrně)."""
+    rng = random.Random(seed)
+    return [cruise_case(rng, rng.choice(CRUISE_CLASSES), rng.choice(CRUISE_PLACES)) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",

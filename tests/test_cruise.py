@@ -88,3 +88,80 @@ class Basics(unittest.TestCase):
         self.assertEqual([bench.near_edge(m) for m in (8, 16, 17, 19, 20, 22, 23, 97, 103, 222, 223, 300)],
                          [False, False, True, True, True, True, False, True, False, True, False, False])
         self.assertEqual([bench.neighbor_level(m) for m in (19, 20, 98, 101, 217, 222)], [2, 1, 5, 4, 7, 6])
+
+
+def cheap_shortcuts():
+    """Levné zkratky, které pravidla nečtou (spec, oddíl Zkratky): stálý stupeň, jen podmínky, hrubá vzdálenost ve čtyřech podobách."""
+    pen = lambda c: bench.CRUISE_ROAD[c[1]] + bench.CRUISE_FOG[c[2]]
+    clip = lambda x: max(1, min(7, x))
+    out = {f"always_{k}": (lambda k: lambda c: k)(k) for k in range(1, 8)}
+    out["conditions_only"] = lambda c: clip(7 - pen(c))
+    for lo, hi in ((2, 5), (3, 6), (2, 6), (3, 5)):
+        out[f"rough_{lo}{hi}"] = (lambda lo, hi: lambda c: clip((lo if c[0] < 100 else hi) - pen(c)))(lo, hi)
+    return out
+
+
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        for m, road, fog, answer, cls, place in cases():
+            with self.subTest(m=m, road=road, fog=fog):
+                self.assertIsInstance(m, int)
+                self.assertTrue(8 <= m <= 300)
+                self.assertTrue(1 <= answer <= 7)
+                self.assertEqual(answer, band_level_check(m) - bench.CRUISE_ROAD[road] - bench.CRUISE_FOG[fog])
+                self.assertIn(cls, bench.CRUISE_CLASSES)
+
+    def test_conditions_match_the_class(self):
+        for m, road, fog, answer, cls, place in cases():
+            with self.subTest(cls=cls, road=road, fog=fog):
+                self.assertEqual((road != "dry", fog != "none"),
+                                 {"table": (False, False), "road": (True, False), "fog": (False, True), "both": (True, True)}[cls])
+
+    def test_classes_and_places_are_spread(self):
+        c = cases()
+        classes = Counter(x[4] for x in c)
+        for cls in bench.CRUISE_CLASSES:
+            sub = [x for x in c if x[4] == cls]
+            with self.subTest(cls=cls):
+                self.assertTrue(0.22 <= classes[cls] / len(c) <= 0.28, classes)
+                self.assertTrue(0.45 <= sum(x[5] == "edge" for x in sub) / len(sub) <= 0.55)
+
+    def test_edge_tasks_lie_near_a_boundary(self):
+        for m, *_, place in cases():
+            with self.subTest(m=m, place=place):
+                self.assertEqual(any(b - 3 <= m <= b + 2 for b in BANDS), place == "edge")
+                if place == "edge":
+                    self.assertLessEqual(min(abs(m - b) for b in BANDS), 3)
+
+    def test_cheap_shortcuts_are_balanced(self):
+        c = cases()
+        for cls in ("road", "fog", "both"):
+            sub = [x for x in c if x[4] == cls]
+            for name, guess in cheap_shortcuts().items():
+                with self.subTest(cls=cls, shortcut=name):
+                    self.assertLessEqual(sum(guess(x) == x[3] for x in sub) / len(sub), 0.35)
+
+    def test_distance_only_and_a_left_out_condition(self):
+        c = cases()
+        for cls, want in (("table", 1.0), ("road", 0.0), ("fog", 0.0), ("both", 0.0)):
+            sub = [x for x in c if x[4] == cls]
+            self.assertEqual(sum(band_level_check(x[0]) == x[3] for x in sub) / len(sub), want, cls)
+        for x in (x for x in c if x[4] == "both"):                                   # vynechaná mlha / vynechaný povrch v both nikdy netrefí
+            band, p, f = band_level_check(x[0]), bench.CRUISE_ROAD[x[1]], bench.CRUISE_FOG[x[2]]
+            self.assertNotIn(x[3], (band - p, band - f), x)
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.cruise_cases(30), bench.cruise_cases(30, seed=1))
+        self.assertNotEqual(bench.cruise_cases(30), bench.cruise_cases(30, seed=2))
+        self.assertEqual(bench.cruise_cases(30), cases()[:30])                       # další úloha nemění ty předchozí
+
+    def test_broken_guarantees_and_bad_arguments_raise(self):
+        with mock.patch.dict(bench.CRUISE_WEIGHTS, {"both": {(1, 1, 1): 1}}), self.assertRaises(RuntimeError):
+            bench.cruise_case(random.Random(1), "both", "middle")                   # stupeň 1 − 2 je pod 1
+        for cls, place in (("floor", "edge"), ("table", "near")):
+            with self.subTest(cls=cls, place=place), self.assertRaises(RuntimeError):
+                bench.cruise_case(random.Random(1), cls, place)
+
+
+if __name__ == "__main__":
+    unittest.main()
