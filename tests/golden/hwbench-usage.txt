@@ -1,7 +1,7 @@
 Měření obsluhy rozhodovacího modelu a hardwaru z příkazové řádky (bez hry).
 
 Použití:  python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv soubor]
-                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+                                   [--idle S] [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
 Příklad:  python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
@@ -17,6 +17,8 @@ Testy:
                odmítnutý stupeň (HTTP 400) se vypíše jako „nevešlo se“ a větší se nezkouší
   soak         dotazy po dobu M minut (výchozí 10), GPU se vzorkuje přibližně po 1 s: souhrn po minutách,
                J na rozhodnutí, poměr latence poslední ÷ první minuta; CSV má řádek na každé rozhodnutí
+               --idle S: před měřením S sekund bez dotazů (výchozí 0 = ne); pod souhrnem klidový příkon a J na rozhodnutí
+               bez klidu. Od 2 minut ještě průběh p50, příkonu a teploty po minutách (znaky ▁ až █).
   server       scénář Server podle MLPerf: dotazy přicházejí náhodně (Poissonův proces, pevné semínko) zadaným tempem
                bez ohledu na to, jestli předchozí odpověď dorazila; latence se měří od plánovaného příchodu (fronta se počítá).
                Stupně tempa jsou 0,25 až 2násobek sériové rychlosti modelu (nebo --rates v dotazech za sekundu),

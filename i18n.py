@@ -334,6 +334,13 @@ TEXTS = {
                               "latence poslední ÷ první minuta {ratio}",
                         "en": "{model}: {n} {n|decision|decisions}{mark}, J per decision {j}, energy {wh} Wh, highest temperature {temp} °C, "
                               "latency last ÷ first minute {ratio}"},
+    # soak --idle: klidový příkon ({watts} W z {k} vzorků za {seconds} s) a J na rozhodnutí bez klidu ({net}); průběh po minutách
+    # ({line} = znaky ▁ až █ od nejnižší po nejvyšší hodnotu, {lo}–{hi} = rozsah), od 2 minut.
+    "hw.soak.idle": {"cs": "{model}: klidový příkon {watts} W ({k} {k|vzorek|vzorky|vzorků} za {seconds} s), J na rozhodnutí bez klidu {net}",
+                     "en": "{model}: idle power draw {watts} W ({k} {k|sample|samples} in {seconds} s), J per decision without idle {net}"},
+    "hw.soak.chartLatency": {"cs": "{model}: p50 po minutách {line} ({lo}–{hi} ms)", "en": "{model}: p50 by minute {line} ({lo}–{hi} ms)"},
+    "hw.soak.chartPower": {"cs": "{model}: příkon po minutách {line} ({lo}–{hi} W)", "en": "{model}: power draw by minute {line} ({lo}–{hi} W)"},
+    "hw.soak.chartTemp": {"cs": "{model}: teplota po minutách {line} ({lo}–{hi} °C)", "en": "{model}: temperature by minute {line} ({lo}–{hi} °C)"},
     # Věty, kterými hwbench.py končí. {error} je hláška systému nebo Ollamy, {name} jméno proměnné prostředí.
     "hw.err.limits": {"cs": "--max-usd a --max-hosted musí být nezáporná čísla.", "en": "--max-usd and --max-hosted must be non-negative numbers."},
     "hw.err.coldNeedsOllama": {"cs": "Test cold potřebuje program ollama v PATH (ollama stop <model>).",

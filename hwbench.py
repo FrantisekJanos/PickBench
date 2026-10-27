@@ -1,7 +1,7 @@
 """Měření obsluhy rozhodovacího modelu a hardwaru z příkazové řádky (bez hry).
 
 Použití:  python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv soubor]
-                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+                                   [--idle S] [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
 Příklad:  python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
@@ -17,6 +17,8 @@ Testy:
                odmítnutý stupeň (HTTP 400) se vypíše jako „nevešlo se“ a větší se nezkouší
   soak         dotazy po dobu M minut (výchozí 10), GPU se vzorkuje přibližně po 1 s: souhrn po minutách,
                J na rozhodnutí, poměr latence poslední ÷ první minuta; CSV má řádek na každé rozhodnutí
+               --idle S: před měřením S sekund bez dotazů (výchozí 0 = ne); pod souhrnem klidový příkon a J na rozhodnutí
+               bez klidu. Od 2 minut ještě průběh p50, příkonu a teploty po minutách (znaky ▁ až █).
   server       scénář Server podle MLPerf: dotazy přicházejí náhodně (Poissonův proces, pevné semínko) zadaným tempem
                bez ohledu na to, jestli předchozí odpověď dorazila; latence se měří od plánovaného příchodu (fronta se počítá).
                Stupně tempa jsou 0,25 až 2násobek sériové rychlosti modelu (nebo --rates v dotazech za sekundu),
@@ -43,7 +45,7 @@ Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu)
 USAGE_EN = """Measures how this machine serves a decision model, and its hardware, from the command line (without the game).
 
 Usage:    python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv file]
-                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+                                   [--idle S] [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
 Examples: python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
@@ -59,6 +61,8 @@ Tests:
                hwbench.py prints a refused level (HTTP 400) as "did not fit" and does not try larger ones
   soak         requests for M minutes (default 10), with the GPU sampled about once a second: a summary per minute,
                J per decision, the latency ratio last ÷ first minute; the CSV has a row for every decision
+               --idle S: S seconds without requests before the measurement (default 0 = no); below the summary the idle power draw
+               and J per decision without idle. From 2 minutes on also the course of p50, power draw and temperature by minute (▁ to █).
   server       MLPerf's Server scenario: requests arrive at random (a Poisson process, fixed seed) at the given rate
                whether or not the previous answer has arrived; the test measures latency from the planned arrival (waiting in the queue counts).
                The rate levels are 0.25 to 2 times the serial speed of the model (or --rates in requests per second),
@@ -108,6 +112,7 @@ CACHE_ROUNDS = 3                                                 # test cache: k
 REPEAT_STATES = 20                                               # test repeat: počet stavů, každý se ptá N× po kolech
 GB = 1e9                                                         # test quant: GB jako Ollama (10⁹ B)
 NO_INFO = {"quant": None, "params": None, "disk_gb": None, "mem_gb": None}      # údaje o modelu, které se nezjistily
+SPARK = "▁▂▃▄▅▆▇█"                                               # průběh soaku po minutách: nejnižší až nejvyšší hodnota
 NAN = float("nan")
 KEYS = bench.lane_keys(3)
 QUESTION = bench.lane_question(3)
@@ -496,6 +501,45 @@ def soak_summary(decisions, samples, duration=None):
             "max_temp": max(temps) if temps else None}
 
 
+def run_idle(sampler, seconds, sleep=time.sleep):
+    """Klidový příkon: seconds s bez dotazů se vzorkuje GPU. watts = průměr příkonu ze vzorků; méně než gpu.MIN_SAMPLES → NaN."""
+    sampler.start()
+    try:
+        sleep(seconds)
+    finally:
+        samples = sampler.stop()
+    watts = [s[2] for s in samples if type(s[2]) in (int, float) and s[2] == s[2]]
+    return {"seconds": seconds, "samples": len(watts), "watts": sum(watts) / len(watts) if len(watts) >= gpu.MIN_SAMPLES else NAN}
+
+
+def spark(values):
+    """Řádek znaků SPARK od nejnižší po nejvyšší hodnotu; všechny stejné → prostřední znak; chybějící hodnota (None, NaN) → „·“."""
+    ok = lambda v: type(v) in (int, float) and v == v
+    nums = [v for v in values if ok(v)]
+    lo, hi = (min(nums), max(nums)) if nums else (0, 0)
+    pick = lambda v: SPARK[3] if hi == lo else SPARK[round((v - lo) / (hi - lo) * (len(SPARK) - 1))]
+    return "".join(pick(v) if ok(v) else "·" for v in values)
+
+
+def spark_notes(model, minutes):
+    """Průběh soaku po minutách (od 2 minut): p50, příkon a teplota; řádek bez jediné hodnoty se vynechá. Klíče stojí doslova."""
+    if len(minutes) < 2:
+        return []
+    out = []
+
+    def part(field):
+        vals = [m[field] for m in minutes]
+        nums = [v for v in vals if v is not None and v == v]
+        return (spark(vals), min(nums), max(nums)) if nums else None
+    if p := part("p50"):
+        out.append(i18n.t("hw.soak.chartLatency", model=model, line=p[0], lo=num(p[1], 1), hi=num(p[2], 1)))
+    if p := part("power"):
+        out.append(i18n.t("hw.soak.chartPower", model=model, line=p[0], lo=num(p[1], 1), hi=num(p[2], 1)))
+    if p := part("temp"):
+        out.append(i18n.t("hw.soak.chartTemp", model=model, line=p[0], lo=num(p[1]), hi=num(p[2])))
+    return out
+
+
 def run_soak(model, minutes=10, post=None, clock=time.perf_counter, sampler=None):
     """Dotazy po dobu M minut. sampler má start() a stop() -> vzorky; None = GPU se nevzorkuje."""
     post = post or bench.post
@@ -513,7 +557,7 @@ def run_soak(model, minutes=10, post=None, clock=time.perf_counter, sampler=None
     finally:
         duration = clock() - t0
         samples = sampler.stop() if sampler else []
-    return {"decisions": decisions, "samples": samples, "interrupted": interrupted, **soak_summary(decisions, samples, duration)}
+    return {"decisions": decisions, "samples": samples, "interrupted": interrupted, "duration": duration, **soak_summary(decisions, samples, duration)}
 
 
 # ---------- výstup ----------
@@ -594,7 +638,7 @@ def spent_notes(model, before, net):
     return [f"{model}: {text}" for text in (spent, net) if text]
 
 
-def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf_counter, info=None):
+def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf_counter, info=None, idle_sampler=None, sleep=time.sleep):
     """Jeden test pro jeden model. Vrací (záhlaví, řádky tabulky, záhlaví CSV, řádky CSV, řádky textu pod tabulku)."""
     local = not providers.hosted(model)
     head, csv_head = heads(a.test)
@@ -650,10 +694,15 @@ def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf
         return head, rows, csv_head, rows, []
     if not local and not a.hosted_soak:
         return head, [], csv_head, [], [i18n.t("hw.skip.soak", model=model)]
+    idle = run_idle(idle_sampler or GpuSampler(), a.idle, sleep) if local and a.idle > 0 else None      # klid před zahřátím; hostovaný model GPU nemá
     r = run_soak(model, a.minutes, post, clock, (sampler or GpuSampler()) if local else None)
     rows = [[model, m["minute"], m["n"], num(m["p50"], 1), num(m["p95"], 1), num(m["temp"]), num(m["power"], 1), num(m["clock"])] for m in r["minutes"]]
     notes = [i18n.t("hw.soak.summary", model=model, n=len(r["decisions"]), mark=mark(r["interrupted"]), j=num(r["j_per_decision"], 2),
                     wh=num(r["joules"] / 3600, 3), temp=num(r["max_temp"]), ratio=num(r["ratio"], 2))]
+    if idle is not None:                             # J bez klidu = (energie běhu − klidový příkon × délka běhu) ÷ rozhodnutí
+        net = (r["joules"] - idle["watts"] * r["duration"]) / len(r["decisions"]) if r["decisions"] else NAN
+        notes.append(i18n.t("hw.soak.idle", model=model, watts=num(idle["watts"], 1), k=idle["samples"], seconds=num(a.idle), net=num(net, 2)))
+    notes += spark_notes(model, r["minutes"])
     return head, rows, csv_head, [[model, *row] for row in soak_rows(r["decisions"], r["samples"])], noted(notes, r["interrupted"])
 
 
@@ -665,6 +714,7 @@ def parse_args(argv):
     p.add_argument("--rates", type=lambda text: [float(x) for x in text.split(",")])
     p.add_argument("--csv")
     p.add_argument("--hosted-soak", action="store_true")
+    p.add_argument("--idle", type=float, default=0)              # soak: sekund klidu před měřením; 0 = bez odečtu klidu
     p.add_argument("--max-usd", type=float)
     p.add_argument("--max-hosted", type=int)
     p.add_argument("rest", nargs="*")
@@ -679,7 +729,7 @@ def line(cells, head):
     return f"{cells[0]:<20}" + "".join(f"{str(c):>{max(len(h) + 2, 10, len(str(c)) + 1)}}" for c, h in zip(cells[1:], head[1:]))
 
 
-def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out=print, clock=time.perf_counter, info=None):
+def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out=print, clock=time.perf_counter, info=None, idle_sampler=None, sleep=time.sleep):
     """Celý běh nástroje v jazyce, který už platí (volbu --lang vyjímá main)."""
     try:
         a = parse_args(argv)
@@ -688,6 +738,8 @@ def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out
     if a.test not in TESTS or not a.models or (a.n is not None and a.n < 1) or not a.minutes > 0:
         sys.exit(usage())
     if not a.p99_ms > 0 or (a.rates is not None and not all(rate > 0 for rate in a.rates)):
+        sys.exit(usage())
+    if not a.idle >= 0 or (a.idle and a.test != "soak"):           # i NaN; --idle jen se soak
         sys.exit(usage())
     if a.max_usd is not None or a.max_hosted is not None:
         if (a.max_usd is not None and not 0 <= a.max_usd < float("inf")) or (a.max_hosted is not None and a.max_hosted < 0):
@@ -709,7 +761,7 @@ def run(argv, post=None, sampler=None, stop=ollama_stop, which=shutil.which, out
                 providers.resolve(model)             # model, který nejde zavolat (není v seznamu, chybí klíč), skončí větou před prvním dotazem
             before, net = providers.BUDGET.state(), providers.net_line(model) if paid else None
             try:
-                head, rows, csv_head, csv_rows, notes = measure(a, model, post, sampler, stop, clock, info)
+                head, rows, csv_head, csv_rows, notes = measure(a, model, post, sampler, stop, clock, info, idle_sampler, sleep)
             except BaseException:                    # i po chybě nebo Ctrl+C: co se utratilo, se vypíše
                 for text in spent_notes(model, before, net):
                     out(text)

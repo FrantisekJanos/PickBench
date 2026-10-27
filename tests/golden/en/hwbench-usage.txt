@@ -1,7 +1,7 @@
 Measures how this machine serves a decision model, and its hardware, from the command line (without the game).
 
 Usage:    python hwbench.py <test> [--n N] [--minutes M] [--p99-ms L] [--rates a,b,c] [--csv file]
-                                   [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
+                                   [--idle S] [--hosted-soak] [--max-usd X] [--max-hosted N] model [model ...]
 Examples: python hwbench.py latency --n 200 tev1
           python hwbench.py soak --minutes 3 --csv soak.csv tev1
           python hwbench.py server --p99-ms 1000 tev1
@@ -17,6 +17,8 @@ Tests:
                hwbench.py prints a refused level (HTTP 400) as "did not fit" and does not try larger ones
   soak         requests for M minutes (default 10), with the GPU sampled about once a second: a summary per minute,
                J per decision, the latency ratio last ÷ first minute; the CSV has a row for every decision
+               --idle S: S seconds without requests before the measurement (default 0 = no); below the summary the idle power draw
+               and J per decision without idle. From 2 minutes on also the course of p50, power draw and temperature by minute (▁ to █).
   server       MLPerf's Server scenario: requests arrive at random (a Poisson process, fixed seed) at the given rate
                whether or not the previous answer has arrived; the test measures latency from the planned arrival (waiting in the queue counts).
                The rate levels are 0.25 to 2 times the serial speed of the model (or --rates in requests per second),

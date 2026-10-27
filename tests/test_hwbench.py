@@ -476,6 +476,70 @@ class Quant(unittest.TestCase):
         self.assertEqual(len(post.calls), 1 + 100)                     # zahřátí a 100 dotazů
 
 
+class Idle(unittest.TestCase):
+    IDLE = [(float(t), 30, 10.0, 210) for t in range(6)]               # šest vzorků v klidu, příkon 10 W
+
+    def soak(self, *argv, idle=None, clock=None, samples=None):
+        a = hwbench.parse_args(["soak", *argv])
+        return hwbench.measure(a, a.models[0], FakePost(), FakeSampler(samples or Language.SAMPLES), clock=clock or FakeClock(20.0),
+                               idle_sampler=idle or FakeSampler(self.IDLE), sleep=lambda seconds: None)
+
+    def test_idle_power_is_the_mean_of_the_samples(self):
+        slept = []
+        r = hwbench.run_idle(FakeSampler([(float(t), 40, 10.0 + t, 210) for t in range(6)]), 5, sleep=slept.append)
+        self.assertEqual((r["samples"], r["seconds"], slept), (6, 5, [5]))
+        self.assertAlmostEqual(r["watts"], 12.5)
+        few = hwbench.run_idle(FakeSampler(self.IDLE[:4]), 5, sleep=lambda s: None)
+        self.assertEqual(few["samples"], 4)
+        self.assertTrue(few["watts"] != few["watts"])                  # méně než gpu.MIN_SAMPLES: NaN
+
+    def test_soak_prints_the_energy_without_idle(self):
+        idle = FakeSampler(self.IDLE)
+        notes = self.soak("--minutes", "1", "--idle", "5", "m", idle=idle)[4]
+        self.assertTrue(idle.started)
+        self.assertEqual(notes[1], "m: klidový příkon 10.0 W (6 vzorků za 5 s), J na rozhodnutí bez klidu 1200.00")      # (3200 J − 10 W × 80 s) ÷ 2
+        self.assertEqual(len(notes), 2)                                # jedna minuta: průběh se nekreslí
+        with i18n.process("en"):
+            notes = self.soak("--minutes", "1", "--idle", "5", "m")[4]
+        self.assertEqual(notes[1], "m: idle power draw 10.0 W (6 samples in 5 s), J per decision without idle 1200.00")
+        self.assertEqual(len(self.soak("--minutes", "1", "m", idle=FakeSampler([]))[4]), 1)       # bez --idle beze změny
+
+    def test_idle_only_with_soak(self):
+        self.assertEqual(hwbench.parse_args(["soak", "--idle", "30", "m"]).idle, 30)
+        self.assertEqual(hwbench.parse_args(["soak", "m"]).idle, 0)
+        for argv in (["latency", "--idle", "5", "m"], ["soak", "--idle", "-1", "m"], ["soak", "--idle", "nan", "m"]):
+            with self.subTest(argv=argv), self.assertRaises(SystemExit) as e:
+                hwbench.main(argv, post=FakePost(), out=lambda line: None)
+            self.assertIn("Použití", str(e.exception.code))
+
+    def test_hosted_soak_has_no_idle_line(self):
+        idle = FakeSampler(self.IDLE)
+        a = hwbench.parse_args(["soak", "--minutes", "1", "--hosted-soak", "--idle", "5", "cf:x"])
+        notes = hwbench.measure(a, "cf:x", FakePost(), FakeSampler([]), clock=FakeClock(20.0), idle_sampler=idle, sleep=lambda s: None)[4]
+        self.assertFalse(idle.started)
+        self.assertEqual(len(notes), 1)
+
+    def test_spark(self):
+        self.assertEqual(hwbench.spark([1, 2, 3, 4]), "▁▃▆█")
+        self.assertEqual(hwbench.spark([5, 5]), "▄▄")
+        self.assertEqual(hwbench.spark([1, None, float("nan"), 3]), "▁··█")
+        self.assertEqual(hwbench.spark([None, None]), "··")
+
+    def test_two_minutes_draw_the_course(self):
+        samples = [(float(t), 50, 40.0, 1500) for t in range(0, 161, 5)]
+        notes = self.soak("--minutes", "2", "m", clock=FakeClock(40.0), samples=samples)[4]
+        self.assertEqual(notes[1:], ["m: p50 po minutách ▄▄ (10.0–10.0 ms)", "m: příkon po minutách ▄▄ (40.0–40.0 W)",
+                                     "m: teplota po minutách ▄▄ (50–50 °C)"])
+        with i18n.process("en"):
+            notes = self.soak("--minutes", "2", "m", clock=FakeClock(40.0), samples=samples)[4]
+        self.assertEqual(notes[1:], ["m: p50 by minute ▄▄ (10.0–10.0 ms)", "m: power draw by minute ▄▄ (40.0–40.0 W)",
+                                     "m: temperature by minute ▄▄ (50–50 °C)"])
+
+    def test_course_without_gpu_has_only_latency(self):
+        notes = self.soak("--minutes", "2", "m", clock=FakeClock(40.0), samples=[(0.0, None, None, None)])[4]
+        self.assertEqual(notes[1:], ["m: p50 po minutách ▄▄ (10.0–10.0 ms)"])
+
+
 class Cli(unittest.TestCase):
     def test_parse_args(self):
         a = hwbench.parse_args(["latency", "--n", "200", "tev1", "nimble"])
