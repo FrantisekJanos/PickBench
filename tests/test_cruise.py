@@ -272,5 +272,35 @@ class RunCruise(unittest.TestCase):
         self.assertEqual((sum(e.values()) - e["invalid"], e["invalid"]), (10, 0))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_class(self):
+        r = {"by_class": {"table": [5, 10], "road": [4, 11], "fog": [3, 9], "both": [2, 10]}}
+        for lang, want in (("cs", "(jen tabulka 5/10, povrch 4/11, mlha 3/9, obojí 2/10)"),
+                           ("en", "(table only 5/10, road 4/11, fog 3/9, both 2/10)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.cruise_note(r), want)
+
+    def test_lines_in_both_languages(self):
+        r = {"by_place": {"edge": [7, 20], "middle": [9, 20]}, "scale": {"within": 0.75, "mae": 1.234, "fast": 6, "slow": 5},
+             "errors": {"distance": 1, "omitted": 2, "flat": 3, "neighbor": 4, "other": 5, "invalid": 6}}
+        pad = " " * 20
+        self.assertEqual(printed("cs", bench.print_cruise, r), [
+            pad + "u hranice 7/20, uvnitř pásma 9/20; ±1 stupeň 75%, MAE 1.23, příliš rychle 6, příliš pomalu 5",
+            pad + "chyby: jen vzdálenost 1, vynechaná podmínka 2, každá podmínka za 1 stupeň 3, sousední pásmo 4, jiné 5, neplatné 6"])
+        self.assertEqual(printed("en", bench.print_cruise, r), [
+            pad + "near a boundary 7/20, inside a band 9/20; ±1 level 75%, MAE 1.23, too fast 6, too slow 5",
+            pad + "errors: distance only 1, condition left out 2, each condition as 1 level 3, neighboring band 4, other 5, invalid 6"])
+
+    def test_lines_with_empty_classes(self):
+        r = {"by_class": {"table": [1, 1], "road": [0, 0], "fog": [0, 0], "both": [0, 0]},
+             "by_place": {"edge": [0, 0], "middle": [1, 1]}, "scale": {"within": 1.0, "mae": 0.0, "fast": 0, "slow": 0},
+             "errors": dict.fromkeys(("distance", "omitted", "flat", "neighbor", "other", "invalid"), 0)}
+        with i18n.process("en"):
+            self.assertEqual(bench.cruise_note(r), "(table only 1/1, road 0/0, fog 0/0, both 0/0)")
+        lines = printed("en", bench.print_cruise, r)
+        self.assertEqual(lines[0], " " * 20 + "near a boundary 0/0, inside a band 1/1; ±1 level 100%, MAE 0.00, too fast 0, too slow 0")
+        self.assertEqual(len(lines), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

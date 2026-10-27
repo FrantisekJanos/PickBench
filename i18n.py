@@ -181,6 +181,18 @@ TEXTS = {
     "bench.bet.general": {"cs": "obecná", "en": "general"},
     "bench.bet.line": {"cs": "regret {regret}; chyby: nejvyšší odměna {reward}, nejvyšší šance {chance}, jiné {other}, neplatné {invalid}",
                        "en": "regret {regret}; errors: highest reward {reward}, highest chance {chance}, other {other}, invalid {invalid}"},
+    # Tempomat (--cruise): jména tříd v poznámce za řádkem modelu; pod ním řádek polohy a škály ({edge}, {middle} = „správně/celkem“,
+    # {within} = hotová procenta, {mae} = číslo na dvě desetinná místa, {fast}, {slow} = počty) a řádek druhů chyb (počty).
+    "bench.cruise.table": {"cs": "jen tabulka", "en": "table only"},
+    "bench.cruise.road": {"cs": "povrch", "en": "road"},
+    "bench.cruise.fog": {"cs": "mlha", "en": "fog"},
+    "bench.cruise.both": {"cs": "obojí", "en": "both"},
+    "bench.cruise.line": {"cs": "u hranice {edge}, uvnitř pásma {middle}; ±1 stupeň {within}, MAE {mae}, příliš rychle {fast}, příliš pomalu {slow}",
+                          "en": "near a boundary {edge}, inside a band {middle}; ±1 level {within}, MAE {mae}, too fast {fast}, too slow {slow}"},
+    "bench.cruise.errors": {"cs": "chyby: jen vzdálenost {distance}, vynechaná podmínka {omitted}, každá podmínka za 1 stupeň {flat}, "
+                                  "sousední pásmo {neighbor}, jiné {other}, neplatné {invalid}",
+                            "en": "errors: distance only {distance}, condition left out {omitted}, each condition as 1 level {flat}, "
+                                  "neighboring band {neighbor}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "

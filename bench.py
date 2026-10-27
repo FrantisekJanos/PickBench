@@ -2331,6 +2331,20 @@ def print_bet(r):
     print(" " * 20 + i18n.t("bench.bet.line", regret=pct1(r["regret"]), **r["errors"]), flush=True)
 
 
+def cruise_note(r):
+    """Poznámka za řádkem modelu: přesnost tempomatu podle třídy."""
+    return class_note(r["by_class"], {"table": i18n.t("bench.cruise.table"), "road": i18n.t("bench.cruise.road"),
+                                      "fog": i18n.t("bench.cruise.fog"), "both": i18n.t("bench.cruise.both")})
+
+
+def print_cruise(r):
+    """Dva řádky pod řádkem modelu: poloha a škála, pak druhy chyb."""
+    s, (eo, en), (mo, mn) = r["scale"], r["by_place"]["edge"], r["by_place"]["middle"]
+    print(" " * 20 + i18n.t("bench.cruise.line", edge=f"{eo}/{en}", middle=f"{mo}/{mn}", within=pct(s["within"]),
+                            mae=f"{s['mae']:.2f}", fast=s["fast"], slow=s["slow"]), flush=True)
+    print(" " * 20 + i18n.t("bench.cruise.errors", **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
