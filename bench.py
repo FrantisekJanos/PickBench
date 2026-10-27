@@ -2639,6 +2639,23 @@ def tictactoe_state(case, form=None):
     return {"you": you, "cells": {k: ("" if b[i] == TICTACTOE_EMPTY else b[i]) for i, k in enumerate(TICTACTOE_CELLS)}}
 
 
+TICTACTOE_RULES = ("Three of one mark in a row, a column or a diagonal win. Pick an empty cell by these rules, in this order: "
+                   "1. If a move wins at once, take it. 2. Otherwise, if the opponent could win on their next move, take that "
+                   "cell to block it. 3. Otherwise, take the cell after which you have two different ways to win on your next move.")
+
+
+def tictactoe_question(form=None):
+    """Otázka choice s devíti poli v pořadí čtení (nabídka i s obsazenými poli, stejná pro všechny úlohy)."""
+    if tictactoe_form(form) == "rows":
+        key, text = "cell", "board lists the rows from the top; in each row the first character is column 1, '.' marks an empty cell."
+    else:
+        key, text = "cell_cells", ("cells gives the mark in each cell, rNcM is row N from the top and column M from the left, "
+                                   "and an empty string is an empty cell.")
+    instructions = f"You play tic-tac-toe on a 3x3 board and it is your move; you is your mark, X or O. {text} {TICTACTOE_RULES}"
+    criteria = {k: f"Row {k[1]}, column {k[3]}" for k in TICTACTOE_CELLS}
+    return {key: {"type": "choice", "instructions": instructions, "criteria": criteria}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2661,6 +2678,8 @@ ALT = {                                              # jinak formulované zadán
     "changed_list": "Two photos show the same row of lanes, before first and after second; each one lists the lane values from left to right, so its first item belongs to lane 1. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
     "throw": "In this game of rock-paper-scissors, paper wins over rock, rock wins over scissors and scissors win over paper. opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick the move that wins against it.",
     "opponent_throw": "In this game of rock-paper-scissors, opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick that move.",
+    "cell": "It is your turn in a game of tic-tac-toe and your mark is the one in you. board shows the three rows from top to bottom, each written left to right, with '.' for a free cell. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.",
+    "cell_cells": "It is your turn in a game of tic-tac-toe and your mark is the one in you. cells names every cell as rNcM, row N counted from the top and column M from the left, and gives its mark; an empty string means the cell is free. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)

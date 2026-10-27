@@ -328,5 +328,48 @@ class State(unittest.TestCase):
                 self.assertEqual((board_of(a), board_of(b), a["you"]), (x[0], x[0], b["you"]))
 
 
+INS_ROWS = ("You play tic-tac-toe on a 3x3 board and it is your move; you is your mark, X or O. board lists the rows from the "
+            "top; in each row the first character is column 1, '.' marks an empty cell. Three of one mark in a row, a column "
+            "or a diagonal win. Pick an empty cell by these rules, in this order: 1. If a move wins at once, take it. "
+            "2. Otherwise, if the opponent could win on their next move, take that cell to block it. 3. Otherwise, take the "
+            "cell after which you have two different ways to win on your next move.")
+INS_CELLS = ("You play tic-tac-toe on a 3x3 board and it is your move; you is your mark, X or O. cells gives the mark in "
+             "each cell, rNcM is row N from the top and column M from the left, and an empty string is an empty cell. "
+             "Three of one mark in a row, a column or a diagonal win. Pick an empty cell by these rules, in this order: "
+             "1. If a move wins at once, take it. 2. Otherwise, if the opponent could win on their next move, take that "
+             "cell to block it. 3. Otherwise, take the cell after which you have two different ways to win on your next move.")
+ALT_ROWS = ("It is your turn in a game of tic-tac-toe and your mark is the one in you. board shows the three rows from top "
+            "to bottom, each written left to right, with '.' for a free cell. A player who gets three marks in a line, "
+            "across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own "
+            "comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that "
+            "leaves you two separate lines that each need just one more mark.")
+ALT_CELLS = ("It is your turn in a game of tic-tac-toe and your mark is the one in you. cells names every cell as rNcM, row N "
+             "counted from the top and column M from the left, and gives its mark; an empty string means the cell is free. "
+             "A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: "
+             "a cell that completes a line of your own comes first; failing that, the cell where the opponent would "
+             "complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.")
+
+
+class Question(unittest.TestCase):
+    def test_question_and_its_alternative_wording(self):
+        for form, ins, alt in (("rows", INS_ROWS, ALT_ROWS), ("cells", INS_CELLS, ALT_CELLS)):
+            key = KEYS[form]
+            q = bench.tictactoe_question(form)
+            with self.subTest(form=form):
+                self.assertEqual(list(q), [key])
+                self.assertEqual((q[key]["type"], q[key]["instructions"]), ("choice", ins))
+                self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps({k: f"Row {k[1]}, column {k[3]}" for k in CELLS}))
+                self.assertEqual(bench.ALT[key], alt)
+                self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt)
+                self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), list(CELLS)[::-1])
+        self.assertEqual(bench.tictactoe_question(), bench.tictactoe_question(bench.TICTACTOE_FORM))
+
+    def test_prompt_stays_short(self):                   # odhad: 4 znaky JSON na token; cíl pro hru 600
+        for form in bench.TICTACTOE_FORMS:
+            q = json.dumps(bench.tictactoe_question(form))
+            longest = max(len(json.dumps(bench.with_note(bench.tictactoe_state(x, form), "r3c3"))) for x in cases()[:300])
+            self.assertLess((longest + len(q)) / 4, 600, form)
+
+
 if __name__ == "__main__":
     unittest.main()
