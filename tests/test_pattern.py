@@ -157,5 +157,83 @@ class Basics(unittest.TestCase):
         self.assertEqual(solved, 3 + 6 + 24 + 72)                                       # primitivní cykly délky 1–4 nad třemi tahy
 
 
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        for case in cases():
+            h, nxt, cls, shape, run, warm = case
+            p = int(cls[1])
+            with self.subTest(case=case):
+                self.assertIsInstance(h, tuple)
+                self.assertTrue(set(h) <= set(MOVES))
+                self.assertEqual(len(h), run + warm)
+                self.assertTrue(8 <= run <= 10 and 1 <= warm <= 3)
+                self.assertIn(shape, bench.PATTERN_WEIGHTS[cls])
+                letters = dict(zip(shape, h[-p:]))                                           # posledních p tahů je tvar
+                self.assertEqual("".join(sorted(letters)), "ABC"[:len(set(shape))])
+                self.assertEqual(len(set(letters.values())), len(letters))
+                self.assertEqual([letters[ch] for ch in shape], list(h[-p:]))
+                self.assertEqual(letters["A"], nxt)
+                self.assertEqual(periods_of(h)[0], p)
+                self.assertEqual({h[-q] for q in periods_of(h)}, {nxt})                       # každá souhlasící perioda dá stejný tah
+                body = h[-run:]
+                self.assertTrue(all(body[i] == body[i - p] for i in range(p, run)))
+                self.assertNotEqual(h[-run - 1], h[-run - 1 + p])                             # rozehrávka cyklus neprodlužuje
+                self.assertEqual(min(q for q in range(1, 5) if all(body[i] == body[i - q] for i in range(q, run))), p)
+
+    def test_classes_and_answers_are_spread(self):
+        c = cases()
+        classes = Counter(x[2] for x in c)
+        for cls in bench.PATTERN_CLASSES:
+            self.assertTrue(0.22 <= classes[cls] / len(c) <= 0.28, classes)
+            answers = Counter(x[1] for x in c if x[2] == cls)
+            for move in MOVES:
+                self.assertTrue(0.28 <= answers[move] / classes[cls] <= 0.39, (cls, answers))
+        self.assertEqual({len(x[0]) for x in c}, set(range(9, 14)))
+
+    def test_shortcuts_stay_near_chance(self):
+        for cls, top, cheap_top in (("p2", 0.56, 0.56), ("p3", 0.48, 0.48), ("p4", 0.48, 0.48)):
+            sub = [x for x in cases() if x[2] == cls]
+            hits = {}
+            for h, nxt, *_ in sub:
+                for name, (family, v) in shortcut_hits(h, nxt, int(cls[1])).items():
+                    hits[name] = (family, hits.get(name, (family, 0))[1] + v / len(sub))
+            with self.subTest(cls=cls):
+                for name, (family, v) in hits.items():
+                    if cls == "p2" and family == "transition":
+                        continue                                                    # přechod je v p2 přesné řešení (spec)
+                    self.assertLessEqual(v, top if family != "cheap" else cheap_top, name)
+        p2 = [x for x in cases() if x[2] == "p2"]
+        self.assertEqual(sum(x[0][-1] == x[1] for x in p2), 0)                       # opakuj poslední v p2: nikdy
+
+    def test_exact_shortcut_rates(self):                     # výčet rozdělení generátoru (tvar × délka × rozehrávka × permutace), bez šumu
+        for cls, top in (("p3", 0.43), ("p4", 0.41)):
+            p, acc, total = int(cls[1]), {}, 0.0
+            for shape, ws in bench.PATTERN_WEIGHTS[cls].items():
+                for run, w in zip(range(8, 11), ws):
+                    for warm in range(1, 4):
+                        for perm in itertools.permutations(MOVES):
+                            cycle = [dict(zip("ABC", perm))[ch] for ch in shape]
+                            body = [cycle[(i - run) % p] for i in range(run)]
+                            lasts = [m for m in MOVES if m != cycle[(-1 - run) % p]]
+                            opens = [list(a) + [b] for a in itertools.product(MOVES, repeat=warm - 1) for b in lasts]
+                            for opening in opens:
+                                weight = w / 3 / 6 / len(opens)
+                                for name, (_, v) in shortcut_hits(opening + body, cycle[0], p).items():
+                                    acc[name] = acc.get(name, 0) + weight * v
+                                total += weight
+            with self.subTest(cls=cls):
+                self.assertLessEqual(max(v / total for v in acc.values()), top)
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.pattern_cases(40), bench.pattern_cases(40, seed=1))
+        self.assertNotEqual(bench.pattern_cases(40), bench.pattern_cases(40, seed=2))
+
+    def test_unknown_class_and_broken_guarantee_raise(self):
+        with self.assertRaises(RuntimeError):
+            bench.pattern_case(random.Random(1), "p5")
+        with mock.patch.dict(bench.PATTERN_WEIGHTS, {"p2": {"AA": (1, 1, 1)}}), self.assertRaises(RuntimeError):     # tvar s periodou 1 ve třídě p2
+            bench.pattern_case(random.Random(1), "p2")
+
+
 if __name__ == "__main__":
     unittest.main()

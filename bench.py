@@ -2240,6 +2240,37 @@ def pattern_solve(history):
     return periods[0], history[-periods[0]]
 
 
+def pattern_case(rng, cls):
+    """Úloha třídy cls: (historie, další tah, třída, tvar, délka cyklické části, délka rozehrávky). Staví přímo, bez zamítání.
+
+    Dvojice (tvar, délka cyklické části) podle PATTERN_WEIGHTS, písmena tvaru na tahy náhodnou permutací, rozehrávka
+    z PATTERN_WARMUP náhodných tahů, z nichž poslední není tah, který by cyklus na tom místě měl (cyklická část je tím
+    přesně tak dlouhá, jak se vylosovalo). Pořadí losování je stejné jako v prototypu. Porušená záruka = RuntimeError,
+    nic se neopravuje potichu."""
+    if cls not in PATTERN_CLASSES:
+        raise RuntimeError(f"pattern_case: unknown class {cls}")
+    p = int(cls[1])
+    combos = [(shape, run) for shape in PATTERN_WEIGHTS[cls] for run in range(PATTERN_RUN[0], PATTERN_RUN[1] + 1)]
+    weights = [w for ws in PATTERN_WEIGHTS[cls].values() for w in ws]
+    shape, run = rng.choices(combos, weights=weights)[0]
+    letters = dict(zip("ABC", rng.sample(PATTERN_MOVES, 3)))
+    cycle = [letters[ch] for ch in shape]            # cycle[0] = další tah; posledních p tahů historie = cycle
+    warm = rng.randint(*PATTERN_WARMUP)
+    body = [cycle[(i - run) % p] for i in range(run)]
+    would_be = cycle[(-1 - run) % p]                 # tah, který by cyklus měl hned před cyklickou částí
+    opening = [rng.choice(PATTERN_MOVES) for _ in range(warm - 1)] + [rng.choice([m for m in PATTERN_MOVES if m != would_be])]
+    history = tuple(opening + body)
+    period, nxt = pattern_solve(history)
+    if (period, nxt) != (p, cycle[0]) or list(history[-p:]) != cycle or pattern_has_period(history[-run - 1:], p):
+        raise RuntimeError(f"pattern_case: {list(history)} does not keep period {p} with next move {cycle[0]}")
+    return history, nxt, cls, shape, run, warm
+
+
+def pattern_cases(n, seed=1):
+    rng = random.Random(seed)
+    return [pattern_case(rng, rng.choice(PATTERN_CLASSES)) for _ in range(n)]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
