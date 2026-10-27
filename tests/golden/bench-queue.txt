@@ -1,11 +1,11 @@
 12 úloh u mýtné brány (fronty bez vah), 4 pruhy; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
-m1                       11ms     11ms    17ms    5ms    17ms     94.5      25%      71%    46%       17%       8%     149   (rozdíl 1 0/4, rozdíl 2–3 0/1, rozdíl 4+ 3/7)
-                    přesnost variant: původní 25%, obrácené pořadí 25%, jiná formulace 42%
-                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 33%, jiná chyba 33%; přesnost bez pokynu 22%
-                    chyby: nejkratší text 0, jiné 9, neplatné 0
-m2                       11ms     11ms    17ms    5ms    17ms     91.6      50%      80%    31%       33%      17%     149   (rozdíl 1 3/4, rozdíl 2–3 0/1, rozdíl 4+ 3/7)
-                    přesnost variant: původní 50%, obrácené pořadí 50%, jiná formulace 25%
-                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 67%, jiná chyba 0%; přesnost bez pokynu 56%
-                    chyby: nejkratší text 0, jiné 6, neplatné 0
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      42%      73%    40%       50%       8%     171   (rozdíl 1 4/5, rozdíl 2–3 0/1, rozdíl 4+ 1/6)
+                    přesnost variant: původní 42%, obrácené pořadí 42%, jiná formulace 33%
+                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 67%, jiná chyba 0%; přesnost bez pokynu 44%
+                    chyby: nejkratší text 1, jiné 6, neplatné 0
+m2                       11ms     11ms    17ms    5ms    17ms     91.6      42%      76%    38%       25%      17%     171   (rozdíl 1 3/5, rozdíl 2–3 1/1, rozdíl 4+ 1/6)
+                    přesnost variant: původní 42%, obrácené pořadí 42%, jiná formulace 25%
+                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 33%, jiná chyba 33%; přesnost bez pokynu 44%
+                    chyby: nejkratší text 1, jiné 6, neplatné 0

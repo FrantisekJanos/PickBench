@@ -1,5 +1,5 @@
 12 tasks at a toll gate (weighted queues), 6 lanes, the same for all models
 
 model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
-m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      70%    53%     245   (difference 1 1/4, difference 2–3 1/4, difference 4+ 0/4)
-                    errors: shortest by count (unweighted) 1, shortest text 0, other 9, invalid 0
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      72%    44%     246   (difference 1 2/3, difference 2–3 0/4, difference 4+ 2/5)
+                    errors: shortest by count (unweighted) 2, shortest text 1, other 5, invalid 0

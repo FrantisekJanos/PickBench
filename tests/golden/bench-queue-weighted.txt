@@ -1,5 +1,5 @@
 12 úloh u mýtné brány (vážené fronty), 6 pruhů; sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
-m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      70%    53%     245   (rozdíl 1 1/4, rozdíl 2–3 1/4, rozdíl 4+ 0/4)
-                    chyby: nejkratší podle počtu (bez vah) 1, nejkratší text 0, jiné 9, neplatné 0
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      33%      72%    44%     246   (rozdíl 1 2/3, rozdíl 2–3 0/4, rozdíl 4+ 2/5)
+                    chyby: nejkratší podle počtu (bez vah) 2, nejkratší text 1, jiné 5, neplatné 0

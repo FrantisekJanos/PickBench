@@ -206,7 +206,9 @@ The game must not run in the browser during the measurement (the requests would 
 """
 import argparse
 import contextlib
+import itertools
 import json
+import math
 import random
 import re
 import statistics
@@ -1207,7 +1209,21 @@ QUEUE_WEIGHTS = {"bus": 3, "truck": 3, "tractor": 3}   # ostatní vozidla váž�
 QUEUE_SIZE = (1, 12)                                    # nejmenší a největší počet vozidel ve frontě
 QUEUE_GAPS = ("gap1", "gap2-3", "gap4+")                # rozdíl nejkratší a druhé nejkratší fronty: 1, 2–3, 4 a víc
 QUEUE_COUNT_SHARE = 0.5                                 # podíl vážených úloh, kde je nejkratší podle počtu jiná
-QUEUE_TRIES = 2000000
+QUEUE_TRIES = 20000000                                  # nejhorší kombinace zkratek (K = 3, gap2-3) má průměr asi 290 tisíc pokusů
+# Generátor losuje pruh jako dvojici (počet vozidel, z toho těžkých): počet rovnoměrně z QUEUE_SIZE, těžkých binomicky.
+# Je to totéž rozdělení jako vozidla losovaná po jednom, jen se třída a zkratky dají zamítnout dřív, než se losují jména.
+QUEUE_HEAVY = tuple(v for v in QUEUE_VEHICLES if v in QUEUE_WEIGHTS)
+QUEUE_LIGHT = tuple(v for v in QUEUE_VEHICLES if v not in QUEUE_WEIGHTS)
+QUEUE_SHAPES = tuple((size, heavy) for size in range(QUEUE_SIZE[0], QUEUE_SIZE[1] + 1) for heavy in range(size + 1))
+QUEUE_SHAPE_CUM = tuple(itertools.accumulate(
+    math.comb(size, heavy) * len(QUEUE_HEAVY) ** heavy * len(QUEUE_LIGHT) ** (size - heavy) / len(QUEUE_VEHICLES) ** size
+    for size, heavy in QUEUE_SHAPES))
+
+
+def queue_fewest(values):
+    """Pruhy s nejmenší hodnotou, všechny při shodě (model, který jde po zkratce, zvolí kterýkoli z nich)."""
+    low = min(values)
+    return tuple(i for i, v in enumerate(values) if v == low)
 
 
 def queue_length(queue, weighted=False):
@@ -1225,8 +1241,8 @@ def queue_class(gap):
 
 
 def queue_text(queues):
-    """Pruh s nejkratším JSON zápisem seznamu (tak ho model čte v dotazu); shoda vybere dřívější pruh."""
-    return min(range(len(queues)), key=lambda i: len(json.dumps(list(queues[i]))))
+    """Pruhy s nejkratším JSON zápisem seznamu (tak ho model čte v dotazu), při shodě všechny, vzestupně."""
+    return queue_fewest([len(json.dumps(list(q))) for q in queues])
 
 
 def queue_count(queues):
@@ -1236,8 +1252,8 @@ def queue_count(queues):
 
 
 def queue_heavy(queues):
-    """Kontrolní zkratka: pruh s nejméně těžkými vozidly (s vahou 3); shoda vybere dřívější pruh."""
-    return min(range(len(queues)), key=lambda i: sum(v in QUEUE_WEIGHTS for v in queues[i]))
+    """Kontrolní zkratka: pruhy s nejméně těžkými vozidly (s vahou 3), při shodě všechny, vzestupně."""
+    return queue_fewest([sum(v in QUEUE_WEIGHTS for v in q) for q in queues])
 
 
 def queue_text_share(lanes):
@@ -1247,42 +1263,49 @@ def queue_text_share(lanes):
 
 
 def queue_case(rng, lanes, cls, weighted=False):
-    """Jedna úloha: (fronty, správný pruh, třída, pruh nejkratšího textu, jediný pruh s nejméně vozidly nebo None).
+    """Jedna úloha: (fronty, správný pruh, třída, pruhy nejkratšího textu, jediný pruh s nejméně vozidly nebo None).
+    Pruhy nejkratšího textu jsou n-tice všech pruhů se stejně krátkým zápisem (queue_text): zkratka trefí, když je
+    správný pruh mezi nimi, protože model, který jde po zkratce, zvolí kterýkoli z nich. Totéž platí pro těžká vozidla.
     Předem se losuje, jestli má nejkratší text trefit správný pruh (queue_text_share, mimo gap4+), s vahami, jestli
     má být nejkratší fronta podle počtu jiná (QUEUE_COUNT_SHARE), a s vahami při K >= 3 mimo gap4+, jestli má trefit
     pruh s nejméně těžkými vozidly (queue_text_share). Při K = 2 se těžká nehlídají: „počet jiný“ tam vynucuje,
-    že pruh s méně těžkými vozidly je správný, takže vylosování „počet jiný, těžká netrefí“ nejde splnit."""
+    že pruh s méně těžkými vozidly je správný, takže vylosování „počet jiný, těžká netrefí“ nejde splnit.
+    Pruh se losuje jako (počet vozidel, z toho těžkých) z QUEUE_SHAPES; jména vozidel až po číselných kontrolách."""
     if not 2 <= lanes <= 8 or cls not in QUEUE_GAPS:
         raise RuntimeError(f"queue_case: unsupported lanes {lanes} or class {cls!r}")
     hit = rng.random() < queue_text_share(lanes) if cls != "gap4+" else None
     differ = rng.random() < QUEUE_COUNT_SHARE if weighted else None
     heavy = rng.random() < queue_text_share(lanes) if weighted and lanes >= 3 and cls != "gap4+" else None
     for _ in range(QUEUE_TRIES):
-        sizes = [rng.randint(*QUEUE_SIZE) for _ in range(lanes)]
-        if not weighted:                             # bez vah je délka počet vozidel: třída se zamítne dřív, než se losují vozidla
-            low = sorted(sizes)
-            if low[0] == low[1] or queue_class(low[1] - low[0]) != cls:
-                continue
-        queues = tuple(tuple(rng.choice(QUEUE_VEHICLES) for _ in range(size)) for size in sizes)
-        lengths = [queue_length(q, weighted) for q in queues]
+        shapes = rng.choices(QUEUE_SHAPES, cum_weights=QUEUE_SHAPE_CUM, k=lanes)
+        sizes = [size for size, _ in shapes]
+        if sizes.count(min(sizes)) > 1:              # bez vah jediná nejkratší fronta, s vahami jediný pruh s nejméně vozidly
+            continue
+        lengths = [size + 2 * n for size, n in shapes] if weighted else sizes   # těžké vozidlo váží 3
         order = sorted(range(lanes), key=lengths.__getitem__)
         gap = lengths[order[1]] - lengths[order[0]]
         if gap == 0 or queue_class(gap) != cls:
             continue
-        answer, text, count = order[0], queue_text(queues), queue_count(queues)
-        if hit is not None and (text == answer) != hit:
+        answer = order[0]
+        if weighted and (sizes.index(min(sizes)) != answer) != differ:
             continue
-        if weighted and (count is None or (count != answer) != differ):
+        if heavy is not None and (answer in queue_fewest([n for _, n in shapes])) != heavy:
             continue
-        if heavy is not None and (queue_heavy(queues) == answer) != heavy:
+        drawn = [rng.choices(QUEUE_HEAVY, k=n) + rng.choices(QUEUE_LIGHT, k=size - n) for size, n in shapes]
+        text = queue_fewest([sum(map(len, lane)) + 4 * len(lane) for lane in drawn])   # délka json.dumps(seznam)
+        if hit is not None and (answer in text) != hit:
             continue
         break
     else:
         raise RuntimeError(f"queue_case: no {cls} task for {lanes} lanes after {QUEUE_TRIES} tries")
-    # záruky se kontrolují znovu; porušení je chyba generátoru a nic se neopravuje potichu
+    for lane in drawn:                           # těžká vozidla na náhodná místa ve frontě
+        rng.shuffle(lane)
+    queues = tuple(tuple(lane) for lane in drawn)
+    # záruky se kontrolují znovu z hotových front; porušení je chyba generátoru a nic se neopravuje potichu
+    lengths, count = [queue_length(q, weighted) for q in queues], queue_count(queues)
     rest = sorted(lengths[:answer] + lengths[answer + 1:])
     if (len(queues) != lanes or lengths[answer] >= rest[0] or queue_class(rest[0] - lengths[answer]) != cls
-            or (not weighted and count != answer) or (weighted and count is None)):
+            or queue_text(queues) != text or (not weighted and count != answer) or (weighted and count is None)):
         raise RuntimeError("queue_case: generated task breaks its guarantees")
     return queues, answer, cls, text, count
 
@@ -1311,7 +1334,7 @@ def queue_errors(cases, choices, keys, weighted=False):
     """Rozbor chybných voleb; správná volba se nepočítá nikam.
 
     count (jen s vahami): zvolený je jediný pruh s nejméně vozidly podle počtu bez vah.
-    text: zvolený je pruh s nejkratším zápisem seznamu.
+    text: zvolený je některý z pruhů s nejkratším zápisem seznamu (při shodě kterýkoli z nich).
     other: ostatní chybné volby.
     invalid: volba, která není řetězec z keys (None, jiný řetězec, jiný typ)."""
     counts = {"count": 0, "text": 0, "other": 0, "invalid": 0} if weighted else {"text": 0, "other": 0, "invalid": 0}
@@ -1322,7 +1345,7 @@ def queue_errors(cases, choices, keys, weighted=False):
             continue
         elif weighted and count is not None and choice == keys[count]:
             counts["count"] += 1
-        elif choice == keys[text]:
+        elif choice in [keys[i] for i in text]:
             counts["text"] += 1
         else:
             counts["other"] += 1

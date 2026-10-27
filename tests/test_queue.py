@@ -46,6 +46,11 @@ def queues_of(state):
     return tuple(tuple(state[k]) for k in keys)
 
 
+def fewest(values):
+    """Množina pruhů s nejmenší hodnotou: model, který jde po zkratce, zvolí kterýkoli z nich."""
+    return {i for i, v in enumerate(values) if v == min(values)}
+
+
 def solver(weighted):
     """Model, který spočítá délky front (s vahami nebo bez) a zvolí nejkratší."""
     def answer(state):
@@ -66,7 +71,7 @@ class Basics(unittest.TestCase):
         self.assertEqual(bench.QUEUE_VEHICLES, ("car", "van", "bus", "truck", "motorbike", "tractor", "minibus", "pickup"))
         self.assertEqual(bench.QUEUE_WEIGHTS, {"bus": 3, "truck": 3, "tractor": 3})
         self.assertEqual((bench.QUEUE_SIZE, bench.QUEUE_GAPS), ((1, 12), ("gap1", "gap2-3", "gap4+")))
-        self.assertEqual((bench.QUEUE_COUNT_SHARE, bench.QUEUE_TRIES), (0.5, 2000000))
+        self.assertEqual((bench.QUEUE_COUNT_SHARE, bench.QUEUE_TRIES), (0.5, 20000000))
         self.assertEqual([bench.queue_text_share(k) for k in (2, 3, 4, 8)], [1 / 2, 1 / 3, 1 / 3, 1 / 3])
 
     def test_lengths_and_classes(self):
@@ -78,15 +83,15 @@ class Basics(unittest.TestCase):
             bench.queue_class(0)
 
     def test_shortest_text_and_fewest_vehicles(self):
-        self.assertEqual(bench.queue_text(EXAMPLE), 1)                                    # '["truck"]' má 9 znaků
-        self.assertEqual(bench.queue_text((("car", "van"), ("bus", "car"))), 0)            # shoda → dřívější pruh
+        self.assertEqual(bench.queue_text(EXAMPLE), (1,))                                 # '["truck"]' má 9 znaků
+        self.assertEqual(bench.queue_text((("car", "van"), ("bus", "car"))), (0, 1))       # shoda → všechny pruhy se shodou
         longer = (("motorbike", "tractor"), ("car", "van", "bus"))                         # 24 znaků proti 21: méně vozidel, delší text
-        self.assertEqual((bench.queue_text(longer), bench.queue_count(longer)), (1, 0))
+        self.assertEqual((bench.queue_text(longer), bench.queue_count(longer)), ((1,), 0))
         self.assertEqual(bench.queue_count(EXAMPLE), 1)
         self.assertIsNone(bench.queue_count((("car",), ("van",), ("bus", "car"))))        # dvě fronty s jedním vozidlem
-        self.assertEqual(bench.queue_heavy(EXAMPLE), 0)                                   # těžká vozidla 0, 1, 1
-        self.assertEqual(bench.queue_heavy((("bus",), ("truck", "car"), ("van", "van", "van"))), 2)
-        self.assertEqual(bench.queue_heavy((("bus", "car"), ("tractor",), ("truck", "van"))), 0)   # shoda → dřívější pruh
+        self.assertEqual(bench.queue_heavy(EXAMPLE), (0,))                                # těžká vozidla 0, 1, 1
+        self.assertEqual(bench.queue_heavy((("bus",), ("truck", "car"), ("van", "van", "van"))), (2,))
+        self.assertEqual(bench.queue_heavy((("bus", "car"), ("tractor",), ("truck", "van"))), (0, 1, 2))   # shoda → všechny pruhy
 
 
 class Generator(unittest.TestCase):
@@ -117,10 +122,10 @@ class Generator(unittest.TestCase):
             for lane in range(4):
                 self.assertGreaterEqual(answers[lane] / 900, 0.15, (weighted, answers))
 
-    def test_shortest_text_is_balanced(self):
+    def test_shortest_text_is_balanced(self):              # zkratka trefí, když je správný pruh mezi VŠEMI pruhy s minimem (shoda)
         def share(c, cls):
             sub = [x for x in c if x[2] == cls]
-            return sum(x[3] == x[1] for x in sub) / len(sub)
+            return sum(x[1] in fewest([len(json.dumps(list(q))) for q in x[0]]) for x in sub) / len(sub)
         for weighted in (False, True):
             for cls in ("gap1", "gap2-3"):
                 with self.subTest(weighted=weighted, cls=cls):
@@ -131,7 +136,8 @@ class Generator(unittest.TestCase):
         for cls in ("gap1", "gap2-3"):
             sub = [x for x in weighted if x[2] == cls]
             with self.subTest(heavy=cls):
-                self.assertTrue(0.2 <= sum(bench.queue_heavy(x[0]) == x[1] for x in sub) / len(sub) <= 0.45)
+                heavy = sum(x[1] in fewest([sum(v in bench.QUEUE_WEIGHTS for v in q) for q in x[0]]) for x in sub)
+                self.assertTrue(0.2 <= heavy / len(sub) <= 0.45, heavy / len(sub))
 
     def test_fewest_vehicles_differ_in_half_of_the_weighted_tasks(self):
         c = cases(900, 4, True)
@@ -203,11 +209,17 @@ class RunQueue(unittest.TestCase):
 
     def test_shortest_text_model(self):
         c = cases(120, 4)
-        r = self.run_with(lambda state: f"lane_{bench.queue_text(queues_of(state)) + 1}", "m", c, 4)
-        wrong = sum(text != answer for _, answer, _, text, _ in c)
+        r = self.run_with(lambda state: f"lane_{bench.queue_text(queues_of(state))[0] + 1}", "m", c, 4)
+        wrong = sum(text[0] != answer for _, answer, _, text, _ in c)
         self.assertGreater(wrong, 0)
         self.assertEqual(r["errors"], {"text": wrong, "other": 0, "invalid": 0})
         self.assertEqual(r["acc"], (120 - wrong) / 120)
+
+    def test_any_lane_tied_for_the_shortest_text_is_a_text_error(self):
+        queues = (("motorbike", "motorbike"), ("car", "van", "bus"), ("bus", "car", "van"))   # správně pruh 1 (26 znaků); 2 a 3 mají 21
+        case = (queues, 0, "gap1", bench.queue_text(queues), bench.queue_count(queues))
+        errors = bench.queue_errors([case] * 3, ["lane_1", "lane_2", "lane_3"], bench.lane_keys(3))
+        self.assertEqual(errors, {"text": 2, "other": 0, "invalid": 0})
 
     def test_counting_without_weights_in_a_weighted_run(self):           # nejkratší podle počtu má přednost před nejkratším textem
         c = cases(120, 4, True)
