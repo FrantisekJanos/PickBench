@@ -119,6 +119,14 @@ TEXTS = {
                           "en": "{n} {n|task|tasks} at a toll gate (unweighted queues), {lanes} lanes, the same for all models"},
     "bench.intro.queueWeighted": {"cs": "{n} {n|úloha|úlohy|úloh} u mýtné brány (vážené fronty), {lanes} {lanes|pruh|pruhy|pruhů}; sada je pro všechny modely stejná",
                                   "en": "{n} {n|task|tasks} at a toll gate (weighted queues), {lanes} lanes, the same for all models"},
+    # Tempomat: {form} = podoba otázky (choice / score, nepřekládá se).
+    "bench.intro.cruise": {"cs": "{n} {n|úloha|úlohy|úloh} s tempomatem (stupně 1–7, otázka {form}); sada je pro všechny modely stejná",
+                           "en": "{n} {n|task|tasks} with the cruise control (levels 1–7, {form} question), the same for all models"},
+    # Jízdní řád: úvodní věta jmenuje podobu stavu; {rows} = rozsah velikosti tabulky („3–12“).
+    "bench.intro.timetable": {"cs": "{n} {n|úloha|úlohy|úloh} se směrováním zásilek podle tabulky ({rows} řádků, řádky podle PSČ); sada je pro všechny modely stejná",
+                              "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows sorted by ZIP), the same for all models"},
+    "bench.intro.timetableShuffled": {"cs": "{n} {n|úloha|úlohy|úloh} se směrováním zásilek podle tabulky ({rows} řádků, řádky zamíchané); sada je pro všechny modely stejná",
+                                      "en": "{n} {n|task|tasks} routing a parcel by a table ({rows} rows, rows shuffled), the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -181,6 +189,25 @@ TEXTS = {
     "bench.bet.general": {"cs": "obecná", "en": "general"},
     "bench.bet.line": {"cs": "regret {regret}; chyby: nejvyšší odměna {reward}, nejvyšší šance {chance}, jiné {other}, neplatné {invalid}",
                        "en": "regret {regret}; errors: highest reward {reward}, highest chance {chance}, other {other}, invalid {invalid}"},
+    # Tempomat (--cruise): jména tříd v poznámce za řádkem modelu; pod ním řádek polohy a škály ({edge}, {middle} = „správně/celkem“,
+    # {within} = hotová procenta, {mae} = číslo na dvě desetinná místa, {fast}, {slow} = počty) a řádek druhů chyb (počty).
+    "bench.cruise.table": {"cs": "jen tabulka", "en": "table only"},
+    "bench.cruise.road": {"cs": "povrch", "en": "road"},
+    "bench.cruise.fog": {"cs": "mlha", "en": "fog"},
+    "bench.cruise.both": {"cs": "obojí", "en": "both"},
+    "bench.cruise.line": {"cs": "u hranice {edge}, uvnitř pásma {middle}; ±1 stupeň {within}, MAE {mae}, příliš rychle {fast}, příliš pomalu {slow}",
+                          "en": "near a boundary {edge}, inside a band {middle}; ±1 level {within}, MAE {mae}, too fast {fast}, too slow {slow}"},
+    "bench.cruise.errors": {"cs": "chyby: jen vzdálenost {distance}, vynechaná podmínka {omitted}, každá podmínka za 1 stupeň {flat}, "
+                                  "sousední pásmo {neighbor}, jiné {other}, neplatné {invalid}",
+                            "en": "errors: distance only {distance}, condition left out {omitted}, each condition as 1 level {flat}, "
+                                  "neighboring band {neighbor}, other {other}, invalid {invalid}"},
+    # Jízdní řád (--timetable): velikost tabulky v poznámce za řádkem modelu ({d} = „3–5“), pod ním přesnost podle polohy
+    # a výjimky (hotové zlomky „správně/celkem“) a řádek chyb (počty).
+    "bench.timetable.size": {"cs": "{d} řádků", "en": "{d} rows"},
+    "bench.timetable.line": {"cs": "poloha: uvnitř {inner}, u hranice {near}, na hranici {bound}; výjimka: žádná {none}, platí {applies}, neplatí {decoy}",
+                             "en": "position: inside {inner}, near a boundary {near}, on a boundary {bound}; exception: none {none}, applies {applies}, does not apply {decoy}"},
+    "bench.timetable.errors": {"cs": "chyby: sousední řádek {neighbor}, výjimka přehlédnutá {missed}, výjimka navíc {misapplied}, jiné {other}, neplatné {invalid}",
+                               "en": "errors: neighboring row {neighbor}, exception missed {missed}, exception wrongly applied {misapplied}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -218,6 +245,10 @@ TEXTS = {
     "bench.err.formRule": {"cs": "Volby --matched-by a --labeled jdou jen s --rule.",
                            "en": "The --matched-by and --labeled options work only with --rule."},
     "bench.err.weightedQueue": {"cs": "Volba --weighted jde jen s --queue.", "en": "The --weighted option works only with --queue."},
+    "bench.err.lanesCruise": {"cs": "Volba --lanes se s --cruise nekombinuje.", "en": "The --lanes option cannot be combined with --cruise."},
+    "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
+                                "en": "The --sorted and --shuffled options work only with --timetable."},
+    "bench.err.lanesTimetable": {"cs": "Volba --lanes se s --timetable nekombinuje.", "en": "The --lanes option cannot be combined with --timetable."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",

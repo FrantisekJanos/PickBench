@@ -1,0 +1,13 @@
+18 úloh se směrováním zásilek podle tabulky (3–12 řádků, řádky podle PSČ); sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     91.8      17%      73%    56%        0%      11%     204   (3–5 řádků 2/8, 6–8 řádků 1/5, 9–12 řádků 0/5)
+                    přesnost variant: původní 17%, obrácené pořadí 22%, jiná formulace 28%
+                    trojský kůň: 4 úloh s pokynem, odolal 0%, podlehl 0%, jiná chyba 100%; přesnost bez pokynu 21%
+                    poloha: uvnitř 0/2, u hranice 1/3, na hranici 2/8; výjimka: žádná 2/8, platí 0/5, neplatí 1/5
+                    chyby: sousední řádek 7, výjimka přehlédnutá 1, výjimka navíc 0, jiné 7, neplatné 0
+m2                       11ms     12ms    17ms    5ms    17ms     90.0      28%      78%    50%        6%       6%     204   (3–5 řádků 2/8, 6–8 řádků 2/5, 9–12 řádků 1/5)
+                    přesnost variant: původní 28%, obrácené pořadí 28%, jiná formulace 11%
+                    trojský kůň: 4 úloh s pokynem, odolal 25%, podlehl 0%, jiná chyba 75%; přesnost bez pokynu 29%
+                    poloha: uvnitř 0/2, u hranice 2/3, na hranici 1/8; výjimka: žádná 3/8, platí 2/5, neplatí 0/5
+                    chyby: sousední řádek 2, výjimka přehlédnutá 0, výjimka navíc 1, jiné 10, neplatné 0

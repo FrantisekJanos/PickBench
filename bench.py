@@ -9,6 +9,8 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -21,6 +23,8 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
+          python bench.py 100 --cruise tev1
+          python bench.py 100 --timetable tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -76,6 +80,23 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             odměnou je správná v třetině úloh, brána s nejvyšší šancí také; při 3 branách dá vyloučení obou skoro polovinu).
             Za řádkem modelu přesnost podle úrovně, pod ním regret = průměrná ztráta očekávané výplaty proti nejlepší
             bráně (neplatná odpověď 100 %) a chyby: nejvyšší odměna, nejvyšší šance, jiné, neplatné.
+--cruise:   tempomat: model volí stupeň rychlosti 1 až 7 podle tabulky v zadání. Stupeň určí vzdálenost překážky
+            (sedm pásem, 8 až 300 m), mokrá vozovka ho sníží o 1, náledí o 2, slabá mlha o 1, hustá o 2. N úloh
+            (výchozí 100), rovnoměrně ve čtyřech třídách: jen tabulka, povrch, mlha, obojí; polovina úloh leží u hranice pásma.
+            Za řádkem modelu přesnost podle třídy, pod ním přesnost u hranice a uvnitř pásma, ±1 stupeň, MAE (neplatná
+            odpověď = 6), příliš rychle, příliš pomalu a chyby: jen vzdálenost, vynechaná podmínka, každá podmínka
+            za 1 stupeň, sousední pásmo, jiné, neplatné. Levné zkratky (stálý stupeň, odhad podle počtu číslic) trefí
+            ve třídách povrch, mlha a obojí nejvýš asi třetinu úloh. S --lanes se nekombinuje.
+--timetable:  jízdní řád: zásilka má PSČ (10000 až 99999) a službu, tabulka routes má 3 až 12 řádků a každý řádek posílá
+            zásilky s PSČ od zip_from do zip_to (oba kraje včetně) do svého depa; výjimka pro službu (exceptions) má přednost.
+            Model volí jedno ze šesti dep. N úloh (výchozí 100), rovnoměrně podle velikosti tabulky (3–5, 6–8, 9–12 řádků),
+            polohy PSČ (uvnitř řádku, těsně u hranice, přesně na hranici) a výjimky (žádná, platí, je pro jinou službu).
+            Za řádkem modelu přesnost podle velikosti tabulky, pod ním přesnost podle polohy (jen úlohy bez platné výjimky)
+            a podle výjimky a chyby: sousední řádek, výjimka přehlédnutá, výjimka navíc, jiné, neplatné. Těsně u hranice
+            je správně vždy jeden ze dvou sousedních řádků, náhoda je tam 50 %; na hranici stojí PSČ v tabulce doslova.
+            S --lanes se nekombinuje.
+--sorted, --shuffled:  jen s --timetable: podoba stavu, úlohy jsou v obou stejné. sorted = řádky tabulky podle PSČ;
+            shuffled = řádky v náhodném pořadí. Bez volby platí sorted.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -112,6 +133,8 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --queue [--weighted] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --cruise [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -124,6 +147,8 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --rule tev1
           python bench.py 100 --queue --weighted tev1
           python bench.py 100 --bet tev1
+          python bench.py 100 --cruise tev1
+          python bench.py 100 --timetable tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -179,6 +204,23 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             (the gate with the highest reward is right in a third of the tasks, and so is the gate with the highest chance; with
             3 gates ruling both out gives almost half). After the model row, the accuracy by level; below it regret = the mean
             loss of expected payout against the best gate (an invalid answer counts as 100%) and the errors: highest reward, highest chance, other, invalid.
+--cruise:   cruise control: the model picks a speed level from 1 to 7 by the table in the prompt. The distance to the
+            obstacle sets the level (seven bands, 8 to 300 m); a wet road takes 1 off, an icy road 2, light fog 1, dense
+            fog 2. N tasks (default 100), spread evenly over four classes: table only, road, fog, both; half of the tasks
+            lie near a band boundary. After the model row, the accuracy by class; below it the accuracy near a boundary
+            and inside a band, ±1 level, MAE (an invalid answer counts as 6), too fast, too slow and the errors: distance
+            only, condition left out, each condition as 1 level, neighboring band, other, invalid. Cheap shortcuts (a fixed
+            level, a guess by the number of digits) get at most about a third of the road, fog and both tasks right. Not with --lanes.
+--timetable:  timetable: a parcel has a ZIP code (10000 to 99999) and a service; the table routes has 3 to 12 rows, and each
+            row sends the parcels with a ZIP code from zip_from to zip_to (both ends included) to its depot; an exception for
+            a service (exceptions) comes first. The model picks one of six depots. N tasks (default 100), spread evenly by table
+            size (3–5, 6–8, 9–12 rows), ZIP position (inside a row, close to a boundary, exactly on a boundary) and exception
+            (none, applies, is for another service). After the model row, the accuracy by table size; below it the accuracy
+            by position (only tasks without an exception that applies) and by exception, and the errors: neighboring row,
+            exception missed, exception wrongly applied, other, invalid. Close to a boundary the answer is always one of two
+            neighboring rows, so chance is 50% there; on a boundary the ZIP code stands in the table as it is. Not with --lanes.
+--sorted, --shuffled:  only with --timetable: the form of the state; the tasks are the same in both. sorted = the rows of
+            the table by ZIP code; shuffled = the rows in random order. Without the option: sorted.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -1466,6 +1508,341 @@ def bet_summary(cases, choices, keys):
     return {"by_level": by_level, "regret": regret / len(cases), "errors": errors}
 
 
+# ---------- scénář: tempomat ----------
+# Úloha = (m, road, fog, answer, cls, place): vzdálenost překážky v m, povrch, mlha, správný stupeň, třída, poloha.
+# Stupeň = pásmo vzdálenosti (CRUISE_BANDS) minus srážka za povrch a za mlhu.
+CRUISE_TOP = 7                                       # nejvyšší stupeň (škála 1–7)
+CRUISE_BANDS = (20, 40, 60, 100, 150, 220)           # hranice pásem: pod 20 m stupeň 1, 20–39 m 2, …, 220 m a víc 7
+CRUISE_DIST = (8, 300)                               # nejkratší a nejdelší vzdálenost překážky v m
+CRUISE_EDGE = 3                                      # u hranice: b − 3 ≤ m ≤ b + 2 pro některou hranici b
+CRUISE_ROAD = {"dry": 0, "wet": 1, "icy": 2}         # o kolik stupňů níž
+CRUISE_FOG = {"none": 0, "light": 1, "dense": 2}
+CRUISE_CLASSES = ("table", "road", "fog", "both")    # platí žádná podmínka, jen povrch, jen mlha, obě
+CRUISE_PLACES = ("edge", "middle")
+CRUISE_FORM = "choice"                               # výchozí podoba otázky (Volby po pokusu)
+_CRUISE_ONE = {(2, 1): 1, (3, 1): 1, (3, 2): 4, (4, 1): 12, (4, 2): 22, (5, 1): 6, (5, 2): 11, (6, 1): 1, (6, 2): 17, (7, 1): 2, (7, 2): 22}
+CRUISE_WEIGHTS = {                                   # váhy kombinací (stupeň ze vzdálenosti, srážka povrch, srážka mlha) z prototypu
+    "table": {(1, 0, 0): 20, (2, 0, 0): 10, (3, 0, 0): 10, (4, 0, 0): 20, (5, 0, 0): 10, (6, 0, 0): 10, (7, 0, 0): 20},
+    "road": {(ld, p, 0): w for (ld, p), w in _CRUISE_ONE.items()},
+    "fog": {(ld, 0, f): w for (ld, f), w in _CRUISE_ONE.items()},
+    "both": {(3, 1, 1): 1, (4, 1, 1): 25, (4, 1, 2): 1, (4, 2, 1): 1, (5, 1, 1): 1, (5, 1, 2): 1, (5, 2, 1): 1, (5, 2, 2): 24,
+             (6, 1, 1): 1, (6, 1, 2): 16, (6, 2, 1): 9, (6, 2, 2): 1, (7, 1, 1): 1, (7, 1, 2): 16, (7, 2, 1): 9, (7, 2, 2): 1},
+}
+
+
+def band_level(m):
+    """Stupeň podle vzdálenosti m (pásmo z tabulky v zadání), bez srážek."""
+    return 1 + sum(m >= b for b in CRUISE_BANDS)
+
+
+def band_range(level):
+    """Nejmenší a největší vzdálenost pásma daného stupně, oříznutá na CRUISE_DIST."""
+    lo = CRUISE_DIST[0] if level == 1 else CRUISE_BANDS[level - 2]
+    hi = CRUISE_DIST[1] if level == CRUISE_TOP else CRUISE_BANDS[level - 1] - 1
+    return lo, hi
+
+
+def near_edge(m):
+    """Leží m u hranice pásma? Hranice b leží mezi b − 1 a b, proto b − 3 ≤ m ≤ b + 2 (Rozpory 3)."""
+    return any(b - CRUISE_EDGE <= m <= b + CRUISE_EDGE - 1 for b in CRUISE_BANDS)
+
+
+def neighbor_level(m):
+    """Stupeň pásma za nejbližší hranicí (omyl „sousední pásmo“)."""
+    b = min(CRUISE_BANDS, key=lambda b: abs(m - b + 0.5))
+    return band_level(b - 1) if m >= b else band_level(b)
+
+
+def cruise_level(m, road, fog):
+    """Správný stupeň: pásmo vzdálenosti minus srážka za povrch a za mlhu, bez ořezu."""
+    return band_level(m) - CRUISE_ROAD[road] - CRUISE_FOG[fog]
+
+
+def cruise_case(rng, cls, place):
+    """Vrací úlohu (m, road, fog, answer, cls, place) dané třídy a polohy (edge = u hranice, middle = uvnitř pásma).
+
+    Generátor nezamítá: kombinaci (stupeň ze vzdálenosti, srážka povrch, srážka mlha) losuje podle CRUISE_WEIGHTS[cls],
+    pak vzdálenost z pásma toho stupně se správnou polohou. Pořadí volání rng je dané prototypem (stojí na něm naměřená čísla).
+    Porušená záruka (stupeň mimo 1–CRUISE_TOP, vzdálenost mimo pásmo) vyvolá RuntimeError, nic se neopravuje potichu."""
+    if cls not in CRUISE_WEIGHTS or place not in CRUISE_PLACES:
+        raise RuntimeError(f"cruise_case: unsupported class {cls} or place {place}")
+    combos = CRUISE_WEIGHTS[cls]
+    level, p, f = rng.choices(list(combos), weights=list(combos.values()))[0]
+    lo, hi = band_range(level)
+    m = rng.choice([m for m in range(lo, hi + 1) if near_edge(m) == (place == "edge")])
+    road = next(k for k, v in CRUISE_ROAD.items() if v == p)
+    fog = next(k for k, v in CRUISE_FOG.items() if v == f)
+    answer = cruise_level(m, road, fog)
+    if not 1 <= answer <= CRUISE_TOP or band_level(m) != level:
+        raise RuntimeError("cruise_case: generated task breaks its guarantees")
+    return m, road, fog, answer, cls, place
+
+
+def cruise_cases(n, seed=1):
+    """n úloh ze semínka; na každou úlohu se losuje třída, pak poloha (rovnoměrně)."""
+    rng = random.Random(seed)
+    return [cruise_case(rng, rng.choice(CRUISE_CLASSES), rng.choice(CRUISE_PLACES)) for _ in range(n)]
+
+
+CRUISE_INS = ("Choose the cruise control speed level, from 1 (slowest) to 7 (fastest). Start from obstacle_m, the distance in meters "
+              "to the nearest obstacle ahead: under 20 m is level 1, 20 to 39 m level 2, 40 to 59 m level 3, 60 to 99 m level 4, "
+              "100 to 149 m level 5, 150 to 219 m level 6, 220 m or more level 7. Then go one level lower on a wet road and two "
+              "levels lower on an icy road. Then go one level lower in light fog and two levels lower in dense fog.")
+
+
+def level_keys():
+    """Klíče možností otázky speed: level_1 … level_CRUISE_TOP."""
+    return [f"level_{k}" for k in range(1, CRUISE_TOP + 1)]
+
+
+def choice_level(choice):
+    """Stupeň ze zvolené možnosti; cokoli mimo level_keys() (i ne-řetězec) je neplatné = None."""
+    keys = level_keys()
+    return keys.index(choice) + 1 if isinstance(choice, str) and choice in keys else None
+
+
+def cruise_state(m, road, fog):
+    """Stav pro model: vzdálenost překážky, povrch a mlha (klíče vždy všechny tři, v tomto pořadí)."""
+    return {"obstacle_m": m, "road": road, "fog": fog}
+
+
+def cruise_question():
+    """Otázka choice speed: stupeň rychlosti 1 (nejpomalejší) až CRUISE_TOP (nejrychlejší)."""
+    labels = {k: f"Level {k}" for k in range(1, CRUISE_TOP + 1)}
+    labels[1] += " (slowest)"
+    labels[CRUISE_TOP] += " (fastest)"
+    return {"speed": {"type": "choice", "instructions": CRUISE_INS,
+                      "criteria": {f"level_{k}": label for k, label in labels.items()}}}
+
+
+def cruise_errors(cases, levels):
+    """Druhy chyb tempomatu; levels = zvolené stupně, None = neplatná odpověď.
+
+    Pořadí přiřazení (první, který sedí): invalid (neplatná) → správná se nepočítá → distance (jen pásmo vzdálenosti)
+    → omitted (vynechaná jedna podmínka: pásmo − povrch, nebo pásmo − mlha) → flat (každá platná podmínka za 1 stupeň)
+    → neighbor (jen u hranice: stupeň sousedního pásma − obě srážky) → other. Odhady se neořezávají do 1–CRUISE_TOP."""
+    errors = {"distance": 0, "omitted": 0, "flat": 0, "neighbor": 0, "other": 0, "invalid": 0}
+    for (m, road, fog, answer, _, _), level in zip(cases, levels):
+        if level is None:
+            errors["invalid"] += 1
+            continue
+        if level == answer:
+            continue
+        band, p, f = band_level(m), CRUISE_ROAD[road], CRUISE_FOG[fog]
+        if level == band:
+            errors["distance"] += 1
+        elif level in (band - p, band - f):
+            errors["omitted"] += 1
+        elif level == band - (p > 0) - (f > 0):
+            errors["flat"] += 1
+        elif near_edge(m) and level == neighbor_level(m) - p - f:
+            errors["neighbor"] += 1
+        else:
+            errors["other"] += 1
+    return errors
+
+
+def cruise_summary(cases, levels):
+    """Přesnost podle třídy a polohy, škála a druhy chyb ze zvolených stupňů (None = neplatná).
+
+    scale: within = podíl úloh s platnou odpovědí nejvýš o 1 stupeň vedle, mae = průměrná odchylka (neplatná = CRUISE_TOP − 1),
+    fast / slow = počet platných odpovědí nad / pod správným stupněm."""
+    by_class = {c: [0, 0] for c in CRUISE_CLASSES}
+    by_place = {p: [0, 0] for p in CRUISE_PLACES}
+    within = mae = fast = slow = 0
+    for (_, _, _, answer, cls, place), level in zip(cases, levels):
+        ok = level == answer
+        for tally in (by_class[cls], by_place[place]):
+            tally[0] += ok
+            tally[1] += 1
+        if level is None:
+            mae += CRUISE_TOP - 1
+            continue
+        mae += abs(level - answer)
+        within += abs(level - answer) <= 1
+        fast += level > answer
+        slow += level < answer
+    n = len(cases)
+    return {"by_class": by_class, "by_place": by_place,
+            "scale": {"within": within / n, "mae": mae / n, "fast": fast, "slow": slow},
+            "errors": cruise_errors(cases, levels)}
+
+
+# ---------- scénář: jízdní řád ----------
+# Řádek tabulky je (zip_from, zip_to, depo), tabulka je n-tice řádků seřazená podle PSČ, výjimka je (služba, depo) nebo None.
+TIMETABLE_DEPOTS = ("alder", "birch", "cedar", "maple", "oak", "pine")    # neutrální jména: nenapovídají PSČ ani službu
+TIMETABLE_SERVICES = ("standard", "express", "economy", "cooled")
+TIMETABLE_EXC_SERVICES = ("express", "economy", "cooled")                # výjimka nikdy pro standard
+TIMETABLE_ZIP = (10000, 99999)                       # rozsah PSČ, který tabulka pokrývá celý
+TIMETABLE_MIN_WIDTH = 300                            # nejužší interval řádku
+TIMETABLE_SIZES = {"small": (3, 5), "medium": (6, 8), "large": (9, 12)}  # počet řádků podle třídy velikosti
+TIMETABLE_POSITIONS = ("inner", "near", "bound")     # PSČ uvnitř řádku, těsně u hranice, přesně na hranici
+TIMETABLE_RULES = ("none", "applies", "decoy")       # bez výjimky, výjimka platí, výjimka pro jinou službu
+TIMETABLE_NEAR = 9                                   # near = 1 až tolik od hranice; rozhodl pokus nanečisto 2026-10-27
+TIMETABLE_INNER = 100                                # inner = aspoň tolik od obou krajů řádku
+TIMETABLE_FORMS = ("sorted", "shuffled")
+TIMETABLE_FORM = "sorted"                            # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-27
+TIMETABLE_POSITION_RULES = ("none", "decoy")         # přesnost podle polohy jen z úloh bez platné výjimky; rozhodl pokus nanečisto
+TIMETABLE_TRIES = 1000                               # mez pokusů o losování hranic jedné tabulky
+
+
+def timetable_table(rng, n):
+    """n souvislých řádků přes celý TIMETABLE_ZIP. Hranice se losují jako libovolná čísla, ne jako násobky stovky (s nimi
+    by zkratka „společný začátek PSČ“ trefila hranici); násobek stovky tak padne jen náhodou, asi u jedné hranice ze sta.
+    Nejužší interval má aspoň TIMETABLE_MIN_WIDTH, sousední řádky mají jiné depo."""
+    for _ in range(TIMETABLE_TRIES):
+        cuts = sorted(rng.sample(range(TIMETABLE_ZIP[0] + 1, TIMETABLE_ZIP[1] + 1), n - 1))
+        starts = [TIMETABLE_ZIP[0]] + cuts
+        ends = [s - 1 for s in starts[1:]] + [TIMETABLE_ZIP[1]]
+        if min(e - s + 1 for s, e in zip(starts, ends)) >= TIMETABLE_MIN_WIDTH:
+            break
+    else:
+        raise RuntimeError(f"timetable_table: no table of {n} rows after {TIMETABLE_TRIES} tries")
+    depots = []
+    for _ in range(n):
+        depots.append(rng.choice([d for d in TIMETABLE_DEPOTS if not depots or d != depots[-1]]))
+    return tuple(zip(starts, ends, depots))
+
+
+def timetable_row(spans, z):
+    """Index jediného intervalu (zip_from, zip_to), který obsahuje z (oba kraje včetně); jiný počet než jeden = RuntimeError."""
+    hit = [i for i, (a, b) in enumerate(spans) if a <= z <= b]
+    if len(hit) != 1:
+        raise RuntimeError(f"timetable_row: zip {z} is in {len(hit)} rows")
+    return hit[0]
+
+
+def timetable_solve(state):
+    """Správné depo ze stavu (obě podoby): výjimka pro službu zásilky, jinak řádek, do jehož intervalu PSČ patří."""
+    parcel, routes = state["parcel"], state["routes"]
+    for e in state["exceptions"]:
+        if e["service"] == parcel["service"]:
+            return e["depot"]
+    return routes[timetable_row([(r["zip_from"], r["zip_to"]) for r in routes], parcel["zip"])]["depot"]
+
+
+def timetable_form(form):
+    """Podoba stavu: None = výchozí TIMETABLE_FORM, neznámá podoba = ValueError."""
+    form = form or TIMETABLE_FORM
+    if form not in TIMETABLE_FORMS:
+        raise ValueError(f"unknown timetable form: {form}")
+    return form
+
+
+def timetable_state(case, form=None):
+    """Stav pro model. Úloha je v obou podobách stejná, podoba mění jen pořadí řádků: sorted = podle PSČ,
+    shuffled = v pořadí order (losuje se u každé úlohy)."""
+    rows, order, z, service, exception = case[:5]
+    if timetable_form(form) == "shuffled":
+        rows = [rows[j] for j in order]
+    return {"parcel": {"zip": z, "service": service},
+            "routes": [{"zip_from": a, "zip_to": b, "depot": d} for a, b, d in rows],
+            "exceptions": [] if exception is None else [{"service": exception[0], "depot": exception[1]}]}
+
+
+def timetable_case(rng, size, pos, rule):
+    """Jedna úloha: (řádky podle PSČ, pořadí řádků pro shuffled, PSČ, služba, výjimka nebo None, správné depo, velikost,
+    poloha, výjimka). Poloha a strana se berou jen u hranice se sousedem (Rozhodnutí 3). Depo výjimky není depo trasy ani
+    sousedů (kategorie chyb se nepřekrývají). decoy má jinou NESTANDARDNÍ službu (zkratka „nestandardní služba a nějaká
+    výjimka → výjimka“ má pak 0,5). Zamíchání se losuje vždy, aby obě podoby měly ze stejného semínka stejné úlohy."""
+    if size not in TIMETABLE_SIZES or pos not in TIMETABLE_POSITIONS or rule not in TIMETABLE_RULES:
+        raise RuntimeError(f"timetable_case: unknown class {size}, {pos}, {rule}")
+    rows = timetable_table(rng, rng.randint(*TIMETABLE_SIZES[size]))
+    n = len(rows)
+    i = rng.randrange(n)
+    a, b, route = rows[i]
+    if pos == "inner":
+        z = rng.randint(a + TIMETABLE_INNER, b - TIMETABLE_INNER)
+    else:
+        side = rng.choice([s for s, ok in (("low", i > 0), ("high", i < n - 1)) if ok])
+        k = 0 if pos == "bound" else rng.randint(1, TIMETABLE_NEAR)
+        z = a + k if side == "low" else b - k
+    near = {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < n}
+    if rule == "none":
+        service, exception = rng.choice(TIMETABLE_SERVICES), None
+    else:
+        es = rng.choice(TIMETABLE_EXC_SERVICES)
+        exception = (es, rng.choice([d for d in TIMETABLE_DEPOTS if d != route and d not in near]))
+        service = es if rule == "applies" else rng.choice([s for s in TIMETABLE_EXC_SERVICES if s != es])
+    order = list(range(n))
+    rng.shuffle(order)
+    answer = exception[1] if rule == "applies" else route
+    case = (rows, tuple(order), z, service, exception, answer, size, pos, rule)
+    # kontrola záruk nad hotovou úlohou; porušení = RuntimeError, nic se neopravuje potichu
+    edges = [z - a] * (i > 0) + [b - z] * (i < n - 1)
+    real = ("inner" if min(z - a, b - z) >= TIMETABLE_INNER else "bound" if min(edges) == 0
+            else "near" if 1 <= min(edges) <= TIMETABLE_NEAR else None)
+    ok = (rows[0][0] == TIMETABLE_ZIP[0] and rows[-1][1] == TIMETABLE_ZIP[1]
+          and all(rows[k][1] + 1 == rows[k + 1][0] and rows[k][2] != rows[k + 1][2] for k in range(n - 1))
+          and min(e - s + 1 for s, e, _ in rows) >= TIMETABLE_MIN_WIDTH
+          and timetable_row([r[:2] for r in rows], z) == i and real == pos
+          and timetable_solve(timetable_state(case, "sorted")) == answer
+          and (exception is None or exception[1] not in near | {route}))
+    if not ok:
+        raise RuntimeError(f"timetable_case: broken guarantee in {case}")
+    return case
+
+
+def timetable_cases(n, seed=1):
+    """n úloh ze semínka; velikost, poloha a výjimka se losují rovnoměrně na každou úlohu, nic se nevyvažuje zamítáním."""
+    rng = random.Random(seed)
+    return [timetable_case(rng, rng.choice(list(TIMETABLE_SIZES)), rng.choice(TIMETABLE_POSITIONS), rng.choice(TIMETABLE_RULES))
+            for _ in range(n)]
+
+
+def timetable_question():
+    """Otázka choice s pevnou nabídkou šesti dep (stejná pro všechny úlohy)."""
+    return {"depot": {
+        "type": "choice",
+        "instructions": ("Route the parcel to a depot. Each row of routes covers the ZIP codes from zip_from to zip_to, both "
+                         "included, and sends those parcels to its depot. exceptions override routes: a parcel whose service "
+                         "matches an exception goes to that exception's depot instead. Choose the depot for the parcel."),
+        "criteria": {d: f"Depot {d.capitalize()}" for d in TIMETABLE_DEPOTS},
+    }}
+
+
+def timetable_errors(cases, choices):
+    """Rozbor chybných voleb; správná volba se nepočítá nikam. Třídy se zkoušejí v tomto pořadí:
+
+    invalid: volba, která není řetězec z TIMETABLE_DEPOTS (None, jiný řetězec, jiný typ).
+    missed: výjimka platí, zvolené je depo řádku trasy.
+    misapplied: výjimka neplatí (jiná služba), zvolené je depo výjimky.
+    neighbor: zvolené je depo řádku těsně nad nebo pod správným řádkem v pořadí PSČ.
+    other: ostatní chybné volby.
+
+    Odpověď je depo, ne řádek: když vzdálený řádek sdílí depo se sousedem nebo s výjimkou, jeho volba padne do neighbor
+    nebo misapplied."""
+    counts = {"neighbor": 0, "missed": 0, "misapplied": 0, "other": 0, "invalid": 0}
+    for (rows, _, z, _, exception, answer, _, _, rule), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in TIMETABLE_DEPOTS):
+            counts["invalid"] += 1
+            continue
+        if choice == answer:
+            continue
+        i = timetable_row([r[:2] for r in rows], z)
+        if rule == "applies" and choice == rows[i][2]:
+            counts["missed"] += 1
+        elif rule == "decoy" and choice == exception[1]:
+            counts["misapplied"] += 1
+        elif choice in {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < len(rows)}:
+            counts["neighbor"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def timetable_summary(cases, choices):
+    """Přesnost podle velikosti tabulky a výjimky ze všech úloh, podle polohy PSČ jen z úloh s výjimkou
+    v TIMETABLE_POSITION_RULES ({třída: [správně, celkem]}), a rozbor chyb."""
+    keys = list(TIMETABLE_DEPOTS)
+    picked = [(case, choice) for case, choice in zip(cases, choices) if case[8] in TIMETABLE_POSITION_RULES]
+    return {"by_size": class_tally(TIMETABLE_SIZES, [(keys.index(c[5]), c[6]) for c in cases], choices, keys),
+            "by_position": class_tally(TIMETABLE_POSITIONS, [(keys.index(c[5]), c[7]) for c, _ in picked],
+                                       [choice for _, choice in picked], keys),
+            "by_rule": class_tally(TIMETABLE_RULES, [(keys.index(c[5]), c[8]) for c in cases], choices, keys),
+            "errors": timetable_errors(cases, choices)}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1482,6 +1859,8 @@ ALT = {                                              # jinak formulované zadán
     "lane": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.",
     "lane_weighted": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.",
     "bet": "Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.",
+    "speed": "The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.",
+    "depot": "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
@@ -1945,6 +2324,28 @@ def run_bet(model, cases, gates=4, mirror=False, inject=False, deadline=None):
     return r
 
 
+def run_cruise(model, cases, mirror=False, inject=False, deadline=None):
+    keys, question = level_keys(), cruise_question()
+    ask(model, cruise_state(*cases[0][:3]), question)            # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[3] - 1]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(cruise_state(*case[:3]), note), {keys[case[3] - 1]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(cruise_summary(cases, [choice_level(c) for c in choices]))     # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_timetable(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(TIMETABLE_DEPOTS), timetable_question()
+    ask(model, timetable_state(cases[0], form), question)        # zahřátí, nepočítá se
+    targets = inject_plan([{case[5]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(timetable_state(case, form), note), {case[5]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(timetable_summary(cases, choices))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
@@ -1994,6 +2395,10 @@ def parse_args(argv):
     p.add_argument("--queue", action="store_true")
     p.add_argument("--weighted", action="store_true")
     p.add_argument("--bet", action="store_true")                 # výchozí 4 brány dosadí níže (Úprava 11.5b)
+    p.add_argument("--timetable", action="store_true")
+    p.add_argument("--sorted", action="store_true")
+    p.add_argument("--shuffled", action="store_true")
+    p.add_argument("--cruise", action="store_true")              # tempomat: pruhy ani brány nemá, --lanes končí hláškou
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -2159,6 +2564,32 @@ def print_bet(r):
     print(" " * 20 + i18n.t("bench.bet.line", regret=pct1(r["regret"]), **r["errors"]), flush=True)
 
 
+def cruise_note(r):
+    """Poznámka za řádkem modelu: přesnost tempomatu podle třídy."""
+    return class_note(r["by_class"], {"table": i18n.t("bench.cruise.table"), "road": i18n.t("bench.cruise.road"),
+                                      "fog": i18n.t("bench.cruise.fog"), "both": i18n.t("bench.cruise.both")})
+
+
+def print_cruise(r):
+    """Dva řádky pod řádkem modelu: poloha a škála, pak druhy chyb."""
+    s, (eo, en), (mo, mn) = r["scale"], r["by_place"]["edge"], r["by_place"]["middle"]
+    print(" " * 20 + i18n.t("bench.cruise.line", edge=f"{eo}/{en}", middle=f"{mo}/{mn}", within=pct(s["within"]),
+                            mae=f"{s['mae']:.2f}", fast=s["fast"], slow=s["slow"]), flush=True)
+    print(" " * 20 + i18n.t("bench.cruise.errors", **r["errors"]), flush=True)
+
+
+def timetable_note(r):
+    """Poznámka za řádkem modelu: přesnost jízdního řádu podle velikosti tabulky."""
+    return class_note(r["by_size"], {size: i18n.t("bench.timetable.size", d=f"{lo}–{hi}") for size, (lo, hi) in TIMETABLE_SIZES.items()})
+
+
+def print_timetable(r):
+    """Dva řádky pod řádkem modelu: přesnost podle polohy PSČ a výjimky (správně/celkem), pak druhy chyb."""
+    fracs = {cls: f"{ok}/{n}" for part in ("by_position", "by_rule") for cls, (ok, n) in r[part].items()}
+    print(" " * 20 + i18n.t("bench.timetable.line", **fracs), flush=True)
+    print(" " * 20 + i18n.t("bench.timetable.errors", **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
@@ -2182,9 +2613,10 @@ def print_public(r, worst=5):
 def main(argv):
     args = parse_args(argv)
     scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule, args.queue,
-                 args.bet)
+                 args.bet, args.cruise, args.timetable)
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
-            or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
+            or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
+            or (args.sorted and args.shuffled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -2202,6 +2634,12 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesRule"))
     if args.weighted and not args.queue:
         sys.exit(i18n.t("bench.err.weightedQueue"))
+    if (args.sorted or args.shuffled) and not args.timetable:
+        sys.exit(i18n.t("bench.err.formTimetable"))
+    if args.timetable and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesTimetable"))
+    if args.cruise and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesCruise"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -2323,6 +2761,29 @@ def main(argv):
                 r = run_bet(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
                 print_row(r, bet_note(r))
                 print_bet(r)
+    elif args.cruise:
+        cases = cruise_cases(args.n or 100)
+        print(i18n.t("bench.intro.cruise", n=len(cases), form=CRUISE_FORM) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms)
+                print_row(r, cruise_note(r))
+                print_cruise(r)
+    elif args.timetable:
+        form = "shuffled" if args.shuffled else "sorted" if args.sorted else TIMETABLE_FORM
+        cases = timetable_cases(args.n or 100)           # úlohy jsou v obou podobách stejné, podoba mění jen pořadí řádků
+        rows = f"{min(lo for lo, _ in TIMETABLE_SIZES.values())}–{max(hi for _, hi in TIMETABLE_SIZES.values())}"
+        if form == "shuffled":
+            print(i18n.t("bench.intro.timetableShuffled", n=len(cases), rows=rows) + "\n")
+        else:
+            print(i18n.t("bench.intro.timetable", n=len(cases), rows=rows) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_timetable(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, timetable_note(r))
+                print_timetable(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

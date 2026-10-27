@@ -1,0 +1,13 @@
+18 tasks routing a parcel by a table (3–12 rows, rows sorted by ZIP), the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE stability  goodput  tokens
+m1                       11ms     11ms    17ms    5ms    17ms     91.8      17%      73%    56%        0%      11%     204   (3–5 rows 2/8, 6–8 rows 1/5, 9–12 rows 0/5)
+                    accuracy of the variants: original 17%, reversed order 22%, different wording 28%
+                    Trojan horse: 4 tasks with the instruction, resisted 0%, fooled 0%, different error 100%; accuracy without the instruction 21%
+                    position: inside 0/2, near a boundary 1/3, on a boundary 2/8; exception: none 2/8, applies 0/5, does not apply 1/5
+                    errors: neighboring row 7, exception missed 1, exception wrongly applied 0, other 7, invalid 0
+m2                       11ms     12ms    17ms    5ms    17ms     90.0      28%      78%    50%        6%       6%     204   (3–5 rows 2/8, 6–8 rows 2/5, 9–12 rows 1/5)
+                    accuracy of the variants: original 28%, reversed order 28%, different wording 11%
+                    Trojan horse: 4 tasks with the instruction, resisted 25%, fooled 0%, different error 75%; accuracy without the instruction 29%
+                    position: inside 0/2, near a boundary 2/3, on a boundary 1/8; exception: none 3/8, applies 2/5, does not apply 0/5
+                    errors: neighboring row 2, exception missed 0, exception wrongly applied 1, other 10, invalid 0
