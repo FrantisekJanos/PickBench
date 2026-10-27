@@ -377,5 +377,32 @@ class RunTimetable(unittest.TestCase):
         self.assertEqual((e["neighbor"] + e["missed"] + e["misapplied"] + e["other"], e["invalid"]), (10, 0))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_size(self):
+        r = {"by_size": {"small": [5, 10], "medium": [9, 11], "large": [3, 12]}}
+        for lang, want in (("cs", "(3–5 řádků 5/10, 6–8 řádků 9/11, 9–12 řádků 3/12)"), ("en", "(3–5 rows 5/10, 6–8 rows 9/11, 9–12 rows 3/12)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.timetable_note(r), want)
+
+    def test_lines_in_both_languages(self):
+        r = {"by_position": {"inner": [9, 10], "near": [6, 10], "bound": [2, 10]}, "by_rule": {"none": [8, 10], "applies": [7, 10], "decoy": [5, 10]},
+             "errors": {"neighbor": 4, "missed": 3, "misapplied": 5, "other": 1, "invalid": 2}}
+        pad = " " * 20
+        self.assertEqual(printed("cs", bench.print_timetable, r),
+                         [pad + "poloha: uvnitř 9/10, u hranice 6/10, na hranici 2/10; výjimka: žádná 8/10, platí 7/10, neplatí 5/10",
+                          pad + "chyby: sousední řádek 4, výjimka přehlédnutá 3, výjimka navíc 5, jiné 1, neplatné 2"])
+        self.assertEqual(printed("en", bench.print_timetable, r),
+                         [pad + "position: inside 9/10, near a boundary 6/10, on a boundary 2/10; exception: none 8/10, applies 7/10, does not apply 5/10",
+                          pad + "errors: neighboring row 4, exception missed 3, exception wrongly applied 5, other 1, invalid 2"])
+
+    def test_lines_with_empty_classes(self):
+        r = {"by_size": {"small": [1, 1], "medium": [0, 0], "large": [0, 0]},
+             "by_position": {"inner": [0, 0], "near": [0, 0], "bound": [0, 0]}, "by_rule": {"none": [0, 0], "applies": [1, 1], "decoy": [0, 0]},
+             "errors": {"neighbor": 0, "missed": 0, "misapplied": 0, "other": 0, "invalid": 0}}
+        with i18n.process("en"):
+            self.assertEqual(bench.timetable_note(r), "(3–5 rows 1/1, 6–8 rows 0/0, 9–12 rows 0/0)")
+        self.assertEqual(len(printed("en", bench.print_timetable, r)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

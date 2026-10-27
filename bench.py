@@ -2547,6 +2547,18 @@ def print_cruise(r):
     print(" " * 20 + i18n.t("bench.cruise.errors", **r["errors"]), flush=True)
 
 
+def timetable_note(r):
+    """Poznámka za řádkem modelu: přesnost jízdního řádu podle velikosti tabulky."""
+    return class_note(r["by_size"], {size: i18n.t("bench.timetable.size", d=f"{lo}–{hi}") for size, (lo, hi) in TIMETABLE_SIZES.items()})
+
+
+def print_timetable(r):
+    """Dva řádky pod řádkem modelu: přesnost podle polohy PSČ a výjimky (správně/celkem), pak druhy chyb."""
+    fracs = {cls: f"{ok}/{n}" for part in ("by_position", "by_rule") for cls, (ok, n) in r[part].items()}
+    print(" " * 20 + i18n.t("bench.timetable.line", **fracs), flush=True)
+    print(" " * 20 + i18n.t("bench.timetable.errors", **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

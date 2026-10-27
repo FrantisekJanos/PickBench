@@ -196,6 +196,13 @@ TEXTS = {
                                   "sousední pásmo {neighbor}, jiné {other}, neplatné {invalid}",
                             "en": "errors: distance only {distance}, condition left out {omitted}, each condition as 1 level {flat}, "
                                   "neighboring band {neighbor}, other {other}, invalid {invalid}"},
+    # Jízdní řád (--timetable): velikost tabulky v poznámce za řádkem modelu ({d} = „3–5“), pod ním přesnost podle polohy
+    # a výjimky (hotové zlomky „správně/celkem“) a řádek chyb (počty).
+    "bench.timetable.size": {"cs": "{d} řádků", "en": "{d} rows"},
+    "bench.timetable.line": {"cs": "poloha: uvnitř {inner}, u hranice {near}, na hranici {bound}; výjimka: žádná {none}, platí {applies}, neplatí {decoy}",
+                             "en": "position: inside {inner}, near a boundary {near}, on a boundary {bound}; exception: none {none}, applies {applies}, does not apply {decoy}"},
+    "bench.timetable.errors": {"cs": "chyby: sousední řádek {neighbor}, výjimka přehlédnutá {missed}, výjimka navíc {misapplied}, jiné {other}, neplatné {invalid}",
+                               "en": "errors: neighboring row {neighbor}, exception missed {missed}, exception wrongly applied {misapplied}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
