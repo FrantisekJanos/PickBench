@@ -1542,6 +1542,37 @@ def cruise_cases(n, seed=1):
     return [cruise_case(rng, rng.choice(CRUISE_CLASSES), rng.choice(CRUISE_PLACES)) for _ in range(n)]
 
 
+CRUISE_INS = ("Choose the cruise control speed level, from 1 (slowest) to 7 (fastest). Start from obstacle_m, the distance in meters "
+              "to the nearest obstacle ahead: under 20 m is level 1, 20 to 39 m level 2, 40 to 59 m level 3, 60 to 99 m level 4, "
+              "100 to 149 m level 5, 150 to 219 m level 6, 220 m or more level 7. Then go one level lower on a wet road and two "
+              "levels lower on an icy road. Then go one level lower in light fog and two levels lower in dense fog.")
+
+
+def level_keys():
+    """Klíče možností otázky speed: level_1 … level_CRUISE_TOP."""
+    return [f"level_{k}" for k in range(1, CRUISE_TOP + 1)]
+
+
+def choice_level(choice):
+    """Stupeň ze zvolené možnosti; cokoli mimo level_keys() (i ne-řetězec) je neplatné = None."""
+    keys = level_keys()
+    return keys.index(choice) + 1 if isinstance(choice, str) and choice in keys else None
+
+
+def cruise_state(m, road, fog):
+    """Stav pro model: vzdálenost překážky, povrch a mlha (klíče vždy všechny tři, v tomto pořadí)."""
+    return {"obstacle_m": m, "road": road, "fog": fog}
+
+
+def cruise_question():
+    """Otázka choice speed: stupeň rychlosti 1 (nejpomalejší) až CRUISE_TOP (nejrychlejší)."""
+    labels = {k: f"Level {k}" for k in range(1, CRUISE_TOP + 1)}
+    labels[1] += " (slowest)"
+    labels[CRUISE_TOP] += " (fastest)"
+    return {"speed": {"type": "choice", "instructions": CRUISE_INS,
+                      "criteria": {f"level_{k}": label for k, label in labels.items()}}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1558,6 +1589,7 @@ ALT = {                                              # jinak formulované zadán
     "lane": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.",
     "lane_weighted": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.",
     "bet": "Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.",
+    "speed": "The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)

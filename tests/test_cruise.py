@@ -163,5 +163,41 @@ class Generator(unittest.TestCase):
                 bench.cruise_case(random.Random(1), cls, place)
 
 
+CRUISE_TEXT = ("Choose the cruise control speed level, from 1 (slowest) to 7 (fastest). Start from obstacle_m, the distance in meters "
+               "to the nearest obstacle ahead: under 20 m is level 1, 20 to 39 m level 2, 40 to 59 m level 3, 60 to 99 m level 4, "
+               "100 to 149 m level 5, 150 to 219 m level 6, 220 m or more level 7. Then go one level lower on a wet road and two "
+               "levels lower on an icy road. Then go one level lower in light fog and two levels lower in dense fog.")
+ALT_SPEED = ("The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the "
+             "nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 "
+             "from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy "
+             "road two. Light fog takes one level off and dense fog two. Pick the level that is left.")
+LEVELS = {"level_1": "Level 1 (slowest)", "level_2": "Level 2", "level_3": "Level 3", "level_4": "Level 4", "level_5": "Level 5",
+          "level_6": "Level 6", "level_7": "Level 7 (fastest)"}
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_example_state(self):
+        state = bench.cruise_state(97, "icy", "none")
+        self.assertEqual(json.dumps(state), '{"obstacle_m": 97, "road": "icy", "fog": "none"}')
+        self.assertEqual(solver(state), "level_2")
+
+    def test_question_and_its_alternative_wordings(self):
+        q = bench.cruise_question()
+        self.assertEqual(list(q), ["speed"])
+        self.assertEqual((q["speed"]["type"], q["speed"]["instructions"]), ("choice", CRUISE_TEXT))
+        self.assertEqual(json.dumps(q["speed"]["criteria"]), json.dumps(LEVELS))
+        self.assertEqual(bench.CRUISE_INS, CRUISE_TEXT)
+        self.assertEqual(bench.ALT["speed"], ALT_SPEED)
+        self.assertEqual(bench.variant(q, 2)["speed"]["instructions"], ALT_SPEED)
+        self.assertEqual(list(bench.variant(q, 1)["speed"]["criteria"]), list(LEVELS)[::-1])
+
+    def test_choice_level(self):
+        self.assertEqual(bench.level_keys(), list(LEVELS))
+        self.assertEqual([bench.choice_level(f"level_{k}") for k in range(1, 8)], list(range(1, 8)))
+        for bad in (None, "level_0", "level_8", "level_03", "3", 3, ["level_1"], "Level 3"):
+            with self.subTest(bad=bad):
+                self.assertIsNone(bench.choice_level(bad))
+
+
 if __name__ == "__main__":
     unittest.main()
