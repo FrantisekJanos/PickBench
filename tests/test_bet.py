@@ -157,5 +157,76 @@ class StateAndQuestion(unittest.TestCase):
                 self.assertEqual(list(bench.variant(q, 1)["bet"]["criteria"]), bench.gate_keys(gates)[::-1])
 
 
+class RunBet(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_bet(*args, **kw)
+
+    def test_regret_and_decoys_by_hand(self):
+        s = bench.bet_summary([EXAMPLE_CASE] * 4, ["gate_2", "gate_1", "gate_3", None], bench.gate_keys(3))
+        self.assertAlmostEqual(s["regret"], (0 + 0.5 + 0.25 + 1) / 4)                    # 12000 proti 6000, 9000 a neplatné
+        self.assertEqual(s["errors"], {"reward": 1, "chance": 1, "other": 0, "invalid": 1})
+        self.assertEqual(s["by_level"], {"same": [0, 0], "round": [0, 0], "general": [1, 4]})
+
+    def test_perfect_model(self):                                          # cases() má výchozí 4 brány: run_bet dostává 4
+        r = self.run_with(solver, "m", cases(120), 4)
+        self.assertEqual((r["acc"], r["regret"]), (1, 0))
+        self.assertEqual(list(r["by_level"]), list(bench.BET_LEVELS))
+        self.assertEqual(sum(n for _, n in r["by_level"].values()), 120)
+        self.assertTrue(all(ok == n > 0 for ok, n in r["by_level"].values()))
+        self.assertEqual(json.dumps(r["errors"]), json.dumps({"reward": 0, "chance": 0, "other": 0, "invalid": 0}))
+
+    def test_highest_reward_model(self):                                  # v general je nejvyšší odměna správná zhruba v třetině úloh
+        c = cases(120)
+        pick = lambda state: f"gate_{max(range(len(gates_of(state))), key=lambda i: gates_of(state)[i][0]) + 1}"
+        r = self.run_with(pick, "m", c, 4)
+        general = [x for x in c if x[3] == "general"]
+        wrong = sum(x[4] != x[2] for x in general)
+        self.assertTrue(0 < wrong < len(general))
+        self.assertEqual(r["by_level"]["same"][0], r["by_level"]["same"][1])
+        self.assertEqual(r["by_level"]["round"][0], r["by_level"]["round"][1])
+        self.assertEqual(r["by_level"]["general"], [len(general) - wrong, len(general)])
+        self.assertEqual(r["errors"], {"reward": wrong, "chance": 0, "other": 0, "invalid": 0})
+        self.assertGreater(r["regret"], 0)
+
+    def test_highest_chance_model(self):                                  # v same jsou šance stejné: první brána, chyba je „jiné“
+        c = cases(120)
+        pick = lambda state: f"gate_{max(range(len(gates_of(state))), key=lambda i: gates_of(state)[i][1]) + 1}"
+        r = self.run_with(pick, "m", c, 4)
+        chance = sum(x[3] == "round" or (x[3] == "general" and x[5] != x[2]) for x in c)   # v round je 100 % vždy špatně
+        other = sum(x[3] == "same" and x[2] != 0 for x in c)
+        self.assertEqual(r["errors"], {"reward": 0, "chance": chance, "other": other, "invalid": 0})
+
+    def test_invalid_answers(self):
+        c = cases(30)
+        for answer in (None, "gate_9", "lane_1", ["gate_1"]):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", c, 4)
+                self.assertEqual((r["acc"], r["regret"]), (0, 1))
+                self.assertEqual(r["errors"], {"reward": 0, "chance": 0, "other": 0, "invalid": 30})
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c, sent = bench.bet_cases(5, 6), []
+
+        def post(model, payload):
+            sent.append(payload)
+            return {"answers": {next(iter(payload["questions"])): {"choice": "gate_1", "confidence": 0.5}}}, 10.0
+        with mock.patch.object(bench, "post", post):
+            bench.run_bet("m", c, 6)
+        self.assertEqual(len(sent), 6)                                          # zahřátí a pět úloh
+        self.assertEqual([p["state"] for p in sent], [bench.bet_state(*c[0][:2])] + [bench.bet_state(*x[:2]) for x in c])
+        self.assertTrue(all(p["questions"] == bench.bet_question(6) for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40)
+        r = self.run_with(solver, "m", c, 4, mirror=True)
+        self.assertEqual((r["stab"], r["acc"]), (1, 1))
+        r = self.run_with(obedient(solver), "m", c, 4, inject=True)
+        self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+        self.assertEqual(r["acc"], 0.75)
+        e = r["errors"]
+        self.assertEqual((e["reward"] + e["chance"] + e["other"], e["invalid"]), (10, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

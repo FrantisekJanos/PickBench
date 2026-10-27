@@ -1398,6 +1398,31 @@ def bet_question(gates):
     return {"bet": {"type": "choice", "instructions": instructions, "criteria": position_criteria(gate_keys(gates), "Gate")}}
 
 
+def bet_summary(cases, choices, keys):
+    """Přesnost po úrovních, regret a rozbor chyb sázky; volba mimo keys nebo ne-řetězec je neplatná (regret 1).
+
+    regret: průměr (ev[správná] - ev[zvolená]) / ev[správná]. errors: reward / chance = zvolená je jediná brána s nejvyšší
+    odměnou / šancí a není správná; other: ostatní chybné; invalid: neplatná volba. Správná volba se nepočítá nikam."""
+    by_level = class_tally(BET_LEVELS, [(answer, level) for _, _, answer, level, _, _ in cases], choices, keys)
+    errors, regret = {"reward": 0, "chance": 0, "other": 0, "invalid": 0}, 0
+    for (rewards, chances, answer, _, top_reward, top_chance), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in keys):
+            errors["invalid"] += 1
+            regret += 1
+            continue
+        ev = [r * c for r, c in zip(rewards, chances)]
+        regret += (ev[answer] - ev[keys.index(choice)]) / ev[answer]
+        if choice == keys[answer]:
+            continue
+        if top_reward is not None and choice == keys[top_reward]:
+            errors["reward"] += 1
+        elif top_chance is not None and choice == keys[top_chance]:
+            errors["chance"] += 1
+        else:
+            errors["other"] += 1
+    return {"by_level": by_level, "regret": regret / len(cases), "errors": errors}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1863,6 +1888,17 @@ def run_queue(model, cases, lanes=4, mirror=False, inject=False, deadline=None, 
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r["by_gap"] = class_tally(QUEUE_GAPS, [(answer, cls) for _, answer, cls, _, _ in cases], choices, keys)
     r["errors"] = queue_errors(cases, choices, keys, weighted)   # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_bet(model, cases, gates=4, mirror=False, inject=False, deadline=None):
+    keys, question = gate_keys(gates), bet_question(gates)
+    ask(model, bet_state(*cases[0][:2]), question)               # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[2]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(bet_state(*case[:2]), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(bet_summary(cases, choices, keys))                  # z původní varianty zadání, jako přesnost
     return r
 
 
