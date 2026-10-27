@@ -203,5 +203,28 @@ class RunHint(unittest.TestCase):
         self.assertEqual(r["by_cond"]["incongruent"], [20, 20])
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_condition(self):
+        r = {"by_cond": {"none": [10, 12], "congruent": [12, 12], "incongruent": [3, 12]}}
+        for lang, want in (("cs", "(bez nápovědy 10/12, shodná 12/12, konfliktní 3/12)"),
+                           ("en", "(no hint 10/12, congruent 12/12, incongruent 3/12)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.hint_note(r), want)
+
+    def test_lines_in_both_languages(self):
+        r = {"help": 0.12, "hurt": -0.034, "pull": 0.0, "errors": {"hint": 7, "other": 2, "invalid": 1}, "flipped": 5, "pairs": 100,
+             "by_gap": {"tight": [3, 30], "medium": [20, 35], "clear": [33, 35]}}
+        self.assertEqual(printed("cs", bench.print_hint, r), [
+            " " * 20 + "nápověda: pomoc +12 pb, škoda -3 pb, tah +0 pb; konfliktní: chyby na nápovědu 7, jiné 2, neplatné 1; převráceno 5/100",
+            " " * 20 + "konfliktní podle rozdílu: těsné 3/30, střední 20/35, jasné 33/35"])
+        self.assertEqual(printed("en", bench.print_hint, r), [
+            " " * 20 + "hint: help +12 pp, harm -3 pp, pull +0 pp; incongruent: errors on the hint 7, other 2, invalid 1; flipped 5/100",
+            " " * 20 + "incongruent by gap: narrow 3/30, medium 20/35, clear 33/35"])
+
+    def test_points_keep_the_sign(self):
+        self.assertEqual([bench.pp(x) for x in (0.5, -1, 0.0, -0.004, 0.004, 0.125, float("nan"), None)],
+                         ["+50", "-100", "+0", "+0", "+0", "+12", "—", "—"])
+
+
 if __name__ == "__main__":
     unittest.main()

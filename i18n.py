@@ -211,6 +211,16 @@ TEXTS = {
                              "en": "position: inside {inner}, near a boundary {near}, on a boundary {bound}; exception: none {none}, applies {applies}, does not apply {decoy}"},
     "bench.timetable.errors": {"cs": "chyby: sousední řádek {neighbor}, výjimka přehlédnutá {missed}, výjimka navíc {misapplied}, jiné {other}, neplatné {invalid}",
                                "en": "errors: neighboring row {neighbor}, exception missed {missed}, exception wrongly applied {misapplied}, other {other}, invalid {invalid}"},
+    # Rušivá nápověda (--hint): jména podmínek v poznámce za řádkem modelu a dva řádky pod ním ({help}, {hurt}, {pull} = hotové
+    # procentní body se znaménkem „+12“, ostatní = počty; {list} = „těsné 3/30, …“ se jmény tříd z bench.gap.*).
+    "bench.hint.none": {"cs": "bez nápovědy", "en": "no hint"},
+    "bench.hint.congruent": {"cs": "shodná", "en": "congruent"},
+    "bench.hint.incongruent": {"cs": "konfliktní", "en": "incongruent"},
+    "bench.hint.line": {"cs": "nápověda: pomoc {help} pb, škoda {hurt} pb, tah {pull} pb; konfliktní: chyby na nápovědu {hint}, jiné {other}, "
+                              "neplatné {invalid}; převráceno {flipped}/{pairs}",
+                        "en": "hint: help {help} pp, harm {hurt} pp, pull {pull} pp; incongruent: errors on the hint {hint}, other {other}, "
+                              "invalid {invalid}; flipped {flipped}/{pairs}"},
+    "bench.hint.byGap": {"cs": "konfliktní podle rozdílu: {list}", "en": "incongruent by gap: {list}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "

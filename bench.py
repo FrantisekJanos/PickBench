@@ -2689,6 +2689,26 @@ def print_timetable(r):
     print(" " * 20 + i18n.t("bench.timetable.errors", **r["errors"]), flush=True)
 
 
+def pp(x):
+    """Rozdíl podílů v procentních bodech, celé číslo vždy se znaménkem (+12, -3, +0); NaN jako pomlčka."""
+    return "—" if x is None or x != x else f"{round(x * 100):+d}"
+
+
+def hint_note(r):
+    """Poznámka za řádkem modelu: přesnost podle podmínky nápovědy."""
+    return class_note(r["by_cond"], {"none": i18n.t("bench.hint.none"), "congruent": i18n.t("bench.hint.congruent"),
+                                     "incongruent": i18n.t("bench.hint.incongruent")})
+
+
+def print_hint(r):
+    """Dva řádky pod řádkem modelu: pomoc, škoda, tah, chyby a převrácené řady, pak konfliktní přesnost podle rozdílu."""
+    names = {"tight": i18n.t("bench.gap.tight"), "medium": i18n.t("bench.gap.medium"), "clear": i18n.t("bench.gap.clear")}
+    print(" " * 20 + i18n.t("bench.hint.line", help=pp(r["help"]), hurt=pp(r["hurt"]), pull=pp(r["pull"]), flipped=r["flipped"],
+                            pairs=r["pairs"], **r["errors"]), flush=True)
+    gaps = ", ".join(f"{names[g]} {ok}/{n}" for g, (ok, n) in r["by_gap"].items())
+    print(" " * 20 + i18n.t("bench.hint.byGap", list=gaps), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
