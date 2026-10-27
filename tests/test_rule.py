@@ -540,6 +540,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; čtení den
         method = lambda name: re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
         page = page_source()
         code = page_function("drawRuleFeature") + page_function("ruleLabel") + page_function("drawRowLabel") + (
+            "const ruleExcluded = () => ({});"
             "const calls = [], LW = 100, W = 300, H = 600, CAR_Y = 500, CELL = 50;" + re.search(r"\nconst RESULT = [^\n]*\n", page).group(0) +
             "const RULE_FEATURE_NAME = { color: 'rule.feature.color', shape: 'rule.feature.shape', count: 'rule.feature.count' };" +
             re.search(r"\nconst RULE_PICK_NAME = [^\n]*\n", page).group(0) +
@@ -585,19 +586,39 @@ class Page(unittest.TestCase):              # scénář ve stránce; čtení den
         body = rule_body()
         method = lambda name: re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
         page = page_source()
-        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "RULE_FEATURE_NAME", "RULE_PICK_NAME"))
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "RULE_FEATURE_NAME", "RULE_PICK_NAME", "RULE_STREAK"))
         code = "(() => { const texts = [], strokes = [], LW = 100, W = 300, H = 600, CAR_Y = 540, CELL = 44;" + consts + (
             page_function("drawRuleFeature") + page_function("ruleLabel") + page_function("drawRowLabel") +
+            page_function("ruleChanges") + page_function("ruleExcluded") +
             "const ctx = new Proxy({ fillText(s) { texts.push(s); }, strokeRect(x) { strokes.push(Math.round(x)); }, measureText: s => ({ width: s.length * 6 }) },"
             " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
             "const o = { drawRing() {}," + method("drawItems") + "};"
-            "const row = extra => ({ y: 3, order: ['color', 'shape', 'count'], truth: 2, inject: null, passLane: 1, result: null, cls: 'repeat', chosen: undefined, old: null, ...extra });"
+            "const row = extra => ({ y: 3, order: ['color', 'shape', 'count'], truth: 2, inject: null, passLane: 1, result: null, cls: 'repeat', chosen: undefined, old: null, log: [['count', true]], ...extra });"
             "o.drawItems({ rows: [row({ chosen: 1 }), row({ y: 7 }), row({ y: -0.5, result: 'ok', chosen: 2 })] });"
-            "return { texts, strokes }; })()")
+            "const plain = texts.splice(0), lines = strokes.splice(0);"
+            "o.drawItems({ rows: [row({ cls: 'switch', truth: 1, log: [['count', true], ['count', true], ['count', true], ['color', false]] })] });"
+            "return { texts: plain, strokes: lines, crossed: texts }; })()")
         got = run_js(code, None)
         self.assertEqual(got["texts"].count("shoda: barva"), 3)
         self.assertIn("✓ platí: počet", got["texts"])
         self.assertEqual(len(got["strokes"]), 1)                    # jen zvolená brána neprojeté řady s odpovědí
+        self.assertEqual(got["crossed"], ["vyřazeno: ✗ po změně", "shoda: tvar", "staré pravidlo, neplatí"])   # po změně zbude jen správná brána
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_log_rules_out_the_old_rule_and_crossed_features(self):  # ruleExcluded: staré pravidlo a ✗ od poslední změny, jen bez ✓ od změny
+        from test_parity import run_js
+        streak = re.search(r"\nconst RULE_STREAK = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + streak + page_function("ruleChanges") + page_function("ruleExcluded") + (
+            "const C = (f, ok) => [f, ok]; return ["
+            "ruleExcluded([C('shape', false), C('count', true), C('count', true), C('count', true), C('color', false)]),"
+            "ruleExcluded([C('shape', true), C('shape', true), C('shape', true), C('shape', false), C('color', false)]),"
+            "ruleExcluded([C('color', true), C('color', true), C('color', true), C('shape', true)]),"
+            "ruleExcluded([C('color', false), C('shape', false)])]; })()")
+        switch, old_crossed, repeat, eliminate = run_js(code, None)
+        self.assertEqual(switch, {"count": "old", "color": "out"})
+        self.assertEqual(old_crossed, {"shape": "old", "color": "out"})     # ✗ na starém pravidle po změně zůstane „staré“
+        self.assertEqual(repeat, {})                                        # správný pokus od změny: nic se nepřeškrtává
+        self.assertEqual(eliminate, {"color": "out", "shape": "out"})
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_log_strip_title_change_and_question(self):  # deník: nadpis, slovo u čáry změny, otazník za posledním pokusem jen u neprojeté řady

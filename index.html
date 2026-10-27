@@ -640,7 +640,7 @@ const TEXTS = {
   'legend.lookahead.first': { cs: 'model volí jen první tah (šipka), zbytek cesty auto dojede nejlepší možnou cestou', en: 'the model picks only the first move (the arrow); the car drives the rest along the best possible path' },
   'legend.lookahead.paths': { cs: 'po průjezdu: zelená = správná cesta, oranžová = cesta hladového řidiče, křížek = náraz', en: 'after the car passes: green = the right path, orange = the path of the greedy driver, cross = crash' },
   // scénář skryté pravidlo: popis, tabulka přesnosti podle třídy s řádkem pod ní (rule.class.* a rule.line znak po znaku jako bench.rule.* v i18n.py), znaky bran, pás deníku, dlaždice
-  'scenario.rule.about': { cs: 'Skryté pravidlo: každá řada má 3 brány a každá ukazuje jen znak, ve kterém se shoduje se vzorem: barvu (barevná skvrna), tvar (obrys) nebo počet (tečky). Skryté pravidlo říká, který znak je správný, a po každých 3 správných pokusech v řadě se mění na jiný znak. Každá řada nese vlastní deník dřívějších pokusů (u každého znak zvolené brány a jestli byl pokus správný); pás pod silnicí ukazuje deník nejbližší řady s nejstarším pokusem vlevo a svislou čarou tam, kde se pravidlo změnilo. Model dostane deník a znaky bran, tedy totéž co divák, a volí bránu podle pravidla, které platí teď. Třídy úloh jako v bench.py --rule: opakování (od poslední změny byl správný pokus), přepnutí (pravidlo se změnilo a nové zbývá vyloučením) a vyloučení (bez změny, dva různé špatné pokusy). Pod znakem brány stojí „shoda: …“, tedy v čem se brána shoduje se vzorem. Jakmile model odpoví, modrý obrys ukáže zvolenou bránu. Po průjezdu správná brána zezelená a pod řadou se ukáže štítek: „✓ platí: …“ (auto projelo branou podle pravidla), „✗ zvolil …, platí …“ (jinou branou), ve třídě přepnutí u brány starého pravidla „✗ perseverace: …“, „✗ neplatná odpověď“, nebo „⏱ nestihl“ (odpověď nepřišla včas). V deníku pod silnicí stojí u čáry změny „změna pravidla“ a otazník za posledním pokusem znamená, že model teď volí. Tabulka „Přesnost podle třídy“ dělí výsledek podle třídy úlohy.', en: 'Hidden rule: every row has 3 gates, and every gate shows only the feature it shares with the sample: the color (a colored spot), the shape (an outline) or the count (dots). A hidden rule says which feature is right, and after every 3 correct picks in a row it changes to another feature. Every row carries its own log of earlier picks (for each, the feature of the picked gate and whether the pick was correct); the strip under the road shows the log of the nearest row with the oldest pick on the left and a vertical line where the rule changed. The model gets the log and the features of the gates, the same as the viewer, and picks the gate by the rule in force now. The classes of the tasks are as in bench.py --rule: repeat (a correct pick since the last change), switch (the rule has changed and ruling out leaves the new one) and eliminate (no change, two different wrong picks). Under the feature of a gate it says "match: …", that is, what the gate shares with the sample. As soon as the model answers, a blue outline marks the picked gate. After the car passes, the right gate turns green and a label appears under the row: "✓ in force: …" (the car passed through the gate the rule asks for), "✗ picked …, in force: …" (through another gate), in the switch class at the gate of the old rule "✗ perseveration: …", "✗ invalid answer", or "⏱ missed" (the answer did not arrive in time). In the log under the road the line of a change says "rule change", and a question mark after the last pick means that the model is picking now. The "Accuracy by class" table splits the result by the class of the task.' },
+  'scenario.rule.about': { cs: 'Skryté pravidlo: každá řada má 3 brány a každá ukazuje jen znak, ve kterém se shoduje se vzorem: barvu (barevná skvrna), tvar (obrys) nebo počet (tečky). Skryté pravidlo říká, který znak je správný, a po každých 3 správných pokusech v řadě se mění na jiný znak. Každá řada nese vlastní deník dřívějších pokusů (u každého znak zvolené brány a jestli byl pokus správný); pás pod silnicí ukazuje deník nejbližší řady s nejstarším pokusem vlevo a svislou čarou tam, kde se pravidlo změnilo. Model dostane deník a znaky bran, tedy totéž co divák, a volí bránu podle pravidla, které platí teď. Třídy úloh jako v bench.py --rule: opakování (od poslední změny byl správný pokus), přepnutí (pravidlo se změnilo a nové zbývá vyloučením) a vyloučení (bez změny, dva různé špatné pokusy). Pod znakem brány stojí „shoda: …“, tedy v čem se brána shoduje se vzorem. Jakmile model odpoví, modrý obrys ukáže zvolenou bránu. Po průjezdu správná brána zezelená a pod řadou se ukáže štítek: „✓ platí: …“ (auto projelo branou podle pravidla), „✗ zvolil …, platí …“ (jinou branou), ve třídě přepnutí u brány starého pravidla „✗ perseverace: …“, „✗ neplatná odpověď“, nebo „⏱ nestihl“ (odpověď nepřišla včas). Brána, kterou deník vylučuje, je přeškrtnutá: „staré pravidlo, neplatí“ (po změně platí jiný znak) a „vyřazeno: ✗ po změně“ (znak, který od poslední změny dostal ✗); nepřeškrtnutá zbude jen jedna. V deníku pod silnicí stojí u čáry změny „změna pravidla“ a otazník za posledním pokusem znamená, že model teď volí. Tabulka „Přesnost podle třídy“ dělí výsledek podle třídy úlohy.', en: 'Hidden rule: every row has 3 gates, and every gate shows only the feature it shares with the sample: the color (a colored spot), the shape (an outline) or the count (dots). A hidden rule says which feature is right, and after every 3 correct picks in a row it changes to another feature. Every row carries its own log of earlier picks (for each, the feature of the picked gate and whether the pick was correct); the strip under the road shows the log of the nearest row with the oldest pick on the left and a vertical line where the rule changed. The model gets the log and the features of the gates, the same as the viewer, and picks the gate by the rule in force now. The classes of the tasks are as in bench.py --rule: repeat (a correct pick since the last change), switch (the rule has changed and ruling out leaves the new one) and eliminate (no change, two different wrong picks). Under the feature of a gate it says "match: …", that is, what the gate shares with the sample. As soon as the model answers, a blue outline marks the picked gate. After the car passes, the right gate turns green and a label appears under the row: "✓ in force: …" (the car passed through the gate the rule asks for), "✗ picked …, in force: …" (through another gate), in the switch class at the gate of the old rule "✗ perseveration: …", "✗ invalid answer", or "⏱ missed" (the answer did not arrive in time). A gate the log rules out is crossed out: "old rule, no longer holds" (after a change another feature is in force) and "ruled out: ✗ after the change" (a feature that got ✗ since the last change); only one gate is left uncrossed. In the log under the road the line of a change says "rule change", and a question mark after the last pick means that the model is picking now. The "Accuracy by class" table splits the result by the class of the task.' },
   'scenario.rule.extraTitle': { cs: 'Přesnost podle třídy', en: 'Accuracy by class' },
   'scenario.rule.extraTip': { cs: 'Přesnost modelu podle třídy úlohy jako v bench.py --rule: opakování = od poslední změny pravidla byl správný pokus a ten pravidlo určuje; přepnutí = pravidlo se změnilo, od změny nebyl správný pokus a nové pravidlo zbývá po vyloučení starého znaku a špatných pokusů; vyloučení = pravidlo se ještě neměnilo a dva různé špatné pokusy nechávají třetí znak. Pod tabulkou jako v bench.py: přesnost u krátkého deníku (3 až 5 pokusů) a dlouhého (6 až 10) a perseverace, tedy kolikrát model ve třídě přepnutí zvolil bránu starého pravidla, z úloh přepnutí. Neplatná odpověď se do perseverace nepočítá. Ve třídě přepnutí generátor hlídá, aby znak, který se v deníku objevil nejméně často, trefil pravidlo jen asi v třetině úloh. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy by the class of the task as in bench.py --rule: repeat = there was a correct pick since the last change of the rule, and it gives the rule; switch = the rule has changed, no pick since the change was correct, and the new rule is what is left after ruling out the old feature and the wrong picks; eliminate = the rule has not changed yet, and two different wrong picks leave the third feature. Below the table, as in bench.py: the accuracy for short logs (3 to 5 picks) and long ones (6 to 10), and the perseveration, how many times the model picked the gate of the old rule in the switch class, out of the switch tasks. An invalid answer does not count as perseveration. In the switch class the generator keeps the feature that appears least often in the log right in only about a third of the tasks. All answers count, including the late ones.' },
   'scenario.rule.col.class': { cs: 'třída úlohy', en: 'class of the task' },
@@ -660,6 +660,8 @@ const TEXTS = {
   'rule.logTitle': { cs: 'deník: znak zvolené brány a výsledek, nejstarší vlevo', en: 'log: feature of the picked gate and result, oldest on the left' },
   'rule.change': { cs: 'změna pravidla', en: 'rule change' },
   'rule.gate': { cs: 'shoda: {name}', en: 'match: {name}' },
+  'rule.gate.old': { cs: 'staré pravidlo, neplatí', en: 'old rule, no longer holds' },
+  'rule.gate.out': { cs: 'vyřazeno: ✗ po změně', en: 'ruled out: ✗ after the change' },
   'rule.pick.color': { cs: 'barvu', en: 'color' },
   'rule.pick.shape': { cs: 'tvar', en: 'shape' },
   'rule.pick.count': { cs: 'počet', en: 'count' },
@@ -668,6 +670,7 @@ const TEXTS = {
   'rule.label.persev': { cs: '✗ perseverace: zvolil starý znak ({pick}), platí {truth}', en: '✗ perseveration: picked the old feature ({pick}), in force: {truth}' },
   'legend.rule.gate': { cs: 'Brána ukazuje, v čem se shoduje se skrytou kartou vzoru (skvrny = barva, hvězda = tvar, tečky = počet).', en: 'A gate shows what it shares with the hidden sample (spots = color, star = shape, dots = count).' },
   'legend.rule.rule': { cs: 'Skryté pravidlo říká, který znak platí. Po 3 správných pokusech v řadě se změní.', en: 'The hidden rule says which feature is right. After 3 correct picks in a row it changes.' },
+  'legend.rule.out': { cs: 'Přeškrtnutá brána je vyloučená: staré pravidlo (po změně neplatí) nebo znak, který od poslední změny dostal ✗. Nepřeškrtnutá zbude jen jedna.', en: 'A crossed-out gate is ruled out: the old rule (no longer holds after a change) or a feature that got ✗ since the last change. Only one gate is left uncrossed.' },
   'legend.rule.log': { cs: 'Deník pod silnicí: znak dříve zvolené brány, ✓ správně, ✗ špatně; ? = teď volí model.', en: 'Log under the road: the feature of an earlier picked gate, ✓ correct, ✗ wrong; ? = the model is picking now.' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
@@ -2146,7 +2149,7 @@ const rule = {
   id: 'rule',                                      // brány jsou vždy 3: silnice má 3 pruhy, volič je zamčený jako u závory
   get about() { return t('scenario.rule.about'); },
   panels: ['confPanel', 'trail', 'legend'], get extraTitle() { return t('scenario.rule.extraTitle'); },
-  legend: [[null, 'legend.rule.gate'], [null, 'legend.rule.rule'], [null, 'legend.rule.log']],
+  legend: [[null, 'legend.rule.gate'], [null, 'legend.rule.rule'], [null, 'legend.rule.out'], [null, 'legend.rule.log']],
   get extraTip() { return t('scenario.rule.extraTip'); },
   get matchTip() { return t('scenario.rule.tip.match'); },
   fixedLanes: 3, lanes: () => 3,
@@ -2176,13 +2179,19 @@ const rule = {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';     // v každé řadě znovu: štítek předchozí řady zarovnání vrací
+      const out = ruleExcluded(r.log);
       r.order.forEach((f, lane) => {
         const x = (lane + 0.5) * LW;
         ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
         ctx.beginPath(); ctx.roundRect(x - hw, y - 20, 2 * hw, 40, 6); ctx.fill();
         drawRuleFeature(ctx, f, x, y - 6, rad);
-        ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3';
-        ctx.fillText(t('rule.gate', { name: t(RULE_FEATURE_NAME[f]) }), x, y + 12, 2 * hw - 4);
+        const ex = out[f];                                       // vyloučený znak: červené přeškrtnutí znaku a důvod místo „shoda: …“
+        if (ex) {
+          ctx.strokeStyle = '#f85149'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(x - rad * 1.3, y - 6 + rad * 1.1); ctx.lineTo(x + rad * 1.3, y - 6 - rad * 1.1); ctx.stroke();
+        }
+        ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.fillStyle = ex ? '#ffa198' : '#e6edf3';
+        ctx.fillText(ex ? t(ex === 'old' ? 'rule.gate.old' : 'rule.gate.out') : t('rule.gate', { name: t(RULE_FEATURE_NAME[f]) }), x, y + 12, 2 * hw - 4);
       });
       ctx.globalAlpha = 1;
       if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 3) {
@@ -2925,6 +2934,16 @@ function ruleChanges(log) {
     if (streak === RULE_STREAK) { changes.push(i); streak = 0; }
   });
   return changes;
+}
+// Jen pro stránku: znaky, které deník vylučuje, {znak: 'old' | 'out'}. Jen když od poslední změny není žádný správný pokus
+// (třídy přepnutí a vyloučení); 'old' = staré pravidlo (znak pokusu, po kterém se pravidlo změnilo), 'out' = ✗ od poslední změny.
+function ruleExcluded(log) {
+  const changes = ruleChanges(log), change = changes.length ? changes[changes.length - 1] : -1;
+  const tail = log.slice(change + 1), out = {};
+  if (tail.some(([, ok]) => ok)) return out;
+  if (change >= 0) out[log[change][0]] = 'old';
+  for (const [f] of tail) out[f] ??= 'out';                  // ✗ na starém pravidle po změně: zůstane „staré pravidlo“
+  return out;
 }
 function ruleState(log, order) {                           // stav ve stejném tvaru a pořadí klíčů jako rule_state(…, "labeled"); order[i] = znak brány i + 1
   const state = { log: log.map(([feature, ok]) => ({ matched_by: feature, result: ok ? 'correct' : 'wrong' })) };
