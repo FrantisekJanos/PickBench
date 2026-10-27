@@ -556,6 +556,62 @@ assert MEMORY_ROWS_JS != ROWS_JS
 # Generátor Závory stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy barrierCase.
 BARRIER_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "barrierCase(rand)")
 assert BARRIER_ROWS_JS != ROWS_JS
+LOOKAHEAD_EXAMPLE = (".#..", "..#.", "###.", "....")             # příklad z rešerše (EXAMPLE v tests/test_lookahead.py): auto v pruhu 2, správně right
+LOOKAHEAD_HAND = [[list(LOOKAHEAD_EXAMPLE), 1], [["#.#", "..."], 1], [["..#", "##."], 0], [["..."], 1], [["...", "..."], 0],
+                  [["...", "..."], 2], [["..#", "..#"], 2], [[".#.", "..."], 1], [["....", "##..", "##..", "...."], 1],
+                  [[".#.", "...", "#..", "..."], 1], [["....",], 0], [[".#...",], 1], [["#.#..",], 1]]      # ručně ověřené mřížky z tests/test_lookahead.py
+
+
+def lookahead_grids(n, seed):
+    """Náhodné mřížky pro paritu prohledávání: K = 3–8, 1–4 řady s hustotou 0,4 (i řady bez volného pole), každý pruh auta."""
+    rng = random.Random(seed)
+    out = []
+    for _ in range(n):
+        lanes = rng.randint(3, 8)
+        out.append([["".join("#" if rng.random() < 0.4 else "." for _ in range(lanes)) for _ in range(rng.randint(1, 4))], rng.randrange(lanes)])
+    return out
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Lookahead(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ moves: LOOKAHEAD_MOVES, shift: LOOKAHEAD_SHIFT, rows: LOOKAHEAD_ROWS, density: LOOKAHEAD_DENSITY, classes: LOOKAHEAD_CLASSES,"
+                    " tries: LOOKAHEAD_TRIES, shortcuts: Object.keys(LOOKAHEAD_SHORTCUTS) })", None)
+        self.assertEqual(js["moves"], list(bench.LOOKAHEAD_MOVES))
+        self.assertEqual(json.dumps(js["shift"]), json.dumps(bench.LOOKAHEAD_SHIFT))
+        self.assertEqual((js["rows"], js["density"], js["tries"]), (bench.LOOKAHEAD_ROWS, bench.LOOKAHEAD_DENSITY, bench.LOOKAHEAD_TRIES))
+        self.assertEqual(js["classes"], list(bench.LOOKAHEAD_CLASSES))
+        self.assertEqual(js["shortcuts"], list(bench.LOOKAHEAD_SHORTCUTS))                  # pořadí rozhoduje o losování
+        tasks = [[list(rows), lane] for lanes in range(3, 9) for rows, lane, *_ in bench.lookahead_cases(4, lanes, seed=lanes)]
+        tasks.append([list(LOOKAHEAD_EXAMPLE), 1])
+        for (rows, lane), state in zip(tasks, run_js("arg.map(([rows, lane]) => lookaheadState(rows, lane))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.lookahead_state(tuple(rows), lane, "blocked")), (rows, lane))   # bajtově, i pořadí klíčů
+        for lanes, question in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => lookaheadQuestion(k))", None)):
+            self.assertEqual(json.dumps(question), json.dumps(bench.lookahead_question(lanes, "blocked")), lanes)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  move_blocked: '([^'\\]*)',$", alt, re.M), [bench.ALT["move_blocked"]])
+        self.assertNotIn("\n  move: ", "\n" + alt)                 # podoba --rows je jen v bench.py
+
+    def test_search_matches_bench(self):
+        import bench
+        grids = lookahead_grids(600, 3) + LOOKAHEAD_HAND
+        got = run_js("arg.map(([rows, lane]) => [lookaheadSurvive(rows, lane), lookaheadValues(rows, lane), [1, 2].map(d => lookaheadValues(rows, lane, d)),"
+                     " lookaheadGreedy(rows, lane), lookaheadDepth(rows, lane), lookaheadDensity(rows, lane), lookaheadCenter(rows, lane)])", grids)
+        for (rows, lane), (survive, values, by_depth, greedy, depth, density, center) in zip(grids, got):
+            rows = tuple(rows)
+            with self.subTest(rows=rows, lane=lane):
+                self.assertEqual(survive, bench.lookahead_survive(rows, lane))
+                self.assertEqual(json.dumps(values), json.dumps(bench.lookahead_values(rows, lane)))       # i pořadí tahů
+                self.assertEqual(by_depth, [bench.lookahead_values(rows, lane, d) for d in (1, 2)])
+                self.assertEqual(greedy, bench.lookahead_greedy(rows, lane))
+                self.assertEqual(depth, list(bench.lookahead_depth(rows, lane)))                         # [null, null] = nejlepší tah není jediný
+                self.assertEqual(density, bench.lookahead_density(rows, lane))
+                self.assertEqual(center, bench.lookahead_center(rows, lane))
 
 
 if __name__ == "__main__":

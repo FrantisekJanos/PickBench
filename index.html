@@ -942,12 +942,18 @@ const ALT = {                                              // jinak formulované
   largest: 'Every gate carries a number. Pick the gate whose number is the greatest.',
   allowed: 'Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.',
   recall: 'For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.',
+  move_blocked: 'The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.',
   go: "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
 };
+const ALT_LANES = /\ba (\d+)-lane road\b/;                  // zadání move_blocked nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
   const key = Object.keys(q)[0];
   if (v === 1) q[key].criteria = Object.fromEntries(Object.entries(q[key].criteria).reverse());
-  if (v === 2) q[key].instructions = ALT[key] + (key === 'category' ? ' ' + q[key].instructions : '');   // pravidla sady e-mailů zůstávají
+  if (v === 2) {
+    let alt = ALT[key];
+    if (alt.includes('{lanes}')) alt = alt.replaceAll('{lanes}', ALT_LANES.exec(q[key].instructions)[1]);     // dva kroky dopředu: počet pruhů z původního zadání
+    q[key].instructions = alt + (key === 'category' ? ' ' + q[key].instructions : '');   // pravidla sady e-mailů zůstávají
+  }
   return q;
 }
 const edgeName = (i, n) => i === 0 ? ' (leftmost)' : i === n - 1 ? ' (rightmost)' : '';
@@ -2239,6 +2245,100 @@ function bestThreshold(probs, truths) {
     if (best === null || n > best.n || (n === best.n && (Math.abs(t - 0.5) < Math.abs(best.t - 0.5) || (Math.abs(t - 0.5) === Math.abs(best.t - 0.5) && t < best.t)))) best = { t, n };
   }
   return [best.t, best.n / D];
+}
+
+// Dva kroky dopředu: konstanty, prohledávání, kontrolní strategie, stav a otázka, stejné jako v bench.py (LOOKAHEAD_*, lookahead_*).
+// Řady jsou řetězce, rows[0] nejbližší řada, '.' volno, '#' překážka, rows[i][j] je pruh j + 1; pruh auta je 0-based.
+// Stránka má jen výchozí podobu stavu blocked; podoba rows je jen v bench.py. Co jde do modelu, je anglicky.
+const LOOKAHEAD_MOVES = ['left', 'stay', 'right'];
+const LOOKAHEAD_SHIFT = { left: -1, stay: 0, right: 1 };
+const LOOKAHEAD_ROWS = 4, LOOKAHEAD_DENSITY = 0.4, LOOKAHEAD_TRIES = 100000;    // řad před autem (R), pravděpodobnost překážky, mez pokusů na úlohu
+const LOOKAHEAD_CLASSES = ['d1', 'd2', 'd3+'];             // hloubka pasti 1, 2, 3 a víc
+// Kolik řad auto projede z pruhu lane (poloha před rows[0]), když před každou řadou smí posun −1/0/+1 v mezích silnice.
+function lookaheadSurvive(rows, lane) {
+  let alive = new Set([lane]);
+  for (const [i, row] of rows.entries()) {
+    const next = new Set();
+    for (const at of alive) for (const m of [at - 1, at, at + 1]) if (m >= 0 && m < row.length && row[m] === '.') next.add(m);
+    alive = next;
+    if (!alive.size) return i;
+  }
+  return rows.length;
+}
+// Hodnota každého tahu (klíče v pořadí LOOKAHEAD_MOVES): kolik řad auto po tahu projede; tah mimo silnici nebo do '#' má 0.
+// depth omezí výpočet na prvních depth řad (jen při depth !== null: rows.slice(0, null) je prázdné pole).
+function lookaheadValues(rows, lane, depth = null) {
+  if (depth !== null) rows = rows.slice(0, depth);
+  const values = {};
+  for (const move of LOOKAHEAD_MOVES) {
+    const target = lane + LOOKAHEAD_SHIFT[move];
+    values[move] = target < 0 || target >= rows[0].length || rows[0][target] !== '.' ? 0 : 1 + lookaheadSurvive(rows.slice(1), target);
+  }
+  return values;
+}
+// Hladový řidič: z tahů v silnici (pořadí stay, left, right) ten s nejdelší volnou dráhou rovně od nejbližší řady; vyhrává první s ostře největší.
+function lookaheadGreedy(rows, lane) {
+  let best = null;
+  for (const move of ['stay', 'left', 'right']) {
+    const target = lane + LOOKAHEAD_SHIFT[move];
+    if (target < 0 || target >= rows[0].length) continue;
+    let run = 0;
+    while (run < rows.length && rows[run][target] === '.') run++;
+    if (best === null || run > best[0]) best = [run, move];
+  }
+  return best[1];
+}
+function lookaheadBest(values) {                           // tahy s nejvyšší hodnotou, v pořadí LOOKAHEAD_MOVES
+  const top = Math.max(...Object.values(values));
+  return Object.keys(values).filter(move => values[move] === top);
+}
+// Hloubka pasti: nejmenší d, pro které je jediný nejlepší tah nad prvními d řadami týž jako nad všemi řadami. [tah, d], nebo [null, null].
+function lookaheadDepth(rows, lane) {
+  const best = lookaheadBest(lookaheadValues(rows, lane));
+  if (best.length !== 1) return [null, null];
+  for (let depth = 1; depth <= rows.length; depth++) {
+    const here = lookaheadBest(lookaheadValues(rows, lane, depth));
+    if (here.length === best.length && here.every((m, i) => m === best[i])) return [best[0], depth];
+  }
+  throw new Error(`lookaheadDepth: no depth for ${JSON.stringify(rows)}, lane ${lane}`);      // nad všemi řadami se shoda najde vždy
+}
+const lookaheadClass = depth => depth === 1 ? 'd1' : depth === 2 ? 'd2' : 'd3+';
+// Tahy do volného pole nejbližší řady v mezích silnice, v pořadí stay, left, right (pořadí shody kontrolních strategií): [[tah, cílový pruh]].
+function lookaheadOpenMoves(rows, lane) {
+  return ['stay', 'left', 'right'].map(move => [move, lane + LOOKAHEAD_SHIFT[move]])
+    .filter(([, target]) => target >= 0 && target < rows[0].length && rows[0][target] === '.');
+}
+// Z tahů do volného pole ten s ostře nejvyšším skóre score(cílový pruh), shoda → dřívější; žádný volný tah → stay.
+function lookaheadPick(rows, lane, score) {
+  let best = null;
+  for (const [move, target] of lookaheadOpenMoves(rows, lane)) {
+    const value = score(target);
+    if (best === null || value > best[0]) best = [value, move];
+  }
+  return best === null ? 'stay' : best[1];
+}
+// Kontrolní strategie hustota: tah, jehož cílový pruh spolu se sousedními má ve všech řadách nejvíc volných polí.
+function lookaheadDensity(rows, lane) {
+  const lanes = rows[0].length;
+  const free = [...Array(lanes).keys()].map(j => rows.filter(row => row[j] === '.').length);
+  return lookaheadPick(rows, lane, t => free.slice(Math.max(0, t - 1), Math.min(lanes, t + 2)).reduce((a, b) => a + b, 0));
+}
+function lookaheadCenter(rows, lane) {                     // kontrolní strategie střed: tah do pruhu nejblíž středu silnice
+  const middle = (rows[0].length - 1) / 2;
+  return lookaheadPick(rows, lane, t => -Math.abs(t - middle));
+}
+const LOOKAHEAD_SHORTCUTS = { greedy: lookaheadGreedy, density: lookaheadDensity, center: lookaheadCenter };     // pořadí rozhoduje o losování
+// Stav pro model (podoba blocked): car_lane od 1, u každé řady čísla zablokovaných pruhů od 1, vzestupně.
+function lookaheadState(rows, lane) {
+  return { car_lane: lane + 1, blocked_lanes_ahead: rows.map(row => [...row].flatMap((c, i) => c === '#' ? [i + 1] : [])) };
+}
+function lookaheadQuestion(lanes) {
+  const instructions = `A car drives up a ${lanes}-lane road, lanes numbered 1 to ${lanes} from the left. car_lane is its lane. `
+    + 'blocked_lanes_ahead lists the next rows, nearest first; each row lists the numbers of its blocked lanes. '
+    + 'Before each row the car may shift one lane left, stay, or shift one lane right, then it enters that row; it cannot leave the road. '
+    + 'Choose the move for the nearest row that lets the car pass the most rows without hitting a blocked lane.';
+  const criteria = { left: 'Shift one lane to the left', stay: 'Stay in the current lane', right: 'Shift one lane to the right' };
+  return { move_blocked: { type: 'choice', instructions, criteria } };
 }
 // ==== sdíleno s Pythonem: konec ====
 
