@@ -2548,6 +2548,97 @@ def tictactoe_pools():
     return {c: {i: tuple(p[i]) for i in sorted(p)} for c, p in out.items()}
 
 
+def tictactoe_cell_type(i):
+    return "center" if i == TICTACTOE_CENTER else "corner" if i in TICTACTOE_CORNERS else "edge"
+
+
+def _tictactoe_top(b, score):
+    free = tictactoe_free(b)
+    top = max(score(i) for i in free)
+    return [i for i in free if score(i) == top]
+
+
+def _tictactoe_count(b, i, marks):
+    return sum(b[j] in marks for j in TICTACTOE_NEIGH[i])
+
+
+# levné zkratky, podle kterých generátor zamítá: deska a značka na tahu → pole, mezi kterými volí (remíza = 1 / počet)
+TICTACTOE_SHORTCUTS = {
+    "center_corner": lambda b, m: next(g for g in ([i for i in grp if b[i] == TICTACTOE_EMPTY] for grp in
+                                                   ((TICTACTOE_CENTER,), TICTACTOE_CORNERS, TICTACTOE_EDGES)) if g),
+    "corner": lambda b, m: [i for i in TICTACTOE_CORNERS if b[i] == TICTACTOE_EMPTY] or tictactoe_free(b),
+    "edge": lambda b, m: [i for i in TICTACTOE_EDGES if b[i] == TICTACTOE_EMPTY] or tictactoe_free(b),
+    "neighbors": lambda b, m: _tictactoe_top(b, lambda i: _tictactoe_count(b, i, "XO")),
+    "own_neighbors": lambda b, m: _tictactoe_top(b, lambda i: _tictactoe_count(b, i, m)),
+    "opp_neighbors": lambda b, m: _tictactoe_top(b, lambda i: _tictactoe_count(b, i, tictactoe_other(m))),
+    "fewest_opp": lambda b, m: _tictactoe_top(b, lambda i: -_tictactoe_count(b, i, tictactoe_other(m))),
+}
+
+
+def tictactoe_hit(case, name):
+    """Očekávaná trefa zkratky na úloze."""
+    b, m, answer, _ = case
+    picks = TICTACTOE_SHORTCUTS[name](b, m)
+    return (answer in picks) / len(picks)
+
+
+def tictactoe_case(rng, cls):
+    """Jeden los úlohy třídy cls: značka na tahu (X s pravděpodobností TICTACTOE_SIDE_X), pole odpovědi mezi poli, pro
+    která pozice s touto značkou existuje, s vahou typu pole, pak pozice rovnoměrně z koše. Kontrola: řešitel dá třídu
+    i pole a platí záruky; porušení = RuntimeError."""
+    if cls not in TICTACTOE_CLASSES:
+        raise RuntimeError(f"tictactoe_case: unknown class {cls}")
+    pool = tictactoe_pools()[cls]
+    side = "X" if rng.random() < TICTACTOE_SIDE_X[cls] else "O"
+    cells = [i for i in pool if any(tictactoe_to_move(b) == side for b in pool[i])]
+    cell = rng.choices(cells, [TICTACTOE_CELL_WEIGHT[cls][tictactoe_cell_type(i)] for i in cells])[0]
+    b = rng.choice([b for b in pool[cell] if tictactoe_to_move(b) == side])
+    if tictactoe_solve(b) != (cls, cell) or not tictactoe_strict(b, cls, cell) or tictactoe_to_move(b) != side:
+        raise RuntimeError(f"tictactoe_case: broken guarantee {b} {cls} {cell}")
+    return (b, side, cell, cls)
+
+
+def tictactoe_accept(rng, case):
+    """Zamítání podle levných zkratek (TICTACTOE_BALANCE); bere z rng právě jedno číslo."""
+    q = 1.0
+    for name, a in TICTACTOE_BALANCE[case[3]].items():
+        q *= 1 - tictactoe_hit(case, name) * (1 - a)
+    return rng.random() < q
+
+
+def tictactoe_cases(n, seed=1):
+    """n úloh ze semínka; třída rovnoměrně na každou úlohu, pak losy do přijetí (nejvýš TICTACTOE_TRIES)."""
+    rng = random.Random(seed)
+    out = []
+    for _ in range(n):
+        cls = rng.choice(TICTACTOE_CLASSES)
+        for _try in range(TICTACTOE_TRIES):
+            case = tictactoe_case(rng, cls)
+            if tictactoe_accept(rng, case):
+                break
+        else:
+            raise RuntimeError(f"tictactoe_cases: no {cls} task after {TICTACTOE_TRIES} tries")
+        out.append(case)
+    return out
+
+
+def tictactoe_form(form):
+    """Podoba stavu: None = výchozí TICTACTOE_FORM, neznámá podoba = ValueError."""
+    form = form or TICTACTOE_FORM
+    if form not in TICTACTOE_FORMS:
+        raise ValueError(f"unknown tictactoe form: {form}")
+    return form
+
+
+def tictactoe_state(case, form=None):
+    """Stav pro model. rows: tři řetězce po třech znacích, řádky shora, '.' volné pole; cells: všech devět polí jménem
+    v pořadí čtení, prázdný řetězec = volné. Úloha je v obou podobách stejná."""
+    b, you = case[0], case[1]
+    if tictactoe_form(form) == "rows":
+        return {"you": you, "board": [b[0:3], b[3:6], b[6:9]]}
+    return {"you": you, "cells": {k: ("" if b[i] == TICTACTOE_EMPTY else b[i]) for i, k in enumerate(TICTACTOE_CELLS)}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",

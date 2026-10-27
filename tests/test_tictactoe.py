@@ -251,5 +251,82 @@ class Pools(unittest.TestCase):
                             self.assertEqual([i for i in free(b) if -negamax(put(b, i, m), other(m)) == 1], [cell])
 
 
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        pools = bench.tictactoe_pools()
+        for case in cases():
+            b, you, answer, cls = case
+            with self.subTest(case=case):
+                self.assertIn(b, pools[cls][answer])
+                self.assertEqual(you, bench.tictactoe_to_move(b))
+                self.assertEqual(rules(b, you), answer)
+                for form in bench.TICTACTOE_FORMS:
+                    self.assertEqual(solve(bench.tictactoe_state(case, form)), CELLS[answer])
+
+    def test_classes_and_sides_are_spread(self):
+        c = cases()
+        counts = Counter(x[3] for x in c)
+        for cls in CLASSES:
+            sub = [x for x in c if x[3] == cls]
+            with self.subTest(cls=cls):
+                self.assertTrue(0.22 <= counts[cls] / len(c) <= 0.28, counts)
+                self.assertTrue(0.42 <= sum(x[1] == "X" for x in sub) / len(sub) <= 0.58)
+        answers = Counter(x[2] for x in c)
+        self.assertTrue(all(0.06 <= answers[i] / len(c) <= 0.2 for i in range(9)), answers)
+
+    def test_cheap_shortcuts_stay_near_chance(self):
+        c = cases()
+        self.assertTrue(set().union(*bench.TICTACTOE_BALANCE.values()) <= set(bench.TICTACTOE_SHORTCUTS) <= set(CHEAP))    # zamítá se jen podle zkratek, které test zná
+        for name, strategy in CHEAP.items():
+            got = shares(strategy, c)
+            with self.subTest(name=name, got=got):
+                self.assertTrue(all(v <= 0.42 for v in got.values()))
+        self.assertTrue(all(0.2 <= v <= 0.3 for v in shares(CHEAP["random"], c).values()))
+
+    def test_partial_reasoning_is_what_the_classes_measure(self):
+        c = cases()
+        got = {name: shares(strategy, c) for name, strategy in PARTIAL.items()}
+        for name in ("any_line", "block_first", "no_fork", "swap_sides", "always_X"):
+            self.assertEqual((got[name]["win"], got[name]["block"]), (1, 1), name)         # kontrolní třídy: čtení linek
+        self.assertTrue(0.45 <= got["any_line"]["win_over_block"] <= 0.55, got["any_line"])
+        self.assertEqual((got["block_first"]["win_over_block"], got["swap_sides"]["win_over_block"]), (0, 0))
+        self.assertEqual(got["block_first"]["fork"], 1)
+        self.assertLess(got["no_fork"]["fork"], 0.35)
+        self.assertTrue(0.6 <= got["open_lines"]["fork"] <= 0.9, got["open_lines"])      # vidlička je i částečné uvažování (README, nápověda)
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.tictactoe_cases(40), bench.tictactoe_cases(40, seed=1))
+        self.assertNotEqual(bench.tictactoe_cases(40), bench.tictactoe_cases(40, seed=2))
+
+    def test_bounded_search_and_broken_guarantee_raise(self):
+        with mock.patch.object(bench, "TICTACTOE_TRIES", 0), self.assertRaises(RuntimeError):
+            bench.tictactoe_cases(1)
+        with self.assertRaises(RuntimeError):
+            bench.tictactoe_case(random.Random(1), "draw")
+        broken = {c: {i: (WIN[0],) for i in range(9)} for c in CLASSES}                   # pozice v koši cizího pole
+        with mock.patch.object(bench, "tictactoe_pools", lambda: broken), self.assertRaises(RuntimeError):
+            bench.tictactoe_case(random.Random(1), "win")
+
+
+class State(unittest.TestCase):
+    def test_spec_example_state(self):
+        self.assertEqual(json.dumps(bench.tictactoe_state(BLOCK, "rows")), '{"you": "O", "board": ["X..", ".X.", "OXO"]}')
+        self.assertEqual(json.dumps(bench.tictactoe_state(BLOCK, "cells")),
+                         '{"you": "O", "cells": {"r1c1": "X", "r1c2": "", "r1c3": "", "r2c1": "", "r2c2": "X", "r2c3": "", '
+                         '"r3c1": "O", "r3c2": "X", "r3c3": "O"}}')
+        self.assertEqual(bench.tictactoe_state(BLOCK), bench.tictactoe_state(BLOCK, bench.TICTACTOE_FORM))
+        self.assertIn(BLOCK[0], bench.tictactoe_pools()["block"][1])
+        with self.assertRaises(ValueError):
+            bench.tictactoe_state(BLOCK, "grid")
+
+    def test_both_forms_carry_the_same_task(self):
+        for x in cases()[:300]:
+            a, b = bench.tictactoe_state(x, "rows"), bench.tictactoe_state(x, "cells")
+            with self.subTest(case=x):
+                self.assertEqual((list(a), list(b)), (["you", "board"], ["you", "cells"]))
+                self.assertEqual(list(b["cells"]), list(CELLS))
+                self.assertEqual((board_of(a), board_of(b), a["you"]), (x[0], x[0], b["you"]))
+
+
 if __name__ == "__main__":
     unittest.main()
