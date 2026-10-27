@@ -590,9 +590,10 @@ class Page(unittest.TestCase):                                         # scéná
             "process.stdout.write(JSON.stringify([[['ok', 0, 0], ['ok', 1, 1], ['bad', 1, 0], ['bad', 0, 1], ['late', 0, undefined], ['late', 1, undefined],"
             " ['bad', 0, -1], ['bad', 1, -1]].map(([r, t, c]) => barrierOutcome(r, t, c)),"
             " [{ result: null, chosen: undefined, y: 3 }, { result: null, chosen: 0, y: 3 }, { result: null, chosen: 1, y: 3 },"
-            "  { result: null, chosen: 1, y: 0.4 }, { result: null, chosen: undefined, y: 0.4 }, { result: 'ok', chosen: 1, y: -0.5 }].map(barrierOpen)]));")
+            "  { result: null, chosen: 1, y: 0.4 }, { result: null, chosen: undefined, y: 0.4 }, { result: 'ok', chosen: 1, y: -0.5 },"
+            "  { result: null, chosen: 1, y: 0.4, hold: 1 }, { result: null, chosen: 1, y: 1.05, hold: 2 }].map(barrierOpen)]));")
         self.assertEqual(run_page_js(code), [["go", "stop", "falseGo", "needless", "late", "lateCrash", "invalid", "invalid"],
-                                             [False, True, False, True, True, True]])            # stůj: závora dole, zvedne se těsně před autem
+                                             [False, True, False, True, True, True, False, True]])   # auto stojí: závora dole; dostálo: nahoře            # stůj: závora dole, zvedne se těsně před autem
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_parse_reads_only_the_asked_key(self):          # stojí za háčkem parse v askModel: odpověď se čte jen pod klíčem otázky dané varianty
@@ -648,9 +649,9 @@ class Page(unittest.TestCase):                                         # scéná
         code = "const CAR_Y = 540; let lit = 0; const ctx = { fillRect() { lit++; } }; const b = {" + draw + "};" + (
             "const R = [[{ result: 'ok', chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }, { result: null, chosen: 1 }],"
             " [{ result: null, chosen: undefined }, { result: null, chosen: 0 }], [{ result: null, chosen: -1 }, { result: null, chosen: 1 }],"
-            " [{ result: null, chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }], []];"
+            " [{ result: null, chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }], [], [{ result: null, chosen: 1, hold: 2 }]];"
             "process.stdout.write(JSON.stringify(R.map(rows => { lit = 0; b.drawVehicle({ rows }, 0, 40); return lit > 0; })));")
-        self.assertEqual(run_page_js(code), [True, True, False, False, False, False, False])      # neplatná (−1) bez světel
+        self.assertEqual(run_page_js(code), [True, True, False, False, False, False, False, False])      # po zastavení světla zhasnou      # neplatná (−1) bez světel
 
     def test_drawing_shows_every_field_and_writes_only_through_t(self):
         page = page_source()
@@ -661,7 +662,7 @@ class Page(unittest.TestCase):                                         # scéná
             self.assertIn("s." + name, draw, name)                                                 # divák vidí všech pět polí stavu
         self.assertNotIn("fillText('", draw)                                                       # žádný pevný text na plátně (nápis STOP ani písmena)
         body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
-        for part in ("drawRing(r, y, rad) {", "drawVehicle(g, x, w) {", "t('barrier.decided'", "t('barrier.needless')", "t('answer.invalid')",
+        for part in ("drawRing(r, y, rad) {", "drawVehicle(g, x, w) {", "t('barrier.decided'", "barrierLabel(r)",
                      "barrierOutcome(r.result, r.truth, r.chosen), x = (r.passLane + 0.5) * LW", "ctx.strokeStyle = BARRIER_COLOR[out]"):
             self.assertIn(part, body)
 
@@ -671,13 +672,90 @@ class Page(unittest.TestCase):                                         # scéná
         method = lambda src: re.search(r"\n  onStep\(g\) \{.*?\n  \},", src, re.S).group(0)[1:-1]
         core = method(page.split("\nconst rowBase = {", 1)[1].split("\n};\n", 1)[0])
         own = method(page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0])
-        code = page_function("barrierOutcome") + "const base = { steer() {}," + core + "}; const b = { __proto__: base," + own + "};" + (
+        code = page_function("barrierOutcome") + "const base = { passAt: 0, steer() {}," + core + "}; const b = { __proto__: base," + own + "};" + (
             "const C = [[0, 1], [undefined, 1], [1, 0], [-1, 1], [-1, 0], [0, 0], [1, 1]];"        # [chosen, truth]
             "process.stdout.write(JSON.stringify(C.map(([chosen, truth]) => {"
             " const g = { rows: [{ y: 0, result: null, chosen, truth }, { y: 3, result: null, chosen: 1, truth: 1 }], history: [], flash: 0.3, good: 0, bad: 0, late: 0 };"
             " b.onStep(g); return [g.rows[0].result, g.flash, g.rows[1].result]; })));")
         self.assertEqual(run_page_js(code), [["bad", 1, None], ["late", 1, None], ["bad", 0.3, None], ["bad", 0.3, None],
                                              ["bad", 0.3, None], ["ok", 0.3, None], ["ok", 0.3, None]])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_holds_at_the_barrier(self):            # stůj: auto dojede k bodu zastavení, BARRIER_HOLD stojí (G.dist ani řady se nehýbou), pak jede dál
+        page = page_source()
+        consts = re.search(r"\nconst BARRIER_STOP_Y = [^\n]*\n", page).group(0)
+        stop_ahead = re.search(r"\n  stopAhead\(g\) \{.*?\n  \},", page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0], re.S).group(0)[1:-1]
+        code = "(() => { let T = 0; const performance = { now: () => T }; let running = true, runLimit = 0, runWhy = '', G, S; const GAP = 4, ROWS = 12, stop = () => {};" + (
+            consts + "".join(page_function(f) for f in ("step", "drive", "startHold", "endHold", "runSecs")) +
+            "const rows = [{ y: 3, result: null, chosen: 1 }, { y: 0.5, result: null, chosen: 1 }];"
+            "const SC = { gap: 4, move(g, c) { for (const r of g.rows) r.y -= c; }, spawnRow() {}, onStep() {}," + stop_ahead + "};"
+            "const out = [];"
+            "G = { dist: 0, sinceSpawn: 0, rows: [rows[0]] }; S = { held: 0, t0: -1000, t1: null };"
+            "const snap = moved => out.push([+moved.toFixed(3), +G.dist.toFixed(3), G.hold ? 'hold' : null, rows[0].hold ?? null]);"
+            "snap(drive(1)); snap(drive(2)); T = 500; snap(drive(1)); out.push(runSecs(500));"
+            "T = 900; snap(drive(1)); snap(drive(1)); out.push(runSecs(1000));"
+            "G = { dist: 0, sinceSpawn: 0, rows: [rows[1]] }; T = 2000; out.push(drive(0.3), G.hold ? rows[1].hold : null);"
+            "process.stdout.write(JSON.stringify(out)); })()")
+        self.assertEqual(run_page_js(code), [[1, 1, None, None], [0.95, 1.95, "hold", 1], [0, 1.95, "hold", 1], 1.0,
+                                             [1, 2.95, None, 2], [1, 3.95, None, 2], 1.1, 0, 1])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_run_time_leaves_out_the_hold(self):        # rozhodnuto/s: doba běhu bez zastavení, i když zastavení právě běží; Stop ho ukončí
+        code = "(() => { let G = { hold: { from: 400 } }, S = { held: 300, t0: 0 };" + page_function("runSecs") + (
+            "const a = runSecs(1000); G = { hold: null }; process.stdout.write(JSON.stringify([a, runSecs(1000)])); })()")
+        self.assertEqual(run_page_js(code), [0.1, 0.7])
+        page = page_source()
+        self.assertIn("const secs = runSecs(S.t1 ?? performance.now());", page_function("summary"))
+        self.assertIn("if (G?.hold) endHold(now);", re.search(r"\nfunction stop\(\) \{.*?\n\}\n", page, re.S).group(0))
+        self.assertIn("held: 0", re.search(r"\nfunction newStats\(\) \{.*?\n\}\n", page, re.S).group(0))
+
+    def test_decision_loop_waits_during_the_hold(self):  # rozhodovací smyčka během zastavení neposílá dotazy; po tazích advance zastavení přečká
+        page = page_source()
+        start = re.search(r"\nasync function start\(\) \{.*?\n\}\n", page, re.S).group(0)
+        self.assertRegex(start, r"while \(id === runId\) \{ +// rozhodovací smyčka\n +if \(G\.hold\) \{ drive\(0\); await sleep\(15\); continue; \}")
+        advance = re.search(r"\nasync function advance\(id, cells\) \{.*?\n\}\n", page, re.S).group(0)
+        self.assertIn("left -= drive(", advance)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek nese výsledek slovem; barva: zelená správně, červená chyba, šedá nestihl a neplatná
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("BARRIER_COLOR", "BARRIER_LABEL"))
+        code = "(() => {" + consts + page_function("barrierOutcome") + page_function("barrierLabel") + (
+            "return [['ok', 0, 0], ['ok', 1, 1], ['bad', 1, 0], ['bad', 0, 1], ['bad', 1, -1], ['late', 0, undefined], ['late', 1, undefined]]"
+            ".map(([result, truth, chosen]) => barrierLabel({ result, truth, chosen })); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ projel", "✓ zastavil", "✗ projel, měl stát", "✗ zastavil zbytečně", "✗ neplatná odpověď", "⏱ nestihl", "⏱ nestihl, náraz"])
+        self.assertEqual([x["text"] for x in en], ["✓ drove through", "✓ stopped", "✗ drove through, should have stopped", "✗ stopped needlessly",
+                                                   "✗ invalid answer", "⏱ missed", "⏱ missed, crash"])
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8", "#f85149"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_pick_is_shown_before_the_row(self):        # rozhodnutí modelu u řady, dokud nedojela; pozdní odpověď (chosen undefined) nic neukáže
+        from test_parity import run_js
+        body = page_source().split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        pick = re.search(r"\n  drawPick\(r, y\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        lamp = re.search(r"\nconst BARRIER_LAMP = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + lamp + "const texts = [], W = 400; const ctx = new Proxy({ fillText(s) { texts.push(s); }, measureText: s => ({ width: s.length * 7 }) }," + (
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } }); const o = {" + pick + "};"
+            "[{ result: null, chosen: 1, noul: 0.12 }, { result: null, chosen: 0, noul: 0.8 }, { result: null, chosen: 0, noul: null },"
+            " { result: null, chosen: undefined }, { result: null, chosen: -1, noul: null }, { result: 'ok', chosen: 1, noul: 0.1 }].forEach(r => o.drawPick(r, 300));"
+            "return texts; })()")
+        self.assertEqual(run_js(code, None), ["STŮJ 0.12", "JEĎ 0.80", "JEĎ"])
+        self.assertEqual(run_js(code, None, "en"), ["STOP 0.12", "GO 0.80", "GO"])
+
+    def test_legend_and_labels_are_wired(self):
+        page = page_source()
+        body = page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0]
+        for part in ("panels: ['confPanel', 'legend']", "'legend.barrier.police'", "'legend.barrier.emergency'", "'legend.barrier.scene'", "'legend.barrier.order'",
+                     "barrierLabel(r)", "drawRowLabel(", "this.drawPick(r, y)", "task.row.noul ="):
+            self.assertIn(part, body)
+        self.assertNotIn("t('barrier.needless')", page)
+        legend = page_function("renderLegend")
+        for part in ("SC.legend", "classList.toggle('lines'", "DS.categories"):
+            self.assertIn(part, legend)
+        self.assertIn("#legend.lines { flex-direction:column; gap:4px; }", page)
+        self.assertIn("    syncControls(); syncRun(); renderLegend(); resetGame();", page)
 
 
 if __name__ == "__main__":
