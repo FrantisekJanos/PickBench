@@ -2109,6 +2109,30 @@ def diff_question(lanes, form=None):
     return {"changed": {"type": "choice", "instructions": DIFF_INTRO + DIFF_ASK, "criteria": criteria}}
 
 
+def diff_summary(cases, choices, keys):
+    """Přesnost podle třídy změny a podle podoby řady a rozbor chyb.
+
+    Chyby se třídí v pořadí: invalid (volba mimo keys nebo ne-řetězec), správná se nepočítá, twin (zvolený pruh nese v after
+    novou hodnotu měněného pruhu nebo v before jeho starou), neighbor (pruh vedle správného), other."""
+    by_class = class_tally(DIFF_CLASSES, [(case[2], case[3]) for case in cases], choices, keys)
+    by_mode = class_tally(DIFF_MODES, [(case[2], case[4]) for case in cases], choices, keys)
+    errors = {"twin": 0, "neighbor": 0, "other": 0, "invalid": 0}
+    for case, choice in zip(cases, choices):
+        if not isinstance(choice, str) or choice not in keys:
+            errors["invalid"] += 1
+            continue
+        picked, answer = keys.index(choice), case[2]
+        if picked == answer:
+            continue
+        if picked in diff_twins(case):
+            errors["twin"] += 1
+        elif abs(picked - answer) == 1:
+            errors["neighbor"] += 1
+        else:
+            errors["other"] += 1
+    return {"by_class": by_class, "by_mode": by_mode, "errors": errors}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2621,6 +2645,17 @@ def run_timetable(model, cases, mirror=False, inject=False, deadline=None, form=
     items = [(with_note(timetable_state(case, form), note), {case[5]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(timetable_summary(cases, choices))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_diff(model, cases, lanes=DIFF_LANES, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = lane_keys(lanes), diff_question(lanes, form)
+    ask(model, diff_state(*cases[0][:2], form), question)        # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[2]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(diff_state(*case[:2], form), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(diff_summary(cases, choices, keys))                 # z původní varianty zadání, jako přesnost
     return r
 
 

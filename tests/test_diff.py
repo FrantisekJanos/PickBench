@@ -222,5 +222,65 @@ class StateAndQuestion(unittest.TestCase):
         self.assertEqual(bench.diff_question(4), bench.diff_question(4, bench.DIFF_FORM))
 
 
+class RunDiff(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_diff(*args, **kw)
+
+    def test_summary_by_hand(self):
+        s = bench.diff_summary([NUMBERS_CASE] * 6 + [WORDS_CASE] * 3,
+                               ["lane_1", "lane_2", "lane_3", None, "lane_9", ["lane_1"], "lane_2", "lane_1", "lane_4"], bench.lane_keys(4))
+        self.assertEqual(s["by_class"], {"num1": [1, 6], "numnew": [0, 0], "word1": [1, 3], "wordnew": [0, 0]})
+        self.assertEqual(s["by_mode"], {"plain": [1, 6], "repeat": [1, 3]})
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"twin": 1, "neighbor": 1, "other": 2, "invalid": 3}))   # i pořadí klíčů
+
+    def test_summary_of_one_task(self):
+        s = bench.diff_summary([WORDS_CASE], ["lane_1"], bench.lane_keys(4))
+        self.assertEqual(s["by_class"], {"num1": [0, 0], "numnew": [0, 0], "word1": [1, 1], "wordnew": [0, 0]})
+        self.assertEqual(s["errors"], {"twin": 0, "neighbor": 0, "other": 0, "invalid": 0})
+
+    def test_perfect_model(self):
+        for form in bench.DIFF_FORMS:
+            with self.subTest(form=form):
+                r = self.run_with(solver, "m", cases(120), 4, form=form)
+                self.assertEqual(r["acc"], 1)
+                self.assertEqual(list(r["by_class"]), list(bench.DIFF_CLASSES))
+                self.assertEqual(list(r["by_mode"]), list(bench.DIFF_MODES))
+                self.assertEqual(sum(n for _, n in r["by_class"].values()), 120)
+                self.assertTrue(all(ok == n > 0 for ok, n in [*r["by_class"].values(), *r["by_mode"].values()]))
+                self.assertEqual(r["errors"], {"twin": 0, "neighbor": 0, "other": 0, "invalid": 0})
+
+    def test_invalid_answers(self):
+        for answer in (None, "lane_9", "gate_1", ["lane_1"]):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", cases(30), 4)
+                self.assertEqual((r["acc"], r["errors"]), (0, {"twin": 0, "neighbor": 0, "other": 0, "invalid": 30}))
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c = bench.diff_cases(5, 6)
+        for form in bench.DIFF_FORMS:
+            sent = []
+
+            def post(model, payload):
+                sent.append(payload)
+                return {"answers": {next(iter(payload["questions"])): {"choice": "lane_1", "confidence": 0.5}}}, 10.0
+            with self.subTest(form=form), mock.patch.object(bench, "post", post):
+                bench.run_diff("m", c, 6, form=form)
+                self.assertEqual(len(sent), 6)                                  # zahřátí a pět úloh
+                self.assertEqual([p["state"] for p in sent], [bench.diff_state(*c[0][:2], form)] + [bench.diff_state(*x[:2], form) for x in c])
+                self.assertTrue(all(p["questions"] == bench.diff_question(6, form) for p in sent))
+
+    def test_mirror_and_inject(self):
+        for form in bench.DIFF_FORMS:
+            with self.subTest(form=form):
+                r = self.run_with(solver, "m", cases(40), 4, mirror=True, form=form)
+                self.assertEqual((r["stab"], r["acc"]), (1, 1))
+                r = self.run_with(obedient(solver), "m", cases(40), 4, inject=True, form=form)
+                self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+                self.assertEqual(r["acc"], 0.75)
+                e = r["errors"]
+                self.assertEqual((e["twin"] + e["neighbor"] + e["other"], e["invalid"]), (10, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
