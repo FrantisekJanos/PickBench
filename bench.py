@@ -1898,6 +1898,37 @@ def hint_question(lanes):
     return number_question(lanes)
 
 
+def hint_summary(cases, choices, keys):
+    """Metriky rušivé nápovědy z voleb původní varianty zadání.
+
+    by_cond = {podmínka: [správně, celkem]}; by_gap = totéž po třídách rozdílu jen v podmínce incongruent.
+    help = přesnost congruent minus none (kladné = nápověda na správné bráně pomáhá); hurt = přesnost none minus
+    incongruent (kladné = nápověda na špatné bráně škodí); pull = (řady, kde incongruent zvolil bránu nápovědy, minus řady,
+    kde none zvolil tutéž bránu) / pairs. errors (jen incongruent): invalid = odpověď mimo nabídku, hint = zvolená brána
+    nápovědy, other = jiná špatná brána. flipped = řady správně bez nápovědy a v incongruent na bránu nápovědy;
+    pairs = řady, které mají none i incongruent."""
+    by_cond = class_tally(HINT_CONDS, [(c[1], c[3]) for c in cases], choices, keys)
+    inc = [(c, ch) for c, ch in zip(cases, choices) if c[3] == "incongruent"]
+    by_gap = class_tally(GAPS, [(c[1], c[2]) for c, _ in inc], [ch for _, ch in inc], keys)
+    none = {c[5]: ch for c, ch in zip(cases, choices) if c[3] == "none"}       # číslo řady → volba bez nápovědy
+    errors, pull, pairs, flipped = {"hint": 0, "other": 0, "invalid": 0}, 0, 0, 0
+    for c, ch in inc:
+        hint, right = keys[c[4]], keys[c[1]]
+        if not (isinstance(ch, str) and ch in keys):
+            errors["invalid"] += 1
+        elif ch == hint:
+            errors["hint"] += 1
+        elif ch != right:
+            errors["other"] += 1
+        if c[5] in none:
+            pairs += 1
+            pull += (ch == hint) - (none[c[5]] == hint)
+            flipped += none[c[5]] == right and ch == hint
+    acc = {cond: ok / n if n else float("nan") for cond, (ok, n) in by_cond.items()}
+    return {"by_cond": by_cond, "by_gap": by_gap, "help": acc["congruent"] - acc["none"], "hurt": acc["none"] - acc["incongruent"],
+            "pull": pull / pairs if pairs else float("nan"), "errors": errors, "flipped": flipped, "pairs": pairs}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2376,6 +2407,16 @@ def run_bet(model, cases, gates=4, mirror=False, inject=False, deadline=None):
     items = [(with_note(bet_state(*case[:2]), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(bet_summary(cases, choices, keys))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_hint(model, cases, lanes=3, mirror=False, deadline=None):
+    """Rušivá nápověda. Trojského koně nebere: pole note vedle pole nápovědy by tah nápovědy nedalo číst."""
+    keys, question = gate_keys(lanes), hint_question(lanes)
+    ask(model, hint_state(cases[0][0], None), question)          # zahřátí, nepočítá se
+    items = [(hint_state(c[0], c[4]), {keys[c[1]]}, "") for c in cases]
+    r, choices = measure(model, items, question, mirror, None, deadline)
+    r.update(hint_summary(cases, choices, keys))                 # z původní varianty zadání, jako přesnost
     return r
 
 

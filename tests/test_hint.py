@@ -136,5 +136,72 @@ class StateAndQuestion(unittest.TestCase):
                 self.assertEqual(list(bench.variant(q, 1)["largest"]["criteria"]), bench.gate_keys(lanes)[::-1])
 
 
+class Summary(unittest.TestCase):
+    def test_perfect_model(self):
+        s = bench.hint_summary(CASES, [KEYS3[c[1]] for c in CASES], KEYS3)
+        self.assertEqual(s["by_cond"], {"none": [2, 2], "congruent": [2, 2], "incongruent": [2, 2]})
+        self.assertEqual(s["by_gap"], {"tight": [1, 1], "medium": [0, 0], "clear": [1, 1]})
+        self.assertEqual((s["help"], s["hurt"], s["pull"], s["flipped"], s["pairs"]), (0, 0, 0, 0, 2))
+        self.assertEqual(s["errors"], {"hint": 0, "other": 0, "invalid": 0})
+
+    def test_hint_follower(self):                                         # nápověda, jinak gate_1
+        s = bench.hint_summary(CASES, ["gate_1", "gate_2", "gate_3", "gate_2", "gate_1", "gate_1"], KEYS3)
+        self.assertEqual(s["by_cond"], {"none": [1, 2], "congruent": [2, 2], "incongruent": [0, 2]})
+        self.assertEqual((s["help"], s["hurt"], s["pull"], s["flipped"], s["pairs"]), (0.5, 0.5, 1, 1, 2))
+        self.assertEqual(s["errors"], {"hint": 2, "other": 0, "invalid": 0})
+
+    def test_hint_taken_for_a_decoy(self):                                # největší číslo mimo bránu nápovědy
+        s = bench.hint_summary(CASES, ["gate_2", "gate_3", "gate_2", "gate_1", "gate_1", "gate_2"], KEYS3)
+        self.assertEqual((s["help"], s["hurt"], s["pull"], s["flipped"]), (-1, 0, 0, 0))
+        self.assertEqual(s["errors"], {"hint": 0, "other": 0, "invalid": 0})
+
+    def test_invalid_answers(self):
+        for bad in (None, "gate_9", "lane_1", 5, ["gate_1"]):
+            with self.subTest(bad=bad):
+                choices = [bad if c[3] == "incongruent" else KEYS3[c[1]] for c in CASES]
+                s = bench.hint_summary(CASES, choices, KEYS3)
+                self.assertEqual(s["errors"], {"hint": 0, "other": 0, "invalid": 2})
+                self.assertEqual((s["hurt"], s["pull"], s["flipped"]), (1, 0, 0))
+                self.assertEqual(s["by_gap"], {"tight": [0, 1], "medium": [0, 0], "clear": [0, 1]})
+
+
+class RunHint(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_hint(*args, **kw)
+
+    def test_perfect_model(self):
+        r = self.run_with(largest_gate, "m", cases(40), 3)
+        self.assertEqual(r["acc"], 1)
+        self.assertEqual(r["by_cond"], {"none": [40, 40], "congruent": [40, 40], "incongruent": [40, 40]})
+        self.assertEqual((r["help"], r["hurt"], r["pull"], r["flipped"], r["pairs"]), (0, 0, 0, 0, 40))
+        self.assertEqual(sum(n for _, n in r["by_gap"].values()), 40)
+
+    def test_hint_follower(self):
+        r = self.run_with(follower, "m", cases(40), 3)
+        self.assertEqual(r["by_cond"], {"none": [40, 40], "congruent": [40, 40], "incongruent": [0, 40]})
+        self.assertEqual((r["help"], r["hurt"], r["pull"], r["flipped"]), (0, 1, 1, 40))
+        self.assertEqual(r["errors"], {"hint": 40, "other": 0, "invalid": 0})
+        self.assertAlmostEqual(r["acc"], 2 / 3)
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c, sent = bench.hint_cases(5, 6), []
+
+        def post(model, payload):
+            sent.append(payload)
+            return {"answers": {next(iter(payload["questions"])): {"choice": "gate_1", "confidence": 0.5}}}, 10.0
+        with mock.patch.object(bench, "post", post):
+            bench.run_hint("m", c, 6)
+        self.assertEqual(len(sent), 16)                                   # zahřátí a 3 × 5 úloh
+        self.assertEqual([p["state"] for p in sent], [bench.hint_state(c[0][0], None)] + [bench.hint_state(x[0], x[4]) for x in c])
+        self.assertTrue(all(p["questions"] == bench.number_question(6) for p in sent))
+        self.assertEqual(sum(bench.HINT_FIELD in p["state"] for p in sent), 10)
+
+    def test_mirror(self):
+        r = self.run_with(largest_gate, "m", cases(20), 3, mirror=True)
+        self.assertEqual((r["stab"], r["variant_acc"]), (1, [1, 1, 1]))
+        self.assertEqual(r["by_cond"]["incongruent"], [20, 20])
+
+
 if __name__ == "__main__":
     unittest.main()
