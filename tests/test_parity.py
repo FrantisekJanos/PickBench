@@ -944,6 +944,19 @@ class Rule(unittest.TestCase):
 QUEUE_HAND = [[["car", "car"], ["truck"], ["bus", "van"]], [["car", "van"], ["bus", "car"]], [["motorbike", "tractor"], ["car", "van", "bus"]],
               [["car"], ["van"], ["bus", "car"]], [["bus"], ["truck", "car"], ["van", "van", "van"]], [["bus", "car"], ["tractor"], ["truck", "van"]]]   # ručně ověřené fronty z tests/test_queue.py (Basics)
 
+# Generátor Nejkratší fronty stránky se stejnou náhodou jako ROWS_JS: seed, lanes, weighted, n → řady queueRow.
+QUEUE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "queueRow(arg.lanes, arg.weighted, rand)")
+assert QUEUE_ROWS_JS != ROWS_JS
+QUEUE_PAGE = {}
+
+
+def queue_page(n, lanes, weighted, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (fronty, pruh, třída, nejkratší text, nejméně vozidel)."""
+    if (n, lanes, weighted, seed) not in QUEUE_PAGE:
+        raw = run_js(QUEUE_ROWS_JS, {"seed": seed, "lanes": lanes, "weighted": weighted, "n": n})
+        QUEUE_PAGE[n, lanes, weighted, seed] = raw, [(tuple(tuple(q) for q in r["queues"]), r["answer"], r["cls"], tuple(r["text"]), r["count"]) for r in raw]
+    return QUEUE_PAGE[n, lanes, weighted, seed]
+
 
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class Queue(unittest.TestCase):
@@ -1004,6 +1017,117 @@ class Queue(unittest.TestCase):
         for key in ("lane", "lane_weighted"):
             self.assertEqual(re.findall(r"^  %s: '([^'\\]*)',$" % key, alt, re.M), [bench.ALT[key]], key)
         self.assertEqual(re.search(r"\nconst ALT_LANES = /(.*?)/;", page).group(1), bench.ALT_LANES.pattern)      # obě větve jako v bench.py
+
+    def test_random_helpers_follow_python(self):                  # cumWeights = accumulate, pickCum = bisect_right na rand · součet, shuffleWith od konce
+        import bisect
+        rs = [0, 0.1, 1 / 6, 0.5, 0.75, 0.9999]
+        got = run_js("({ cum: cumWeights([1, 2, 3.5, 0, 4]), picks: arg.map(r => pickCum(() => r, ['a', 'b', 'c', 'd', 'e'], cumWeights([1, 2, 3.5, 0, 4]))),"
+                     " shuffled: shuffleWith((() => { const s = [0.9, 0.1, 0.5, 0.3]; return () => s.shift(); })(), [0, 1, 2, 3, 4]) })", rs)
+        cum = list(itertools.accumulate([1, 2, 3.5, 0, 4]))
+        self.assertEqual(got["cum"], cum)
+        self.assertEqual(got["picks"], ["abcde"[bisect.bisect(cum, r * cum[-1], 0, 4)] for r in rs])     # jako random.choices v CPythonu
+        a, seq = [0, 1, 2, 3, 4], [0.9, 0.1, 0.5, 0.3]
+        for i in range(4, 0, -1):
+            j = math.floor(seq.pop(0) * (i + 1))
+            a[i], a[j] = a[j], a[i]
+        self.assertEqual(got["shuffled"], a)
+
+    def test_class_tally_matches_bench(self):
+        import bench
+        rng, keys = random.Random(3), bench.lane_keys(4)
+        tops = [[rng.randrange(4), rng.choice(bench.QUEUE_GAPS)] for _ in range(200)]
+        choices = [rng.choice(keys + [None, "lane_9", 2]) for _ in tops]
+        got = run_js("classTally(QUEUE_GAPS, arg.tops, arg.choices, arg.keys)", {"tops": tops, "choices": choices, "keys": keys})
+        self.assertEqual(json.dumps(got), json.dumps(bench.class_tally(bench.QUEUE_GAPS, [tuple(t) for t in tops], choices, keys)))
+
+    def test_generated_rows_keep_the_guarantees(self):            # jako tests/test_queue.py (Generator.test_cases_keep_the_guarantees)
+        import bench
+        for lanes, n in ((2, 300), (4, 900), (8, 120)):
+            for weighted in (False, True):
+                raw, cases = queue_page(n, lanes, weighted)
+                for r, (queues, answer, cls, text, count) in zip(raw, cases):
+                    with self.subTest(lanes=lanes, weighted=weighted, queues=queues):
+                        self.assertEqual(list(r), ["queues", "answer", "cls", "text", "count", "truth"])
+                        self.assertEqual(r["truth"], answer)
+                        self.assertEqual(len(queues), lanes)
+                        self.assertTrue(all(1 <= len(q) <= 12 and set(q) <= set(bench.QUEUE_VEHICLES) for q in queues))
+                        lengths = [bench.queue_length(q, weighted) for q in queues]
+                        rest = sorted(lengths[:answer] + lengths[answer + 1:])
+                        self.assertLess(lengths[answer], rest[0])                         # jediná nejkratší fronta
+                        self.assertEqual(bench.queue_class(rest[0] - lengths[answer]), cls)
+                        self.assertEqual((text, count), (bench.queue_text(queues), bench.queue_count(queues)))
+                        self.assertIsNotNone(count)
+                        if not weighted:
+                            self.assertEqual(count, answer)
+
+    def test_classes_and_answers_are_spread(self):
+        for weighted in (False, True):
+            _, c = queue_page(900, 4, weighted)
+            classes, answers = Counter(x[2] for x in c), Counter(x[1] for x in c)
+            for cls in ("gap1", "gap2-3", "gap4+"):
+                self.assertTrue(0.25 <= classes[cls] / 900 <= 0.42, (weighted, classes))
+            for lane in range(4):
+                self.assertGreaterEqual(answers[lane] / 900, 0.15, (weighted, answers))
+
+    def test_shortest_text_is_balanced(self):                     # meze jako tests/test_queue.py (shoda = trefa)
+        import bench
+        from test_queue import fewest
+
+        def share(c, cls):
+            sub = [x for x in c if x[2] == cls]
+            return sum(x[1] in fewest([len(json.dumps(list(q))) for q in x[0]]) for x in sub) / len(sub)
+        for weighted in (False, True):
+            for cls in ("gap1", "gap2-3"):
+                with self.subTest(weighted=weighted, cls=cls):
+                    self.assertTrue(0.2 <= share(queue_page(900, 4, weighted)[1], cls) <= 0.45)
+                    self.assertTrue(0.3 <= share(queue_page(300, 2, weighted)[1], cls) <= 0.7)
+        self.assertGreaterEqual(share(queue_page(900, 4, False)[1], "gap4+"), 0.95)
+        weighted = queue_page(900, 4, True)[1]
+        for cls in ("gap1", "gap2-3"):
+            sub = [x for x in weighted if x[2] == cls]
+            heavy = sum(x[1] in fewest([sum(v in bench.QUEUE_WEIGHTS for v in q) for q in x[0]]) for x in sub)
+            with self.subTest(heavy=cls):
+                self.assertTrue(0.2 <= heavy / len(sub) <= 0.45, heavy / len(sub))
+        differ = sum(count != answer for _, answer, _, _, count in weighted) / 900
+        self.assertTrue(0.4 <= differ <= 0.6, differ)                                          # nejméně vozidel je jinde v polovině úloh
+
+    def test_same_seed_same_rows(self):
+        first = run_js(QUEUE_ROWS_JS, {"seed": 7, "lanes": 4, "weighted": True, "n": 30})
+        self.assertEqual(run_js(QUEUE_ROWS_JS, {"seed": 7, "lanes": 4, "weighted": True, "n": 30}), first)
+        self.assertNotEqual(run_js(QUEUE_ROWS_JS, {"seed": 8, "lanes": 4, "weighted": True, "n": 30}), first)
+        self.assertNotEqual(run_js(QUEUE_ROWS_JS, {"seed": 7, "lanes": 4, "weighted": False, "n": 30}), first)
+
+    def test_bounded_search_raises(self):                          # jako tests/test_queue.py; tries = 0 místo mock.patch (Rozhodnutí F2)
+        got = run_js("[[4, 'gap1', 0], [1, 'gap1'], [9, 'gap1'], [4, 'gap0']]"
+                     ".map(([k, cls, tries]) => { try { queueCase(Math.random, k, cls, true, tries); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["queueCase: no gap1 task for 4 lanes after 0 tries", "queueCase: unsupported lanes 1 or class gap1",
+                               "queueCase: unsupported lanes 9 or class gap1", "queueCase: unsupported lanes 4 or class gap0"])
+
+    def test_errors_match_bench(self):                             # i neplatné volby; s vahami navíc nejkratší podle počtu
+        import bench
+        for weighted, lanes in ((False, 4), (True, 4), (True, 6)):
+            cases = bench.queue_cases(90, lanes, weighted, seed=6)
+            keys, rng = bench.lane_keys(lanes), random.Random(lanes + weighted)
+            choices = [rng.choice(keys + keys + [None, "lane_9", 3, ["lane_1"], "LANE_1"]) for _ in cases]
+            js_cases = [{"queues": [list(q) for q in qs], "answer": a, "cls": cls, "text": list(text), "count": count} for qs, a, cls, text, count in cases]
+            got = run_js("queueErrors(arg.cases, arg.choices, arg.keys, arg.weighted)", {"cases": js_cases, "choices": choices, "keys": keys, "weighted": weighted})
+            with self.subTest(weighted=weighted, lanes=lanes):
+                self.assertEqual(json.dumps(got), json.dumps(bench.queue_errors(cases, choices, keys, weighted)))      # i pořadí klíčů
+                self.assertGreater(got["invalid"], 0)
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for lanes, warm in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(k => queueWarm(k))", None)):
+            queues = tuple(tuple(q) for q in warm["queues"])
+            with self.subTest(lanes=lanes):
+                self.assertEqual(list(warm), ["queues", "answer", "cls", "text", "count", "truth"])
+                self.assertEqual(len(queues), lanes)
+                for weighted in (False, True):
+                    lengths = [bench.queue_length(q, weighted) for q in queues]
+                    self.assertEqual([i for i, x in enumerate(lengths) if x == min(lengths)], [warm["answer"]])     # jediná nejkratší, s vahami i bez
+                self.assertEqual((warm["truth"], warm["count"], list(warm["text"])), (lanes - 1, bench.queue_count(queues), list(bench.queue_text(queues))))
+                longest = max(len(json.dumps(bench.queue_state(c[0]))) for w in (False, True) for c in bench.queue_cases(20, lanes, w, seed=lanes))
+                self.assertGreaterEqual(len(json.dumps(bench.queue_state(queues))), longest)          # horní odhad délky dotazu ve stepEstimate
 
 
 if __name__ == "__main__":

@@ -3115,6 +3115,101 @@ function queueQuestion(lanes, weighted = false) {            // otázka choice: 
   for (let i = 0; i < lanes; i++) criteria[`lane_${i + 1}`] = `Lane ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : '');
   return { [weighted ? 'lane_weighted' : 'lane']: { type: 'choice', instructions, criteria } };
 }
+// Losování jako random v Pythonu (kroky a pořadí volání, ne stejná čísla): cumWeights = itertools.accumulate, pickCum = jeden prvek rng.choices
+// s cum_weights, shuffleWith = rng.shuffle; classTally = class_tally. Používají je i sázka, tempomat a jízdní řád.
+function cumWeights(weights) {
+  let sum = 0;
+  return weights.map(w => sum += w);
+}
+function pickCum(rand, list, cum) {                          // bisect_right(cum, rand() * součet, 0, list.length - 1), jako random.choices v CPythonu
+  const x = rand() * cum[cum.length - 1];
+  let lo = 0, hi = list.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (x < cum[mid]) hi = mid; else lo = mid + 1;
+  }
+  return list[lo];
+}
+function shuffleWith(rand, a) {                              // rng.shuffle: od konce, j = floor(rand() * (i + 1)); mění pole na místě
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function classTally(order, tops, choices, keys) {            // přesnost po třídách: { třída: [správně, celkem] } v pořadí order; tops = [[index správné možnosti, třída]]
+  const counts = {};
+  order.forEach(c => counts[c] = [0, 0]);
+  tops.forEach(([top, cls], i) => {
+    if (choices[i] === keys[top]) counts[cls][0]++;
+    counts[cls][1]++;
+  });
+  return counts;
+}
+// Úloha Nejkratší fronty dané třídy: port queue_case z bench.py, stejné kroky a pořadí volání rand, náhoda z předané funkce (stránka dává rnd);
+// jiné úlohy než bench.py, protože Python má jiný generátor náhody. Předem se losuje, jestli má nejkratší text trefit správný pruh (mimo gap4+),
+// s vahami, jestli má být nejkratší podle počtu jiná, a s vahami při 3 a více pruzích mimo gap4+, jestli má trefit pruh s nejméně těžkými vozidly.
+// Při 2 pruzích se těžká nehlídají (viz docstring queue_case). Pruh se losuje jako (počet, z toho těžkých), jména vozidel až po číselných kontrolách.
+// tries stránka nepředává, parametr je kvůli testu meze. Vrací { queues, answer, cls, text, count }.
+function queueCase(rand, lanes, cls, weighted = false, tries = QUEUE_TRIES) {
+  if (!(Number.isInteger(lanes) && lanes >= 2 && lanes <= 8) || !QUEUE_GAPS.includes(cls)) throw new Error(`queueCase: unsupported lanes ${lanes} or class ${cls}`);
+  const hit = cls !== 'gap4+' ? rand() < queueTextShare(lanes) : null;
+  const differ = weighted ? rand() < QUEUE_COUNT_SHARE : null;
+  const heavy = weighted && lanes >= 3 && cls !== 'gap4+' ? rand() < queueTextShare(lanes) : null;
+  let drawn = null, answer, text;
+  for (let t = 0; t < tries && drawn === null; t++) {
+    const shapes = [...Array(lanes)].map(() => pickCum(rand, QUEUE_SHAPES, QUEUE_SHAPE_CUM));
+    const sizes = shapes.map(([size]) => size), low = Math.min(...sizes);
+    if (sizes.filter(s => s === low).length > 1) continue;  // jediný pruh s nejméně vozidly
+    const lengths = weighted ? shapes.map(([size, n]) => size + 2 * n) : sizes;      // těžké vozidlo váží 3
+    const order = lengths.map((_, i) => i).sort((a, b) => lengths[a] - lengths[b]);
+    const gap = lengths[order[1]] - lengths[order[0]];
+    if (gap === 0 || queueClass(gap) !== cls) continue;
+    const top = order[0];
+    if (weighted && (sizes.indexOf(low) !== top) !== differ) continue;
+    if (heavy !== null && queueFewest(shapes.map(([, n]) => n)).includes(top) !== heavy) continue;
+    const lanesDrawn = shapes.map(([size, n]) => [...Array(n)].map(() => pickOf(rand, QUEUE_HEAVY)).concat([...Array(size - n)].map(() => pickOf(rand, QUEUE_LIGHT))));
+    const shortest = queueFewest(lanesDrawn.map(lane => lane.reduce((s, v) => s + v.length, 0) + 4 * lane.length));      // délka json.dumps(seznam)
+    if (hit !== null && shortest.includes(top) !== hit) continue;
+    drawn = lanesDrawn;
+    answer = top;
+    text = shortest;
+  }
+  if (drawn === null) throw new Error(`queueCase: no ${cls} task for ${lanes} lanes after ${tries} tries`);
+  drawn.forEach(lane => shuffleWith(rand, lane));          // těžká vozidla na náhodná místa ve frontě
+  const queues = drawn, count = queueCount(queues);
+  // záruky se kontrolují znovu z hotových front; porušení je chyba generátoru a nic se neopravuje potichu
+  const lengths = queues.map(q => queueLength(q, weighted)), rest = lengths.filter((_, i) => i !== answer).sort((a, b) => a - b);
+  const texts = queueText(queues);
+  if (queues.length !== lanes || lengths[answer] >= rest[0] || queueClass(rest[0] - lengths[answer]) !== cls
+      || texts.length !== text.length || texts.some((v, i) => v !== text[i]) || (!weighted && count !== answer) || (weighted && count === null))
+    throw new Error('queueCase: generated task breaks its guarantees');
+  return { queues, answer, cls, text, count };
+}
+function queueRow(lanes, weighted, rand) {                 // třída se losuje před úlohou, jako queue_cases; truth = index nejkratšího pruhu
+  const c = queueCase(rand, lanes, pickOf(rand, QUEUE_GAPS), weighted);
+  return { ...c, truth: c.answer };
+}
+// Rozbor chyb, stejné definice jako queue_errors v bench.py. Úloha c = { queues, answer, cls, text, count }, keys = klíče pruhů. Správná volba vrací null.
+// invalid: není řetězec z keys; count (jen s vahami): zvolený je jediný pruh s nejméně vozidly; text: zvolený je některý z pruhů s nejkratším zápisem; other: zbytek.
+function queueErrorKind(c, choice, keys, weighted) {
+  if (typeof choice !== 'string' || !keys.includes(choice)) return 'invalid';
+  if (choice === keys[c.answer]) return null;
+  if (weighted && c.count !== null && choice === keys[c.count]) return 'count';
+  if (c.text.some(i => choice === keys[i])) return 'text';
+  return 'other';
+}
+function queueErrors(cases, choices, keys, weighted) {
+  const counts = weighted ? { count: 0, text: 0, other: 0, invalid: 0 } : { text: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = queueErrorKind(c, choices[i], keys, weighted); if (kind) counts[kind]++; });
+  return counts;
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. lanes - 1 pruhů po 12 motorkách (nejdelší jméno vozidla) a poslední pruh s 11,
+// takže stav je skoro nejdelší. Správně je poslední pruh s vahami i bez (motorka váží 1).
+function queueWarm(lanes) {
+  const queues = [...Array(lanes)].map((_, i) => Array(i === lanes - 1 ? 11 : 12).fill('motorbike'));
+  return { queues, answer: lanes - 1, cls: 'gap1', text: queueText(queues), count: lanes - 1, truth: lanes - 1 };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
