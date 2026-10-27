@@ -70,8 +70,8 @@ class Generator(unittest.TestCase):
         self.assertEqual(bench.bet_top((10, 30, 20)), 1)
         self.assertIsNone(bench.bet_top((30, 30, 20)))
         self.assertIsNone(bench.bet_top((50, 50, 50)))
-        self.assertEqual(bench.bet_second((10, 30, 20)), 2)
-        self.assertEqual(bench.bet_second((40, 30, 30)), 1)                  # shoda → dřívější brána
+        self.assertEqual(bench.bet_second((10, 30, 20)), (2,))
+        self.assertEqual(bench.bet_second((40, 30, 30)), (1, 2))             # shoda → všechny brány s druhou nejvyšší odměnou
 
     def test_cases_keep_the_guarantees(self):
         for gates, n in ((3, 900), (4, 900), (8, 300)):
@@ -113,11 +113,11 @@ class Generator(unittest.TestCase):
             rewards, _, _, _, top_reward, top_chance = x
             rest = [i for i in range(len(rewards)) if i not in (top_reward, top_chance)]
             return max(rest, key=lambda i: (rewards[i], -i))
-        shortcuts = {"reward": lambda x: x[4], "chance": lambda x: x[5], "elimination": elimination,
-                     "second": lambda x: bench.bet_second(x[0])}
-        for name, pick in shortcuts.items():
+        shortcuts = {"reward": lambda x: x[4] == x[2], "chance": lambda x: x[5] == x[2], "elimination": lambda x: elimination(x) == x[2],
+                     "second": lambda x: x[0][x[2]] == sorted(x[0], reverse=True)[1]}     # shoda druhé odměny je zásah
+        for name, hit in shortcuts.items():
             with self.subTest(shortcut=name):
-                self.assertLessEqual(sum(pick(x) == x[2] for x in general) / len(general), 0.45)
+                self.assertLessEqual(sum(map(hit, general)) / len(general), 0.45)
 
     def test_same_seed_same_tasks(self):
         self.assertEqual(bench.bet_cases(30), bench.bet_cases(30, 4, seed=1))

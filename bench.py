@@ -1370,8 +1370,10 @@ def bet_top(values):
 
 
 def bet_second(rewards):
-    """Brána s druhou nejvyšší odměnou; shoda → dřívější brána (řazení je stabilní)."""
-    return sorted(range(len(rewards)), key=lambda i: -rewards[i])[1]
+    """Brány, jejichž odměna se rovná druhé hodnotě sestupně seřazených odměn, při shodě všechny, vzestupně (model, který
+    jde po zkratce „druhá nejvyšší odměna“, zvolí kteroukoli z nich). V general je nejvyšší odměna jediná."""
+    second = sorted(rewards, reverse=True)[1]
+    return tuple(i for i, r in enumerate(rewards) if r == second)
 
 
 def bet_case(rng, gates, level):
@@ -1411,7 +1413,7 @@ def bet_case(rng, gates, level):
                 continue
             if (top_reward == answer) != want[0] or (top_chance == answer) != want[1]:
                 continue
-            if want[2] is not None and (bet_second(rewards) == answer) != want[2]:
+            if want[2] is not None and (answer in bet_second(rewards)) != want[2]:
                 continue
         break
     else:
