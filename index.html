@@ -2340,6 +2340,38 @@ function lookaheadQuestion(lanes) {
   const criteria = { left: 'Shift one lane to the left', stay: 'Stay in the current lane', right: 'Shift one lane to the right' };
   return { move_blocked: { type: 'choice', instructions, criteria } };
 }
+// Úloha Dvou kroků dopředu dané třídy: stejné kroky a pořadí losování jako lookahead_case v bench.py, náhoda z předané funkce rand
+// (stránka dává rnd, test vlastní); jiné úlohy než bench.py, protože Python má jiný generátor náhody. Řady se losují a zamítají, dokud
+// nemají jediný nejlepší tah, který projede všech LOOKAHEAD_ROWS řad, s hloubkou pasti ve třídě cls. V d2 a d3+ se předem vylosuje,
+// které kontrolní strategie mají trefit (každá s pravděpodobností 1/3; density jen při K ≥ 4, center jen při K ≥ 5). Při K = 3 se density
+// nehlídá: v d2 a d3+ tam greedy a density nikdy nemíjejí obě zároveň, takže „obě mimo“ nejde splnit. Vrací { rows, lane, answer, depth, greedy }.
+function lookaheadCase(rand, lanes, cls) {
+  if (!(Number.isInteger(lanes) && lanes >= 3 && lanes <= 8) || !LOOKAHEAD_CLASSES.includes(cls)) throw new Error(`lookaheadCase: no ${cls} task for ${lanes} lanes`);
+  const want = {};                                         // pořadí klíčů = pořadí kontroly
+  if (cls !== 'd1') {
+    want.greedy = rand() < 1 / 3;
+    if (lanes >= 4) want.density = rand() < 1 / 3;
+    if (lanes >= 5) want.center = rand() < 1 / 3;
+  }
+  let rows, lane, answer, depth, found = false;
+  for (let tries = 0; tries < LOOKAHEAD_TRIES && !found; tries++) {
+    rows = [...Array(LOOKAHEAD_ROWS)].map(() => [...Array(lanes)].map(() => rand() < LOOKAHEAD_DENSITY ? '#' : '.').join(''));
+    if (rows.some(row => !row.includes('.'))) continue;   // řada bez volného pole: další pokus před losováním pruhu
+    lane = Math.floor(rand() * lanes);
+    [answer, depth] = lookaheadDepth(rows, lane);
+    if (answer === null || lookaheadClass(depth) !== cls || Math.max(...Object.values(lookaheadValues(rows, lane))) !== LOOKAHEAD_ROWS) continue;
+    found = Object.entries(want).every(([name, hit]) => (LOOKAHEAD_SHORTCUTS[name](rows, lane) === answer) === hit);
+  }
+  if (!found) throw new Error(`lookaheadCase: no ${cls} task for ${lanes} lanes after ${LOOKAHEAD_TRIES} tries`);
+  const values = lookaheadValues(rows, lane), best = lookaheadBest(values);
+  if (best.length !== 1 || best[0] !== answer || values[answer] !== LOOKAHEAD_ROWS)      // zaručuje to konstrukce; nic se neopravuje potichu
+    throw new Error(`lookaheadCase: ${JSON.stringify(rows)}, lane ${lane} has best moves ${JSON.stringify(values)}, not only ${answer}`);
+  return { rows, lane, answer, depth, greedy: lookaheadGreedy(rows, lane) };
+}
+function lookaheadRow(lanes, rand) {                       // třída se losuje před úlohou, jako lookahead_cases; truth = index tahu v LOOKAHEAD_MOVES
+  const c = lookaheadCase(rand, lanes, pickOf(rand, LOOKAHEAD_CLASSES));
+  return { ...c, truth: LOOKAHEAD_MOVES.indexOf(c.answer) };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------

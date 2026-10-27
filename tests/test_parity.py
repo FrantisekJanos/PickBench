@@ -572,6 +572,32 @@ def lookahead_grids(n, seed):
     return out
 
 
+# Generátor Dvou kroků dopředu stránky se stejnou náhodou jako ROWS_JS: seed, lanes, n → řady lookaheadRow.
+LOOKAHEAD_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "lookaheadRow(arg.lanes, rand)")
+assert LOOKAHEAD_ROWS_JS != ROWS_JS
+LOOKAHEAD_PAGE = {}
+
+
+def lookahead_page(n, lanes, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (řady, pruh, tah, hloubka, hladový)."""
+    if (n, lanes, seed) not in LOOKAHEAD_PAGE:
+        raw = run_js(LOOKAHEAD_ROWS_JS, {"seed": seed, "lanes": lanes, "n": n})
+        LOOKAHEAD_PAGE[n, lanes, seed] = raw, [(tuple(r["rows"]), r["lane"], r["answer"], r["depth"], r["greedy"]) for r in raw]
+    return LOOKAHEAD_PAGE[n, lanes, seed]
+
+
+def lookahead_rates(cases):
+    """Podíl úloh, kde kontrolní strategie trefí správný tah, podle třídy (jako shortcut_rates v tests/test_lookahead.py)."""
+    import bench
+    out = {}
+    for name, pick in bench.LOOKAHEAD_SHORTCUTS.items():
+        out[name] = {}
+        for cls in bench.LOOKAHEAD_CLASSES:
+            sub = [c for c in cases if bench.lookahead_class(c[3]) == cls]
+            out[name][cls] = sum(pick(rows, lane) == answer for rows, lane, answer, _, _ in sub) / len(sub)
+    return out
+
+
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class Lookahead(unittest.TestCase):
     def test_constants_state_and_question_match_bench(self):
@@ -612,6 +638,74 @@ class Lookahead(unittest.TestCase):
                 self.assertEqual(depth, list(bench.lookahead_depth(rows, lane)))                         # [null, null] = nejlepší tah není jediný
                 self.assertEqual(density, bench.lookahead_density(rows, lane))
                 self.assertEqual(center, bench.lookahead_center(rows, lane))
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        for lanes, n in ((3, 300), (4, 900), (8, 300)):
+            raw, cases = lookahead_page(n, lanes)
+            for r, (rows, lane, answer, depth, greedy) in zip(raw, cases):
+                with self.subTest(lanes=lanes, rows=rows, lane=lane):
+                    self.assertEqual(list(r), ["rows", "lane", "answer", "depth", "greedy", "truth"])
+                    self.assertEqual(len(rows), bench.LOOKAHEAD_ROWS)
+                    self.assertTrue(all(len(x) == lanes and set(x) <= {".", "#"} and "." in x for x in rows))
+                    self.assertTrue(0 <= lane < lanes)
+                    values = bench.lookahead_values(rows, lane)
+                    self.assertEqual(values[answer], bench.LOOKAHEAD_ROWS)                          # nejlepší tah projede všechny řady
+                    self.assertEqual([m for m in bench.LOOKAHEAD_MOVES if values[m] == values[answer]], [answer])     # a je jediný
+                    self.assertEqual(bench.lookahead_depth(rows, lane), (answer, depth))
+                    self.assertEqual(bench.lookahead_greedy(rows, lane), greedy)
+                    self.assertEqual(r["truth"], bench.LOOKAHEAD_MOVES.index(answer))
+
+    def test_classes_and_answers_are_spread(self):
+        import bench
+        _, cases = lookahead_page(900, 4)
+        classes = Counter(bench.lookahead_class(d) for _, _, _, d, _ in cases)
+        answers = Counter(a for _, _, a, _, _ in cases)
+        for cls in bench.LOOKAHEAD_CLASSES:
+            self.assertTrue(0.25 <= classes[cls] / len(cases) <= 0.42, (cls, classes))
+        for move in ("left", "right"):
+            self.assertGreaterEqual(answers[move] / len(cases), 0.20, (move, answers))
+        self.assertGreaterEqual(answers["stay"] / len(cases), 0.17, answers)                       # Rozpory 3: bench.py 0,20 při naměřených 0,211
+
+    def test_control_strategies(self):                             # meze jako tests/test_lookahead.py (Generator.test_control_strategies)
+        import bench
+        _, cases = lookahead_page(900, 4)
+
+        def acc(pick, cls=None):
+            sub = [c for c in cases if cls is None or bench.lookahead_class(c[3]) == cls]
+            return sum(pick(rows, lane) == answer for rows, lane, answer, _, _ in sub) / len(sub)
+
+        def lowest_free(rows, lane):                               # tah do volného pole s nejnižším číslem pruhu
+            return next((m for m in bench.LOOKAHEAD_MOVES if 0 <= lane + bench.LOOKAHEAD_SHIFT[m] < len(rows[0])
+                         and rows[0][lane + bench.LOOKAHEAD_SHIFT[m]] == "."), "stay")
+        self.assertEqual(acc(bench.lookahead_greedy, "d1"), 1)
+        rates = lookahead_rates(cases)
+        for cls in ("d2", "d3+"):
+            for name in bench.LOOKAHEAD_SHORTCUTS:
+                with self.subTest(cls=cls, strategy=name):
+                    self.assertLessEqual(rates[name][cls], 0.45, rates)
+            with self.subTest(cls=cls, strategy="lowest_free"):
+                self.assertLessEqual(acc(lowest_free, cls), 0.6)
+        self.assertLess(acc(lambda rows, lane: "stay"), 0.5)
+
+    def test_control_strategies_on_five_lanes(self):               # při K ≥ 5 se vyvažuje i center; 900 úloh místo 300 (Rozpory 3)
+        import bench
+        rates = lookahead_rates(lookahead_page(900, 5)[1])
+        for cls in ("d2", "d3+"):
+            for name in bench.LOOKAHEAD_SHORTCUTS:
+                with self.subTest(cls=cls, strategy=name):
+                    self.assertLessEqual(rates[name][cls], 0.45, rates)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(LOOKAHEAD_ROWS_JS, {"seed": 7, "lanes": 4, "n": 30})
+        self.assertEqual(run_js(LOOKAHEAD_ROWS_JS, {"seed": 7, "lanes": 4, "n": 30}), first)
+        self.assertNotEqual(run_js(LOOKAHEAD_ROWS_JS, {"seed": 8, "lanes": 4, "n": 30}), first)
+
+    def test_bounded_search_raises(self):                          # jako tests/test_lookahead.py; rand = 0 dá samé překážky, žádná řada neprojde
+        got = run_js("[[() => 0, 4, 'd1'], [Math.random, 2, 'd1'], [Math.random, 9, 'd1'], [Math.random, 4, 'd4']]"
+                     ".map(([rand, k, cls]) => { try { lookaheadCase(rand, k, cls); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["lookaheadCase: no d1 task for 4 lanes after 100000 tries", "lookaheadCase: no d1 task for 2 lanes",
+                               "lookaheadCase: no d1 task for 9 lanes", "lookaheadCase: no d4 task for 4 lanes"])
 
 
 if __name__ == "__main__":
