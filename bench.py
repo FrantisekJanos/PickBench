@@ -1644,6 +1644,58 @@ def cruise_summary(cases, levels):
             "errors": cruise_errors(cases, levels)}
 
 
+# ---------- scénář: jízdní řád ----------
+# Řádek tabulky je (zip_from, zip_to, depo), tabulka je n-tice řádků seřazená podle PSČ, výjimka je (služba, depo) nebo None.
+TIMETABLE_DEPOTS = ("alder", "birch", "cedar", "maple", "oak", "pine")    # neutrální jména: nenapovídají PSČ ani službu
+TIMETABLE_SERVICES = ("standard", "express", "economy", "cooled")
+TIMETABLE_EXC_SERVICES = ("express", "economy", "cooled")                # výjimka nikdy pro standard
+TIMETABLE_ZIP = (10000, 99999)                       # rozsah PSČ, který tabulka pokrývá celý
+TIMETABLE_MIN_WIDTH = 300                            # nejužší interval řádku
+TIMETABLE_SIZES = {"small": (3, 5), "medium": (6, 8), "large": (9, 12)}  # počet řádků podle třídy velikosti
+TIMETABLE_POSITIONS = ("inner", "near", "bound")     # PSČ uvnitř řádku, těsně u hranice, přesně na hranici
+TIMETABLE_RULES = ("none", "applies", "decoy")       # bez výjimky, výjimka platí, výjimka pro jinou službu
+TIMETABLE_NEAR = 9                                   # near = 1 až tolik od hranice; rozhodl pokus nanečisto 2026-10-27
+TIMETABLE_INNER = 100                                # inner = aspoň tolik od obou krajů řádku
+TIMETABLE_FORMS = ("sorted", "shuffled")
+TIMETABLE_FORM = "sorted"                            # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-27
+TIMETABLE_POSITION_RULES = ("none", "decoy")         # přesnost podle polohy jen z úloh bez platné výjimky; rozhodl pokus nanečisto
+TIMETABLE_TRIES = 1000                               # mez pokusů o losování hranic jedné tabulky
+
+
+def timetable_table(rng, n):
+    """n souvislých řádků přes celý TIMETABLE_ZIP. Hranice jsou libovolná čísla (ne kulatá: s nimi by zkratka „společný
+    začátek PSČ“ trefila hranici), nejužší interval má aspoň TIMETABLE_MIN_WIDTH, sousední řádky mají jiné depo."""
+    for _ in range(TIMETABLE_TRIES):
+        cuts = sorted(rng.sample(range(TIMETABLE_ZIP[0] + 1, TIMETABLE_ZIP[1] + 1), n - 1))
+        starts = [TIMETABLE_ZIP[0]] + cuts
+        ends = [s - 1 for s in starts[1:]] + [TIMETABLE_ZIP[1]]
+        if min(e - s + 1 for s, e in zip(starts, ends)) >= TIMETABLE_MIN_WIDTH:
+            break
+    else:
+        raise RuntimeError(f"timetable_table: no table of {n} rows after {TIMETABLE_TRIES} tries")
+    depots = []
+    for _ in range(n):
+        depots.append(rng.choice([d for d in TIMETABLE_DEPOTS if not depots or d != depots[-1]]))
+    return tuple(zip(starts, ends, depots))
+
+
+def timetable_row(spans, z):
+    """Index jediného intervalu (zip_from, zip_to), který obsahuje z (oba kraje včetně); jiný počet než jeden = RuntimeError."""
+    hit = [i for i, (a, b) in enumerate(spans) if a <= z <= b]
+    if len(hit) != 1:
+        raise RuntimeError(f"timetable_row: zip {z} is in {len(hit)} rows")
+    return hit[0]
+
+
+def timetable_solve(state):
+    """Správné depo ze stavu (obě podoby): výjimka pro službu zásilky, jinak řádek, do jehož intervalu PSČ patří."""
+    parcel, routes = state["parcel"], state["routes"]
+    for e in state["exceptions"]:
+        if e["service"] == parcel["service"]:
+            return e["depot"]
+    return routes[timetable_row([(r["zip_from"], r["zip_to"]) for r in routes], parcel["zip"])]["depot"]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
