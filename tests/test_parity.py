@@ -556,6 +556,389 @@ assert MEMORY_ROWS_JS != ROWS_JS
 # Generátor Závory stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy barrierCase.
 BARRIER_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "barrierCase(rand)")
 assert BARRIER_ROWS_JS != ROWS_JS
+LOOKAHEAD_EXAMPLE = (".#..", "..#.", "###.", "....")             # příklad z rešerše (EXAMPLE v tests/test_lookahead.py): auto v pruhu 2, správně right
+LOOKAHEAD_HAND = [[list(LOOKAHEAD_EXAMPLE), 1], [["#.#", "..."], 1], [["..#", "##."], 0], [["..."], 1], [["...", "..."], 0],
+                  [["...", "..."], 2], [["..#", "..#"], 2], [[".#.", "..."], 1], [["....", "##..", "##..", "...."], 1],
+                  [[".#.", "...", "#..", "..."], 1], [["....",], 0], [[".#...",], 1], [["#.#..",], 1]]      # ručně ověřené mřížky z tests/test_lookahead.py
+
+
+def lookahead_grids(n, seed):
+    """Náhodné mřížky pro paritu prohledávání: K = 3–8, 1–4 řady s hustotou 0,4 (i řady bez volného pole), každý pruh auta."""
+    rng = random.Random(seed)
+    out = []
+    for _ in range(n):
+        lanes = rng.randint(3, 8)
+        out.append([["".join("#" if rng.random() < 0.4 else "." for _ in range(lanes)) for _ in range(rng.randint(1, 4))], rng.randrange(lanes)])
+    return out
+
+
+# Generátor Dvou kroků dopředu stránky se stejnou náhodou jako ROWS_JS: seed, lanes, n → řady lookaheadRow.
+LOOKAHEAD_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "lookaheadRow(arg.lanes, rand)")
+assert LOOKAHEAD_ROWS_JS != ROWS_JS
+LOOKAHEAD_PAGE = {}
+
+
+def lookahead_page(n, lanes, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (řady, pruh, tah, hloubka, hladový)."""
+    if (n, lanes, seed) not in LOOKAHEAD_PAGE:
+        raw = run_js(LOOKAHEAD_ROWS_JS, {"seed": seed, "lanes": lanes, "n": n})
+        LOOKAHEAD_PAGE[n, lanes, seed] = raw, [(tuple(r["rows"]), r["lane"], r["answer"], r["depth"], r["greedy"]) for r in raw]
+    return LOOKAHEAD_PAGE[n, lanes, seed]
+
+
+def lookahead_rates(cases):
+    """Podíl úloh, kde kontrolní strategie trefí správný tah, podle třídy (jako shortcut_rates v tests/test_lookahead.py)."""
+    import bench
+    out = {}
+    for name, pick in bench.LOOKAHEAD_SHORTCUTS.items():
+        out[name] = {}
+        for cls in bench.LOOKAHEAD_CLASSES:
+            sub = [c for c in cases if bench.lookahead_class(c[3]) == cls]
+            out[name][cls] = sum(pick(rows, lane) == answer for rows, lane, answer, _, _ in sub) / len(sub)
+    return out
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Lookahead(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ moves: LOOKAHEAD_MOVES, shift: LOOKAHEAD_SHIFT, rows: LOOKAHEAD_ROWS, density: LOOKAHEAD_DENSITY, classes: LOOKAHEAD_CLASSES,"
+                    " tries: LOOKAHEAD_TRIES, shortcuts: Object.keys(LOOKAHEAD_SHORTCUTS) })", None)
+        self.assertEqual(js["moves"], list(bench.LOOKAHEAD_MOVES))
+        self.assertEqual(json.dumps(js["shift"]), json.dumps(bench.LOOKAHEAD_SHIFT))
+        self.assertEqual((js["rows"], js["density"], js["tries"]), (bench.LOOKAHEAD_ROWS, bench.LOOKAHEAD_DENSITY, bench.LOOKAHEAD_TRIES))
+        self.assertEqual(js["classes"], list(bench.LOOKAHEAD_CLASSES))
+        self.assertEqual(js["shortcuts"], list(bench.LOOKAHEAD_SHORTCUTS))                  # pořadí rozhoduje o losování
+        tasks = [[list(rows), lane] for lanes in range(3, 9) for rows, lane, *_ in bench.lookahead_cases(4, lanes, seed=lanes)]
+        tasks.append([list(LOOKAHEAD_EXAMPLE), 1])
+        for (rows, lane), state in zip(tasks, run_js("arg.map(([rows, lane]) => lookaheadState(rows, lane))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.lookahead_state(tuple(rows), lane, "blocked")), (rows, lane))   # bajtově, i pořadí klíčů
+        for lanes, question in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => lookaheadQuestion(k))", None)):
+            self.assertEqual(json.dumps(question), json.dumps(bench.lookahead_question(lanes, "blocked")), lanes)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  move_blocked: '([^'\\]*)',$", alt, re.M), [bench.ALT["move_blocked"]])
+        self.assertNotIn("\n  move: ", "\n" + alt)                 # podoba --rows je jen v bench.py
+
+    def test_search_matches_bench(self):
+        import bench
+        grids = lookahead_grids(600, 3) + LOOKAHEAD_HAND
+        got = run_js("arg.map(([rows, lane]) => [lookaheadSurvive(rows, lane), lookaheadValues(rows, lane), [1, 2].map(d => lookaheadValues(rows, lane, d)),"
+                     " lookaheadGreedy(rows, lane), lookaheadDepth(rows, lane), lookaheadDensity(rows, lane), lookaheadCenter(rows, lane)])", grids)
+        for (rows, lane), (survive, values, by_depth, greedy, depth, density, center) in zip(grids, got):
+            rows = tuple(rows)
+            with self.subTest(rows=rows, lane=lane):
+                self.assertEqual(survive, bench.lookahead_survive(rows, lane))
+                self.assertEqual(json.dumps(values), json.dumps(bench.lookahead_values(rows, lane)))       # i pořadí tahů
+                self.assertEqual(by_depth, [bench.lookahead_values(rows, lane, d) for d in (1, 2)])
+                self.assertEqual(greedy, bench.lookahead_greedy(rows, lane))
+                self.assertEqual(depth, list(bench.lookahead_depth(rows, lane)))                         # [null, null] = nejlepší tah není jediný
+                self.assertEqual(density, bench.lookahead_density(rows, lane))
+                self.assertEqual(center, bench.lookahead_center(rows, lane))
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        for lanes, n in ((3, 300), (4, 900), (8, 300)):
+            raw, cases = lookahead_page(n, lanes)
+            for r, (rows, lane, answer, depth, greedy) in zip(raw, cases):
+                with self.subTest(lanes=lanes, rows=rows, lane=lane):
+                    self.assertEqual(list(r), ["rows", "lane", "answer", "depth", "greedy", "truth"])
+                    self.assertEqual(len(rows), bench.LOOKAHEAD_ROWS)
+                    self.assertTrue(all(len(x) == lanes and set(x) <= {".", "#"} and "." in x for x in rows))
+                    self.assertTrue(0 <= lane < lanes)
+                    values = bench.lookahead_values(rows, lane)
+                    self.assertEqual(values[answer], bench.LOOKAHEAD_ROWS)                          # nejlepší tah projede všechny řady
+                    self.assertEqual([m for m in bench.LOOKAHEAD_MOVES if values[m] == values[answer]], [answer])     # a je jediný
+                    self.assertEqual(bench.lookahead_depth(rows, lane), (answer, depth))
+                    self.assertEqual(bench.lookahead_greedy(rows, lane), greedy)
+                    self.assertEqual(r["truth"], bench.LOOKAHEAD_MOVES.index(answer))
+
+    def test_classes_and_answers_are_spread(self):
+        import bench
+        _, cases = lookahead_page(900, 4)
+        classes = Counter(bench.lookahead_class(d) for _, _, _, d, _ in cases)
+        answers = Counter(a for _, _, a, _, _ in cases)
+        for cls in bench.LOOKAHEAD_CLASSES:
+            self.assertTrue(0.25 <= classes[cls] / len(cases) <= 0.42, (cls, classes))
+        for move in ("left", "right"):
+            self.assertGreaterEqual(answers[move] / len(cases), 0.20, (move, answers))
+        self.assertGreaterEqual(answers["stay"] / len(cases), 0.17, answers)                       # Rozpory 3: bench.py 0,20 při naměřených 0,211
+
+    def test_control_strategies(self):                             # meze jako tests/test_lookahead.py (Generator.test_control_strategies)
+        import bench
+        _, cases = lookahead_page(900, 4)
+
+        def acc(pick, cls=None):
+            sub = [c for c in cases if cls is None or bench.lookahead_class(c[3]) == cls]
+            return sum(pick(rows, lane) == answer for rows, lane, answer, _, _ in sub) / len(sub)
+
+        def lowest_free(rows, lane):                               # tah do volného pole s nejnižším číslem pruhu
+            return next((m for m in bench.LOOKAHEAD_MOVES if 0 <= lane + bench.LOOKAHEAD_SHIFT[m] < len(rows[0])
+                         and rows[0][lane + bench.LOOKAHEAD_SHIFT[m]] == "."), "stay")
+        self.assertEqual(acc(bench.lookahead_greedy, "d1"), 1)
+        rates = lookahead_rates(cases)
+        for cls in ("d2", "d3+"):
+            for name in bench.LOOKAHEAD_SHORTCUTS:
+                with self.subTest(cls=cls, strategy=name):
+                    self.assertLessEqual(rates[name][cls], 0.45, rates)
+            with self.subTest(cls=cls, strategy="lowest_free"):
+                self.assertLessEqual(acc(lowest_free, cls), 0.6)
+        self.assertLess(acc(lambda rows, lane: "stay"), 0.5)
+
+    def test_control_strategies_on_five_lanes(self):               # při K ≥ 5 se vyvažuje i center; 900 úloh místo 300 (Rozpory 3)
+        import bench
+        rates = lookahead_rates(lookahead_page(900, 5)[1])
+        for cls in ("d2", "d3+"):
+            for name in bench.LOOKAHEAD_SHORTCUTS:
+                with self.subTest(cls=cls, strategy=name):
+                    self.assertLessEqual(rates[name][cls], 0.45, rates)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(LOOKAHEAD_ROWS_JS, {"seed": 7, "lanes": 4, "n": 30})
+        self.assertEqual(run_js(LOOKAHEAD_ROWS_JS, {"seed": 7, "lanes": 4, "n": 30}), first)
+        self.assertNotEqual(run_js(LOOKAHEAD_ROWS_JS, {"seed": 8, "lanes": 4, "n": 30}), first)
+
+    def test_bounded_search_raises(self):                          # jako tests/test_lookahead.py; rand = 0 dá samé překážky, žádná řada neprojde
+        got = run_js("[[() => 0, 4, 'd1'], [Math.random, 2, 'd1'], [Math.random, 9, 'd1'], [Math.random, 4, 'd4']]"
+                     ".map(([rand, k, cls]) => { try { lookaheadCase(rand, k, cls); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["lookaheadCase: no d1 task for 4 lanes after 100000 tries", "lookaheadCase: no d1 task for 2 lanes",
+                               "lookaheadCase: no d1 task for 9 lanes", "lookaheadCase: no d4 task for 4 lanes"])
+
+    def test_errors_match_bench(self):
+        import bench
+        cases = bench.lookahead_cases(60, 4, seed=4) + bench.lookahead_cases(30, 6, seed=6)
+        rng = random.Random(2)
+        choices = [rng.choice(["left", "stay", "right", "left", "right", None, "LEFT", 1, ["stay"]]) for _ in cases]
+        js_cases = [{"rows": list(rows), "lane": lane, "answer": answer, "greedy": greedy} for rows, lane, answer, _, greedy in cases]
+        got = run_js("lookaheadErrors(arg.cases, arg.choices)", {"cases": js_cases, "choices": choices})
+        self.assertEqual(json.dumps(got), json.dumps(bench.lookahead_errors(cases, choices)))        # i pořadí klíčů
+        self.assertTrue(all(got[k] > 0 for k in ("greedy", "crash", "invalid")), got)
+
+    def test_path_follows_the_value_of_the_move(self):             # cesta pro kresbu: délka = hodnota tahu, po volných polích, nejvýš o pruh
+        import bench
+        cases = bench.lookahead_cases(60, 4, seed=4) + bench.lookahead_cases(30, 7, seed=7)
+        grids = [[list(rows), lane] for rows, lane, *_ in cases] + LOOKAHEAD_HAND
+        paths = run_js("arg.map(([rows, lane]) => LOOKAHEAD_MOVES.map(m => lookaheadPath(rows, lane, m)))", grids)
+        for (rows, lane), by_move in zip(grids, paths):
+            values = bench.lookahead_values(tuple(rows), lane)
+            for move, path in zip(bench.LOOKAHEAD_MOVES, by_move):
+                with self.subTest(rows=rows, lane=lane, move=move):
+                    self.assertEqual(len(path), values[move])
+                    if path:
+                        self.assertEqual(path[0], lane + bench.LOOKAHEAD_SHIFT[move])
+                    for i, at in enumerate(path):
+                        self.assertEqual(rows[i][at], ".")
+                        self.assertTrue(i == 0 or abs(at - path[i - 1]) <= 1)
+
+    def test_outcome_of_a_passed_block(self):                      # příklad z rešerše: left 2 (slepá ulička), stay 0 (náraz), right 4 (správně)
+        got = run_js("[['ok', 2], ['bad', 0], ['bad', 1], ['bad', -1], ['late', undefined]].map(([r, c]) => lookaheadOutcome(r, c, arg, 1))"
+                     ".concat([lookaheadOutcome('bad', 0, ['...', '...'], 0), lookaheadOutcome('bad', 2, ['...', '...'], 2)])", list(LOOKAHEAD_EXAMPLE))
+        self.assertEqual(got, ["ok", "deadEnd", "crash", "invalid", "late", "crash", "crash"])        # mimo silnici je náraz
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for lanes, warm in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => lookaheadWarm(k))", None)):
+            rows, lane = tuple(warm["rows"]), warm["lane"]
+            with self.subTest(lanes=lanes):
+                self.assertEqual(list(warm), ["rows", "lane", "answer", "depth", "greedy", "truth"])
+                self.assertEqual(len(rows), bench.LOOKAHEAD_ROWS)
+                self.assertTrue(all(len(r) == lanes and r.count(".") == 1 for r in rows))           # nejvíc zablokovaných pruhů
+                self.assertEqual(bench.lookahead_depth(rows, lane), (warm["answer"], warm["depth"]))
+                self.assertEqual(bench.lookahead_values(rows, lane)[warm["answer"]], bench.LOOKAHEAD_ROWS)
+                self.assertEqual(warm["greedy"], bench.lookahead_greedy(rows, lane))
+                self.assertEqual(warm["truth"], bench.LOOKAHEAD_MOVES.index(warm["answer"]))
+                longest = max(len(json.dumps(bench.lookahead_state(r, l, "blocked"))) for r, l, *_ in bench.lookahead_cases(20, lanes, seed=lanes))
+                self.assertGreaterEqual(len(json.dumps(bench.lookahead_state(rows, lane, "blocked"))), longest)      # horní odhad délky dotazu
+
+
+SPEC_RULE_LOG = [["color", True]] * 3 + [["color", False], ["shape", False]]     # příklad z rešerše (SPEC_LOG v tests/test_rule.py): přepnutí na count
+C, W = True, False
+# Generátor Skrytého pravidla stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy ruleRow.
+RULE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "ruleRow(rand)")
+assert RULE_ROWS_JS != ROWS_JS
+RULE_PAGE = {}
+
+
+def rule_page(n=3000, seed=1):
+    """Úlohy generátoru stránky, jednou za běh modulu; deník jako [(znak, správně?)]."""
+    if (n, seed) not in RULE_PAGE:
+        RULE_PAGE[n, seed] = [{**r, "log": [tuple(e) for e in r["log"]]} for r in run_js(RULE_ROWS_JS, {"seed": seed, "n": n})]
+    return RULE_PAGE[n, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Rule(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ features: RULE_FEATURES, classes: RULE_CLASSES, streak: RULE_STREAK, log: RULE_LOG, short: RULE_SHORT, lengths: RULE_LENGTHS,"
+                    " stick: RULE_STICK, tries: RULE_TRIES, insert: RULE_INSERT, question: ruleQuestion() })", None)
+        self.assertEqual((js["features"], js["classes"], js["lengths"]), (list(bench.RULE_FEATURES), list(bench.RULE_CLASSES), list(bench.RULE_LENGTHS)))
+        self.assertEqual((js["streak"], js["log"], js["short"], js["stick"], js["tries"], js["insert"]),
+                         (bench.RULE_STREAK, list(bench.RULE_LOG), bench.RULE_SHORT, bench.RULE_STICK, bench.RULE_TRIES, bench.RULE_INSERT))
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.rule_question("labeled")))
+        cases = bench.rule_cases(40, seed=3)
+        tasks = [[[list(e) for e in log], [bench.rule_shared(sample, g)[0] for g in gates]] for log, sample, gates, *_ in cases]
+        for case, state in zip(cases, run_js("arg.map(([log, order]) => ruleState(log, order))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.rule_state(case, "labeled")))        # bajtově, i pořadí klíčů
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  gate_labeled: '([^'\\]*)',$", alt, re.M), [bench.ALT["gate_labeled"]])
+        self.assertNotIn("\n  gate: ", "\n" + alt)                 # podoba --matched-by je jen v bench.py
+
+    def test_read_and_least_match_bench(self):
+        import bench
+        rng = random.Random(5)
+        logs = [[[rng.choice(bench.RULE_FEATURES), rng.random() < 0.6] for _ in range(rng.randint(0, 10))] for _ in range(800)]
+        logs += [SPEC_RULE_LOG, [["color", C]] * 3, [["color", C]] * 3 + [["shape", C]] * 3, [["color", C]] * 3 + [["shape", C]],
+                 [["color", C], ["color", C], ["shape", W], ["color", C], ["color", C]], [["color", W], ["shape", W], ["color", W]],
+                 [["shape", C]] * 3 + [["shape", W], ["count", W]]]                      # ručně ověřené deníky z tests/test_rule.py (Reading)
+        for log, ([candidates, old, cls], least) in zip(logs, run_js("arg.map(log => [ruleRead(log), ruleLeast(log)])", logs)):
+            entries = [tuple(e) for e in log]
+            py_candidates, py_old, py_cls = bench.rule_read(entries)
+            with self.subTest(log=log):
+                self.assertEqual(candidates, [f for f in bench.RULE_FEATURES if f in py_candidates])      # pořadí RULE_FEATURES
+                self.assertEqual((old, cls), (py_old, py_cls))
+                self.assertEqual(least, bench.rule_least(entries))
+
+    def test_changes_follow_the_streak(self):                      # pás deníku: svislá čára za pokusem, po kterém se pravidlo změnilo
+        import bench
+        hand = [SPEC_RULE_LOG, [["color", C]] * 6 + [["shape", W]], [["color", C], ["color", C], ["shape", W], ["color", C], ["color", C], ["color", C]],
+                [["color", C]] * 3 + [["shape", C]], [["color", W]] * 4, []]
+        self.assertEqual(run_js("arg.map(ruleChanges)", hand), [[2], [2, 5], [5], [2], [], []])
+        rng = random.Random(8)
+        logs = [[[rng.choice(bench.RULE_FEATURES), rng.random() < 0.7] for _ in range(rng.randint(1, 10))] for _ in range(300)]
+        for log, changes in zip(logs, run_js("arg.map(ruleChanges)", logs)):
+            old = bench.rule_read([tuple(e) for e in log])[1]
+            self.assertEqual(old, log[changes[-1]][0] if changes else None, log)            # poslední změna je ta, kterou zná rule_read
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        for r in rule_page():
+            log, order = r["log"], r["order"]
+            with self.subTest(case=r):
+                self.assertEqual(list(r), ["log", "order", "truth", "cls", "old"])
+                self.assertTrue(bench.RULE_LOG[0] <= len(log) <= bench.RULE_LOG[1])
+                self.assertTrue(all(f in bench.RULE_FEATURES and isinstance(ok, bool) for f, ok in log))
+                self.assertEqual(sorted(order), sorted(bench.RULE_FEATURES))                       # znaky bran jsou permutace
+                candidates, old, cls = bench.rule_read(log)
+                self.assertEqual(candidates, {order[r["truth"]]})                                   # odvozené pravidlo je jediné a je to pravidlo úlohy
+                self.assertEqual(cls, r["cls"])
+                if old is None:
+                    self.assertIsNone(r["old"])
+                else:
+                    self.assertEqual(order[r["old"]], old)
+                    self.assertNotEqual(r["old"], r["truth"])
+
+    def test_classes_and_answers_are_spread(self):
+        import bench
+        c = rule_page()
+        classes, tops = Counter(r["cls"] for r in c), Counter(r["truth"] for r in c)
+        for cls in bench.RULE_CLASSES:
+            self.assertTrue(0.25 <= classes[cls] / len(c) <= 0.42, (cls, classes))
+        for top in range(3):
+            self.assertTrue(0.25 <= tops[top] / len(c) <= 0.42, (top, tops))
+        self.assertTrue(all(r["old"] is not None for r in c if r["cls"] == "switch"))
+        self.assertTrue(all(r["old"] is None for r in c if r["cls"] == "eliminate"))
+        for cls in bench.RULE_CLASSES:                                                             # délka deníku nezávisí na třídě
+            sub = [r for r in c if r["cls"] == cls]
+            short = sum(len(r["log"]) <= bench.RULE_SHORT for r in sub) / len(sub)
+            self.assertTrue(0.4 <= short <= 0.6, (cls, short))
+
+    def test_control_strategies(self):
+        import bench
+        c = rule_page()
+
+        def acc(pick, cls=None):
+            sub = [r for r in c if cls is None or r["cls"] == cls]
+            return sum(pick(r) == r["truth"] for r in sub) / len(sub)
+
+        def solve(r):
+            return r["order"].index(next(iter(bench.rule_read(r["log"])[0])))
+
+        def last_correct(r):                                       # zopakuj znak posledního správného pokusu; bez něj brána 1
+            hits = [f for f, ok in r["log"] if ok]
+            return r["order"].index(hits[-1]) if hits else 0
+        self.assertEqual(acc(solve), 1)
+        self.assertEqual(acc(last_correct, "repeat"), 1)
+        self.assertEqual(acc(last_correct, "switch"), 0)
+        self.assertTrue(all(last_correct(r) == r["old"] for r in c if r["cls"] == "switch"))      # v přepnutí vždy brána starého pravidla
+        self.assertLessEqual(acc(last_correct, "eliminate"), 0.4)
+        self.assertLess(acc(last_correct), 0.5)
+        self.assertLess(acc(lambda r: r["order"].index(r["log"][-1][0])), 0.45)                 # zopakuj znak posledního pokusu
+        self.assertLess(acc(lambda r: 0), 0.4)
+
+    def test_least_frequent_feature_is_balanced_in_switch(self):
+        import bench
+        c = rule_page()
+
+        def acc(cls):
+            sub = [r for r in c if r["cls"] == cls]
+            return sum(r["order"].index(bench.rule_least(r["log"])) == r["truth"] for r in sub) / len(sub)
+        self.assertTrue(0.2 <= acc("switch") <= 0.45, acc("switch"))
+        self.assertEqual(acc("eliminate"), 1)                     # bez změny je nezkoušený znak totéž co vyloučení
+
+    def test_first_pick_is_not_a_shortcut_in_switch(self):
+        import bench
+        switch = [r for r in rule_page() if r["cls"] == "switch"]
+
+        def acc(long=None):
+            sub = [r for r in switch if long is None or (len(r["log"]) > bench.RULE_SHORT) == long]
+            return sum(r["order"].index(r["log"][0][0]) == r["truth"] for r in sub) / len(sub)
+        self.assertLessEqual(acc(long=True), 0.45)
+        self.assertLessEqual(acc(), 0.6)
+
+    def test_rule_features_are_spread(self):                       # brána jmenuje svůj znak: „vždy count“ nesmí ve třídě vycházet
+        import bench
+        c = rule_page()
+
+        def shares(sub):
+            rules = Counter(r["order"][r["truth"]] for r in sub)
+            return {f: rules[f] / len(sub) for f in bench.RULE_FEATURES}
+        for cls in ("repeat", "eliminate"):
+            for f, share in shares([r for r in c if r["cls"] == cls]).items():
+                self.assertTrue(0.25 <= share <= 0.42, (cls, f, share))
+        switch = [r for r in c if r["cls"] == "switch"]
+        for f, share in shares([r for r in switch if len(r["log"]) > bench.RULE_SHORT]).items():
+            self.assertTrue(0.2 <= share <= 0.45, ("switch long", f, share))
+        self.assertLessEqual(max(shares(switch).values()), 0.5, shares(switch))
+
+    def test_same_seed_same_rows(self):
+        first = run_js(RULE_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(RULE_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(RULE_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_bounded_search_raises(self):                          # rand = 0: samé správné pokusy color, deník končí změnou, žádná třída
+        got = run_js("[[() => 0, 'eliminate', 'short'], [Math.random, 'guess', 'short'], [Math.random, 'repeat', 'medium']]"
+                     ".map(([rand, cls, length]) => { try { ruleCase(rand, cls, length); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["ruleCase: no eliminate short log after 10000 tries", "ruleCase: no guess short log", "ruleCase: no repeat medium log"])
+
+    def test_summary_matches_bench(self):                          # i neplatné volby: do perseverace se nepočítají
+        import bench
+        cases, rng, keys = bench.rule_cases(300, seed=4), random.Random(6), bench.gate_keys(3)
+        choices = [rng.choice(keys + keys + [None, "gate_4", 2]) for _ in cases]
+        js_cases = [{"log": [list(e) for e in log], "truth": top, "cls": cls, "old": old} for log, _, _, top, cls, old in cases]
+        got = run_js("ruleSummary(arg.cases, arg.choices, arg.keys)", {"cases": js_cases, "choices": choices, "keys": keys})
+        self.assertEqual(json.dumps(got), json.dumps(bench.rule_summary(cases, choices, keys)))      # i pořadí klíčů
+        self.assertEqual(run_js("ruleSummary([], [], arg)", keys)["persev"], [0, 0])                   # prázdná hra: stránka ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("ruleWarm()", None)
+        log = [tuple(e) for e in warm["log"]]
+        self.assertEqual(list(warm), ["log", "order", "truth", "cls", "old"])
+        self.assertEqual(len(log), bench.RULE_LOG[1])
+        self.assertTrue(all(ok for _, ok in log))                                                   # samé „correct“: nejdelší stav
+        self.assertEqual(bench.rule_read(log), ({warm["order"][warm["truth"]]}, warm["order"][warm["old"]], warm["cls"]))
+        self.assertEqual(warm["cls"], "repeat")
+        state = run_js("ruleState(arg.log, arg.order)", warm)
+        longest = max(len(json.dumps(bench.rule_state(c, "labeled"))) for c in bench.rule_cases(200, seed=2))
+        self.assertGreaterEqual(len(json.dumps(state)), longest)                                    # horní odhad délky dotazu ve stepEstimate
 
 
 if __name__ == "__main__":

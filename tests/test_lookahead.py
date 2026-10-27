@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient, recording
 from test_golden import Clock, fake_urlopen
+from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 EXAMPLE = (".#..", "..#.", "###.", "....")           # příklad z rešerše: auto v pruhu 2 (index 1); správně right, hladový left
@@ -453,6 +456,98 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--lookahead:  ", text)
             self.assertIn("\n--rows, --blocked:  ", text)
             self.assertIn(bench.LOOKAHEAD_FORM + ".", text)
+
+
+REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"
+
+
+def lookahead_body():
+    return page_source().split("\nconst lookahead = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; prohledávání, generátor a rozbor hlídá tests/test_parity.py (Lookahead)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_fills_in_the_lanes_like_bench(self):
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        questions = [bench.lookahead_question(k, "blocked") for k in range(3, 9)] + [bench.number_question(4), bench.memory_question(5)]
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(questions) + ";" + (
+            "process.stdout.write(JSON.stringify(Q.map(q => [0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(q)), v)))));")
+        for q, by_variant in zip(questions, run_page_js(code)):
+            for v, js in enumerate(by_variant):
+                self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))     # varianta 2 s počtem pruhů z původního zadání
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="lookahead" data-i18n="opt.scenario.lookahead"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: dva kroky dopředu ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(lookaheadWarm(LANES), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, lookaheadRow(LANES, rnd), 3)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(lookaheadRow(LANES, rnd)); },"), 1)
+        steer = re.search(r"\n  steer\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)     # projetý blok, který ještě kryje auto, řídí po cestě; jinak pruh úlohy nebo cíl tahu
+        for part in ("-r.y <= (LOOKAHEAD_ROWS - 1) * LOOKAHEAD_THIN", "lookaheadCarLane(", "r.target ?? r.lane"):
+            self.assertIn(part, steer)
+        body = lookahead_body()
+        for call in ("rollInject([d.truth], 3)", "lookaheadState(d.rows, d.lane)", "injectText(INJECT_NOTE, LOOKAHEAD_MOVES[inject])",
+                     "variantOf(lookaheadQuestion(LANES), v)", "a.move_blocked?.choice", "lookaheadErrorKind(", "lookaheadClass(", "laneOf: lookaheadLane"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    def test_road_has_at_least_three_lanes(self):                  # volič stojí na 2 (jiný scénář, uložené nastavení, krok fronty): silnice má 3 pruhy
+        page = page_source()
+        self.assertIn("  id: 'lookahead', lanesFree: true, minLanes: 3,", lookahead_body())
+        self.assertEqual(page.count("  lanes: () => Math.max(3, +$('lanes').value),"), 1)
+        self.assertEqual(page.count("  for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);"), 1)
+        self.assertEqual(page.count("  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;"), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_takes_the_lane_of_the_task_and_moves_one_lane(self):
+        code = ("const LOOKAHEAD_MOVES = ['left', 'stay', 'right'], LOOKAHEAD_SHIFT = { left: -1, stay: 0, right: 1 };" + page_function("lookaheadLane") +
+                "const r = (lane, k) => ({ lane, rows: ['.'.repeat(k)] });"
+                "process.stdout.write(JSON.stringify([[0, 4, 0], [0, 4, 1], [0, 4, 2], [3, 4, 2], [3, 4, 0], [1, 3, 2]].map(([l, k, m]) => lookaheadLane(r(l, k), m))));")
+        self.assertEqual(run_page_js(code), [0, 0, 1, 3, 2, 2])         # mimo silnici zůstane na kraji; náraz ukáže kroužek a rozbor
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_counts_depth_and_errors(self):                   # počítají se všechny odpovědi; správně, hladový, náraz, neplatná
+        from test_parity import run_js                              # sdílený blok přes soubor: v node -e je na Windows příkazová řádka příliš dlouhá
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", lookahead_body(), re.S).group(0)[1:-1]
+        code = "(() => { const base = { tally() {} }; const o = { __proto__: base," + tally + "};" + (
+            "const g = { byDepth: { d1: [0, 0], d2: [0, 0], 'd3+': [0, 0] }, errs: { greedy: 0, crash: 0, other: 0, invalid: 0 } };"
+            "const task = { rows: ['.#..', '..#.', '###.', '....'], lane: 1, answer: 'right', depth: 3, greedy: 'left', truth: 2 };"
+            "[2, 0, 1, -1].forEach(m => o.tally(g, task, m)); return g; })()")
+        self.assertEqual(run_js(code, None), {"byDepth": {"d1": [0, 0], "d2": [0, 0], "d3+": [1, 4]}, "errs": {"greedy": 1, "crash": 1, "other": 0, "invalid": 1}})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_drives_through_the_block_along_the_path_of_its_move(self):   # auto na plátně nejede přes kostky mimo nakreslenou cestu
+        from test_parity import run_js
+        page = page_source()
+        thin = re.search(r"\nconst LOOKAHEAD_THIN = [^\n]*\n", page).group(0)
+        steer = re.search(r"\n  steer\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)[1:-1]
+        code = "(() => {" + thin + page_function("lookaheadCarLane") + "const o = {" + steer + "};" + (
+            "const rows = " + json.dumps(list(EXAMPLE)) + ";"
+            "const done = (chosen, y) => ({ rows, lane: 1, chosen, y, result: chosen === 2 ? 'ok' : 'bad', passLane: 9 });"
+            "const lane = rows => { const g = { lane: -1, rows }; o.steer(g); return g.lane; };"
+            "const next = { rows, lane: 3, target: null, result: null, y: 2.4 };"
+            "return { path: lookaheadPath(rows, 1, 'right'), right: [0, -0.5, -1, -1.5].map(y => lane([done(2, y), next])),"
+            "  stay: lane([done(1, -0.5), next]), left: [-0.5, -1, -1.5].map(y => lane([done(0, y), next])), invalid: lane([done(-1, -1), next]),"
+            "  after: lane([done(2, -1.6), next]), answered: lane([done(2, -1.6), { ...next, target: 2 }]) }; })()")
+        out = run_js(code, None)
+        self.assertEqual(out["path"], [2, 3, 3, 3])
+        self.assertEqual(out["right"], out["path"])                     # správně: pruhy cesty lookaheadPath, tenká řada po tenké řadě
+        self.assertEqual(out["stay"], 9)                                # náraz: zůstane v passLane
+        self.assertEqual(out["left"], [0, 0, 0])                        # slepá ulička: cesta [0, 0], dál poslední pruh cesty
+        self.assertEqual(out["invalid"], 9)
+        self.assertEqual([out["after"], out["answered"]], [3, 2])       # po bloku pruh dalšího bloku, po odpovědi cíl tahu
+
+    def test_drawing_writes_only_through_t_and_shows_both_paths(self):
+        for name in ("drawLookahead", "drawLookaheadPath"):
+            self.assertNotIn("fillText(", page_function(name), name)                          # blok a cesty bez textu
+        body = lookahead_body()
+        for part in ("drawRing(r, y, rad) {", "lookaheadPath(r.rows, r.lane, r.answer)", "lookaheadPath(r.rows, r.lane, r.greedy)",
+                     "t('lookahead.deadEnd'", "t('answer.invalid')", "LOOKAHEAD_COLOR[lookaheadOutcome(", "drawLookahead(r, y)"):
+            self.assertIn(part, body)
 
 
 if __name__ == "__main__":

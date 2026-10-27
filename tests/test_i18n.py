@@ -350,7 +350,8 @@ SAME = {"mode.bench", "ui.start", "ui.stop", "ui.model", "ui.hardware", "ui.csv"
 DYNAMIC = ("tip.", "col.", "result.", "gap.", "state.")
 # Celé klíče, které se skládají za běhu a doslova ve skriptu nestojí: klíč → kde. Starší scénáře drží doslova seznam v legacyCells.
 COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.memory": "cellsOf: known('scenario.' + v.scenario, …)",
-            "scenario.barrier": "cellsOf: known('scenario.' + v.scenario, …)"}
+            "scenario.barrier": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.lookahead": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.rule": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -359,7 +360,7 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
         "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
-        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora"]
+        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -564,7 +565,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 6)                                      # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora
+        self.assertEqual(len(blocks), 8)                                      # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -592,7 +593,7 @@ class PageTexts(unittest.TestCase):
         for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
             self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
-        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.memory", "scenario.signs"])
+        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.lookahead", "scenario.memory", "scenario.rule", "scenario.signs"])
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("výjim", self.texts[key]["cs"], key)
             self.assertIn("bans and exceptions", self.texts[key]["en"], key)
@@ -632,6 +633,36 @@ class PageTexts(unittest.TestCase):
             self.assertIn("barrier", self.texts[key]["en"], key)
         self.assertEqual(node("[1, 5].map(n => t('barrier.rule', { n, name: 'x' }))"), ["pravidlo 1: x", "pravidlo 5: x"])
         self.assertEqual(node("[1, 5].map(n => t('barrier.rule', { n, name: 'x' }))", lang="en"), ["rule 1: x", "rule 5: x"])
+
+    def test_lookahead_texts_match_bench_and_name_the_scenario(self):         # hloubka a řádek chyb jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = dict(re.findall(r"(\w+): '(lookahead\.move\.\w+)'", piece(r"^const LOOKAHEAD_MOVE_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["left", "stay", "right"])                                           # pořadí LOOKAHEAD_MOVES
+        for code in ("cs", "en"):
+            for key in ("errors", "depth"):
+                self.assertEqual(self.texts["lookahead." + key][code], i18n.TEXTS["bench.lookahead." + key][code], (key, code))
+            self.assertIn(self.texts["opt.scenario.lookahead"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.lookahead.extraTitle"][code], self.texts["scenario.lookahead.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("dopředu", self.texts[key]["cs"], key)
+            self.assertIn("two steps ahead", self.texts[key]["en"], key)
+        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))"), ["slepá ulička v řadě 1", "slepá ulička v řadě 4"])
+        self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))", lang="en"), ["dead end in row 1", "dead end in row 4"])
+
+    def test_rule_texts_match_bench_and_name_the_scenario(self):              # třídy a řádek pod tabulkou jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = dict(re.findall(r"(\w+): '(rule\.class\.\w+)'", piece(r"^const RULE_CLASS_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["repeat", "switch", "eliminate"])                                   # pořadí RULE_CLASSES
+        features = re.findall(r"(\w+): 'rule\.feature\.\w+'", piece(r"^const RULE_FEATURE_NAME = \{.*?\};$"))
+        self.assertEqual(features, ["color", "shape", "count"])
+        for code in ("cs", "en"):
+            for cls, key in names.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.rule." + cls][code], (key, code))
+                self.assertIn(self.texts[key][code] + " = ", self.texts["scenario.rule.extraTip"][code], (key, code))
+            self.assertEqual(self.texts["rule.line"][code], i18n.TEXTS["bench.rule.line"][code], code)
+            self.assertIn(self.texts["opt.scenario.rule"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.rule.extraTitle"][code], self.texts["scenario.rule.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("skryt", self.texts[key]["cs"], key)
+            self.assertIn("hidden rule", self.texts[key]["en"], key)
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
@@ -1106,6 +1137,18 @@ class Results(unittest.TestCase):
         pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
         self.assertEqual(node(pick, rows), [["závora", 4]])
         self.assertEqual(node(pick, rows, lang="en"), [["barrier", 4]])
+
+    def test_lookahead_row_reads_in_both_languages(self):                     # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.lookahead
+        rows = [{"vals": {**VALS, "scenario": "lookahead", "lanes": 5}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["dva kroky dopředu", 5]])
+        self.assertEqual(node(pick, rows, lang="en"), [["two steps ahead", 5]])
+
+    def test_rule_row_reads_in_both_languages(self):                          # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.rule
+        rows = [{"vals": {**VALS, "scenario": "rule", "lanes": 3}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["skryté pravidlo", 3]])
+        self.assertEqual(node(pick, rows, lang="en"), [["hidden rule", 3]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
@@ -1822,7 +1865,7 @@ class PageStatic(unittest.TestCase):
         live = ("$('speed')", "$('mode')", "isRealtime(")
         for word in live:
             self.assertEqual(body("drawStats").count(word), 0, word)
-        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora",
+        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo",
                      "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:
