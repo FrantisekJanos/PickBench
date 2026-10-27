@@ -151,5 +151,39 @@ class Generator(unittest.TestCase):
                 bench.queue_case(random.Random(1), lanes, cls)
 
 
+QUEUE_TEXT = ("A car comes to a toll gate with {k} lanes. Each lane_N lists the vehicles waiting in that lane. "
+              "Choose the lane with the shortest queue.")
+WEIGHTED_TEXT = QUEUE_TEXT.replace(" Choose", " A truck, a bus or a tractor counts as three vehicles; any other vehicle counts as one. Choose")
+ALT_QUEUE = "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest."
+ALT_WEIGHTED = ALT_QUEUE.replace(" Pick", " A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick")
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_example_state(self):
+        state = bench.queue_state(EXAMPLE)
+        self.assertEqual(json.dumps(state), '{"lane_1": ["car", "car"], "lane_2": ["truck"], "lane_3": ["bus", "van"]}')
+        self.assertEqual((solver(False)(state), solver(True)(state)), ("lane_2", "lane_1"))
+
+    def test_questions_and_their_alternative_wordings(self):
+        for weighted, key, text, alt in ((False, "lane", QUEUE_TEXT, ALT_QUEUE), (True, "lane_weighted", WEIGHTED_TEXT, ALT_WEIGHTED)):
+            for lanes in range(2, 9):
+                with self.subTest(weighted=weighted, lanes=lanes):
+                    q = bench.queue_question(lanes, weighted)
+                    self.assertEqual(list(q), [key])
+                    self.assertEqual(q[key]["type"], "choice")
+                    self.assertEqual(q[key]["instructions"], text.format(k=lanes))
+                    self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps(bench.position_criteria(bench.lane_keys(lanes), "Lane")))
+                    self.assertEqual(bench.ALT[key], alt)
+                    self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt.format(lanes=lanes))
+                    self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), bench.lane_keys(lanes)[::-1])
+        self.assertEqual(bench.queue_question(4), bench.queue_question(4, False))
+
+    def test_lookahead_still_takes_its_lane_count(self):                        # ALT_LANES má teď dvě větve; move bere tu první
+        for lanes in (3, 8):
+            for form, key in (("rows", "move"), ("blocked", "move_blocked")):
+                q = bench.lookahead_question(lanes, form)
+                self.assertEqual(bench.variant(q, 2)[key]["instructions"], bench.ALT[key].format(lanes=lanes))
+
+
 if __name__ == "__main__":
     unittest.main()

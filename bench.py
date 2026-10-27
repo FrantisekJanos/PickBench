@@ -1255,6 +1255,20 @@ def queue_cases(n, lanes=4, weighted=False, seed=1):
     return [queue_case(rng, lanes, rng.choice(QUEUE_GAPS), weighted) for _ in range(n)]
 
 
+def queue_state(queues):
+    """Stav pro model: lane_N → seznam vozidel v pořadí z generátoru."""
+    return {f"lane_{i + 1}": list(q) for i, q in enumerate(queues)}
+
+
+def queue_question(lanes, weighted=False):
+    """Otázka choice: lane (bez vah) nebo lane_weighted (s větou o vahách)."""
+    weights = "A truck, a bus or a tractor counts as three vehicles; any other vehicle counts as one. " if weighted else ""
+    instructions = (f"A car comes to a toll gate with {lanes} lanes. Each lane_N lists the vehicles waiting in that lane. "
+                    f"{weights}Choose the lane with the shortest queue.")
+    key = "lane_weighted" if weighted else "lane"
+    return {key: {"type": "choice", "instructions": instructions, "criteria": position_criteria(lane_keys(lanes), "Lane")}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1268,9 +1282,11 @@ ALT = {                                              # jinak formulované zadán
     "gate": "Which gate is right is set by a hidden rule: the right gate shares the color, the shape or the count with the sample card. Every gate shares exactly one feature with the sample. Right after any three correct picks in a row, the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate had in common with the sample, and whether the pick was correct. Find the rule in force now and pick the gate that matches the sample by it.",
     "gate_labeled": "A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.",
     "go": "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
+    "lane": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.",
+    "lane_weighted": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
-ALT_LANES = re.compile(r"\ba (\d+)-lane road\b")    # zadání move nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
+ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
 
 
 def noul_variant(question, v):
@@ -1289,8 +1305,9 @@ def variant(question, v):
         q["criteria"] = dict(reversed(list(q["criteria"].items())))
     if v == 2:
         alt = ALT[key]
-        if "{lanes}" in alt:                         # dva kroky dopředu: počet pruhů z původního zadání
-            alt = alt.format(lanes=ALT_LANES.search(q["instructions"]).group(1))
+        if "{lanes}" in alt:                         # dva kroky dopředu a fronta: počet pruhů z původního zadání
+            lanes = ALT_LANES.search(q["instructions"])
+            alt = alt.format(lanes=lanes.group(lanes.lastindex))     # číslo nese ta větev výrazu, která se chytila
         q["instructions"] = alt + (" " + q["instructions"] if key == "category" else "")   # pravidla sady e-mailů zůstávají
     return {key: q}
 
