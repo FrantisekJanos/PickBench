@@ -251,6 +251,18 @@ TEXTS = {
                              "en": "errors: repeats the last move {last}, most frequent move {frequent}, wrong period {period}, transition {transition}, other {other}, invalid {invalid}"},
     "bench.pattern.errorsPredict": {"cs": "chyby: protitah místo předpovědi {counter_given}, opakuje poslední {last}, nejčastější tah {frequent}, špatná perioda {period}, přechod {transition}, jiné {other}, neplatné {invalid}",
                                     "en": "errors: counter instead of prediction {counter_given}, repeats the last move {last}, most frequent move {frequent}, wrong period {period}, transition {transition}, other {other}, invalid {invalid}"},
+    # Tah na výhru (--tictactoe): třídy v poznámce za řádkem modelu, pod ním přesnost podle značky na tahu a počtu volných
+    # polí (hotové zlomky „správně/celkem“) a řádek chyb (počty).
+    "bench.tictactoe.win": {"cs": "výhra", "en": "win"},
+    "bench.tictactoe.block": {"cs": "blok", "en": "block"},
+    "bench.tictactoe.winOverBlock": {"cs": "výhra před blokem", "en": "win before block"},
+    "bench.tictactoe.fork": {"cs": "vidlička", "en": "fork"},
+    "bench.tictactoe.line": {"cs": "hraje X {x}, hraje O {o}; volná pole 2–3 {few}, 4–6 {many}",
+                             "en": "plays X {x}, plays O {o}; free cells 2–3 {few}, 4–6 {many}"},
+    "bench.tictactoe.errors": {"cs": "chyby: blok místo výhry {block_not_win}, přehlédnutá výhra {missed_win}, přehlédnutý blok {missed_block}, "
+                                     "vidlička soupeře {wrong_side}, jen jedna hrozba {single_threat}, obsazené pole {occupied}, jiné {other}, neplatné {invalid}",
+                               "en": "errors: block instead of win {block_not_win}, win missed {missed_win}, block missed {missed_block}, "
+                                     "opponent's fork {wrong_side}, single threat only {single_threat}, occupied cell {occupied}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "

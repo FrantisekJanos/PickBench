@@ -3646,6 +3646,20 @@ def print_pattern(r):
         print(" " * 20 + i18n.t("bench.pattern.errors", **r["errors"]), flush=True)
 
 
+def tictactoe_note(r):
+    """Poznámka za řádkem modelu: přesnost tahu na výhru podle třídy."""
+    return class_note(r["by_class"], {"win": i18n.t("bench.tictactoe.win"), "block": i18n.t("bench.tictactoe.block"),
+                                      "win_over_block": i18n.t("bench.tictactoe.winOverBlock"), "fork": i18n.t("bench.tictactoe.fork")})
+
+
+def print_tictactoe(r):
+    """Dva řádky pod řádkem modelu: přesnost podle značky na tahu a počtu volných polí (správně/celkem), pak druhy chyb."""
+    frac = lambda counts: f"{counts[0]}/{counts[1]}"
+    print(" " * 20 + i18n.t("bench.tictactoe.line", x=frac(r["by_side"]["X"]), o=frac(r["by_side"]["O"]),
+                            few=frac(r["by_free"]["few"]), many=frac(r["by_free"]["many"])), flush=True)
+    print(" " * 20 + i18n.t("bench.tictactoe.errors", **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

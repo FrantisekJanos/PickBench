@@ -479,5 +479,36 @@ class RunTictactoe(unittest.TestCase):
             self.assertNotEqual(key, solve(state))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_class(self):
+        r = {"by_class": {"win": [5, 10], "block": [9, 11], "win_over_block": [3, 12], "fork": [1, 9]}}
+        for lang, want in (("cs", "(výhra 5/10, blok 9/11, výhra před blokem 3/12, vidlička 1/9)"),
+                           ("en", "(win 5/10, block 9/11, win before block 3/12, fork 1/9)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.tictactoe_note(r), want)
+
+    def test_lines_in_both_languages(self):
+        r = {"by_side": {"X": [9, 10], "O": [6, 10]}, "by_free": {"few": [2, 7], "many": [8, 13]},
+             "errors": {"block_not_win": 4, "missed_win": 3, "missed_block": 5, "wrong_side": 1, "single_threat": 2, "occupied": 6,
+                        "other": 7, "invalid": 8}}
+        pad = " " * 20
+        self.assertEqual(printed("cs", bench.print_tictactoe, r),
+                         [pad + "hraje X 9/10, hraje O 6/10; volná pole 2–3 2/7, 4–6 8/13",
+                          pad + "chyby: blok místo výhry 4, přehlédnutá výhra 3, přehlédnutý blok 5, vidlička soupeře 1, "
+                                "jen jedna hrozba 2, obsazené pole 6, jiné 7, neplatné 8"])
+        self.assertEqual(printed("en", bench.print_tictactoe, r),
+                         [pad + "plays X 9/10, plays O 6/10; free cells 2–3 2/7, 4–6 8/13",
+                          pad + "errors: block instead of win 4, win missed 3, block missed 5, opponent's fork 1, "
+                                "single threat only 2, occupied cell 6, other 7, invalid 8"])
+
+    def test_lines_with_empty_classes(self):
+        r = {"by_class": {"win": [1, 1], "block": [0, 0], "win_over_block": [0, 0], "fork": [0, 0]},
+             "by_side": {"X": [1, 1], "O": [0, 0]}, "by_free": {"few": [0, 0], "many": [1, 1]},
+             "errors": dict.fromkeys(bench.TICTACTOE_ERRORS, 0)}
+        with i18n.process("en"):
+            self.assertEqual(bench.tictactoe_note(r), "(win 1/1, block 0/0, win before block 0/0, fork 0/0)")
+        self.assertEqual(len(printed("en", bench.print_tictactoe, r)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
