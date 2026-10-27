@@ -2069,7 +2069,10 @@ const lookahead = {
       if (r.result === 'bad' && r.greedy !== r.answer) drawLookaheadPath(r, y, lookaheadRoute(r.rows, r.lane, r.greedy), '#e69f00', 5);
       const stop = lookaheadRouteOf(r).stop;
       if (stop && stop.kind !== 'none') drawLookaheadCross(r, y, stop);
-      if (-r.y <= LOOKAHEAD_SPAN) { const lab = lookaheadLabel(r); drawRowLabel(lab.text, lab.color, H - 10); }
+      if (-r.y <= LOOKAHEAD_SPAN + 0.3) {                   // do konce bloku a o kus dál: po tazích auto čeká na model v s = SPAN + 0.2 (turnCells)
+        const lab = lookaheadLabel(r);
+        drawRowLabel(lab.text, lab.color, H - 10);
+      }
     }
   },
   describeLast(task, res) {                                // pruh auta a zablokované pruhy řad, jak je dostal model, pak volba, správný tah a tah hladového řidiče

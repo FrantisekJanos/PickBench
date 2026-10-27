@@ -679,6 +679,9 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         for name in ("drawLookahead", "drawLookaheadPath", "drawLookaheadArrow", "drawLookaheadCross"):
             self.assertNotIn("fillText(", page_function(name), name)
         self.assertNotIn("drawRing(r, y, rad) {", body)                  # kroužek u Dvou kroků není
+        # po tazích auto stojí v s = SPAN + 0.2 (turnCells) a čeká na model: štítek tam musí být ještě vidět
+        self.assertIn("Math.max(0, task.row.y) + LOOKAHEAD_SPAN + 0.2", body)
+        self.assertIn("if (-r.y <= LOOKAHEAD_SPAN + 0.3) {", body)
         self.assertNotIn("LOOKAHEAD_COLOR", page_source())
 
 
