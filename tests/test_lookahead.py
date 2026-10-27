@@ -487,7 +487,9 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         self.assertEqual(page.count("  warmTask() { return this.task(lookaheadWarm(LANES), null, null); },"), 1)
         self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, lookaheadRow(LANES, rnd), 3)); },"), 1)
         self.assertEqual(page.count("  randomTask() { return this.task(lookaheadRow(LANES, rnd)); },"), 1)
-        self.assertEqual(page.count("  steer(g) { const r = g.rows.find(r => r.result === null); if (r) g.lane = r.target ?? r.lane; },"), 1)
+        steer = re.search(r"\n  steer\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)     # projetý blok, který ještě kryje auto, řídí po cestě; jinak pruh úlohy nebo cíl tahu
+        for part in ("-r.y <= (LOOKAHEAD_ROWS - 1) * LOOKAHEAD_THIN", "lookaheadCarLane(", "r.target ?? r.lane"):
+            self.assertIn(part, steer)
         body = lookahead_body()
         for call in ("rollInject([d.truth], 3)", "lookaheadState(d.rows, d.lane)", "injectText(INJECT_NOTE, LOOKAHEAD_MOVES[inject])",
                      "variantOf(lookaheadQuestion(LANES), v)", "a.move_blocked?.choice", "lookaheadErrorKind(", "lookaheadClass(", "laneOf: lookaheadLane"):
@@ -516,6 +518,28 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
             "const task = { rows: ['.#..', '..#.', '###.', '....'], lane: 1, answer: 'right', depth: 3, greedy: 'left', truth: 2 };"
             "[2, 0, 1, -1].forEach(m => o.tally(g, task, m)); return g; })()")
         self.assertEqual(run_js(code, None), {"byDepth": {"d1": [0, 0], "d2": [0, 0], "d3+": [1, 4]}, "errs": {"greedy": 1, "crash": 1, "other": 0, "invalid": 1}})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_drives_through_the_block_along_the_path_of_its_move(self):   # auto na plátně nejede přes kostky mimo nakreslenou cestu
+        from test_parity import run_js
+        page = page_source()
+        thin = re.search(r"\nconst LOOKAHEAD_THIN = [^\n]*\n", page).group(0)
+        steer = re.search(r"\n  steer\(g\) \{.*?\n  \},", lookahead_body(), re.S).group(0)[1:-1]
+        code = "(() => {" + thin + page_function("lookaheadCarLane") + "const o = {" + steer + "};" + (
+            "const rows = " + json.dumps(list(EXAMPLE)) + ";"
+            "const done = (chosen, y) => ({ rows, lane: 1, chosen, y, result: chosen === 2 ? 'ok' : 'bad', passLane: 9 });"
+            "const lane = rows => { const g = { lane: -1, rows }; o.steer(g); return g.lane; };"
+            "const next = { rows, lane: 3, target: null, result: null, y: 2.4 };"
+            "return { path: lookaheadPath(rows, 1, 'right'), right: [0, -0.5, -1, -1.5].map(y => lane([done(2, y), next])),"
+            "  stay: lane([done(1, -0.5), next]), left: [-0.5, -1, -1.5].map(y => lane([done(0, y), next])), invalid: lane([done(-1, -1), next]),"
+            "  after: lane([done(2, -1.6), next]), answered: lane([done(2, -1.6), { ...next, target: 2 }]) }; })()")
+        out = run_js(code, None)
+        self.assertEqual(out["path"], [2, 3, 3, 3])
+        self.assertEqual(out["right"], out["path"])                     # správně: pruhy cesty lookaheadPath, tenká řada po tenké řadě
+        self.assertEqual(out["stay"], 9)                                # náraz: zůstane v passLane
+        self.assertEqual(out["left"], [0, 0, 0])                        # slepá ulička: cesta [0, 0], dál poslední pruh cesty
+        self.assertEqual(out["invalid"], 9)
+        self.assertEqual([out["after"], out["answered"]], [3, 2])       # po bloku pruh dalšího bloku, po odpovědi cíl tahu
 
     def test_drawing_writes_only_through_t_and_shows_both_paths(self):
         for name in ("drawLookahead", "drawLookaheadPath"):

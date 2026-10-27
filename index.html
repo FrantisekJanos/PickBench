@@ -1849,6 +1849,15 @@ const LOOKAHEAD_MOVE_NAME = { left: 'lookahead.move.left', stay: 'lookahead.move
 function lookaheadLane(r, move) {                          // pruh po tahu; mimo silnici zůstane auto na kraji (náraz ukáže kroužek)
   return Math.min(r.rows[0].length - 1, Math.max(0, r.lane + LOOKAHEAD_SHIFT[LOOKAHEAD_MOVES[move]]));
 }
+// Pruh auta v projetém bloku r (r.y ≤ 0): pruh tenké řady, nad kterou auto právě je, na cestě lookaheadPath zvoleného tahu; za koncem kratší
+// cesty (slepá ulička) její poslední pruh. Náraz, tah mimo silnici, neplatná a pozdní odpověď: r.passLane (auto zůstane, kudy blokem vjelo).
+function lookaheadCarLane(r) {
+  const valid = Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LOOKAHEAD_MOVES.length;
+  const path = valid ? lookaheadPath(r.rows, r.lane, LOOKAHEAD_MOVES[r.chosen]) : [];
+  if (!path.length) return r.passLane;
+  const i = Math.floor(Math.max(0, -r.y) / LOOKAHEAD_THIN + 1e-9);      // 1e-9: −1,5 / 0,5 se po odečítání kroků nesmí zaokrouhlit pod 3
+  return path[Math.min(i, path.length - 1)];
+}
 
 // Podklad bloku a kostky překážek; tenká řada i má střed y − i · LOOKAHEAD_THIN · CELL (rows[0] nejblíž autu). Bez textu; globalAlpha nastaví volající.
 function drawLookahead(r, y) {
@@ -1894,8 +1903,14 @@ const lookahead = {
   },
   rowTask(r) { return this.task(r, r); },
   laneOf: lookaheadLane,
-  // před odpovědí pruh úlohy, po ní cíl tahu; po projetém bloku se auto přesune do pruhu dalšího bloku
-  steer(g) { const r = g.rows.find(r => r.result === null); if (r) g.lane = r.target ?? r.lane; },
+  // Dokud projetý blok kryje auto (jeho tenké řady ještě nedojely za auto), jede auto po cestě zvoleného tahu (lookaheadCarLane);
+  // jinak nejbližší neprojetý blok: před odpovědí pruh úlohy, po ní cíl tahu.
+  steer(g) {
+    const done = g.rows.find(r => r.result !== null && -r.y <= (LOOKAHEAD_ROWS - 1) * LOOKAHEAD_THIN);
+    if (done) { g.lane = lookaheadCarLane(done); return; }
+    const r = g.rows.find(r => r.result === null);
+    if (r) g.lane = r.target ?? r.lane;
+  },
   spawnRow(g, y) { g.rows.push(this.newRow(g, y, lookaheadRow(LANES, rnd), 3)); },
   randomTask() { return this.task(lookaheadRow(LANES, rnd)); },
   warmTask() { return this.task(lookaheadWarm(LANES), null, null); },
