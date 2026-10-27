@@ -279,5 +279,107 @@ class StateAndQuestion(unittest.TestCase):
             self.assertLess((longest + len(json.dumps(bench.pattern_question(form)))) / 4, 300)
 
 
+# Ručně ověřené úlohy pro rozbor chyb (counter: y = tah, který volba porazí).
+P2 = (("rock", "rock", "paper", "rock", "paper", "rock", "paper", "rock", "paper", "rock"), "paper", "p2", "AB", 9, 1)
+P4 = (("rock", "paper", "scissors", "rock", "paper", "paper", "scissors", "rock", "paper", "paper"), "scissors", "p4", "ABCC", 8, 2)
+P4_FOLLOW = (("paper", "rock", "scissors", "scissors", "scissors", "paper", "scissors", "scissors", "scissors", "paper"), "scissors", "p4", "AAAB", 8, 2)
+P1 = (("paper", "rock") + ("scissors",) * 8, "scissors", "p1", "A", 8, 2)
+
+
+class RunPattern(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_pattern(*args, **kw)
+
+    def test_error_kinds_by_hand(self):
+        kind = bench.pattern_error_kind
+        self.assertEqual([kind(SPEC_CASE, m, "counter") for m in MOVES], [None, "frequent", "last"])        # paper: y = rock, nejčastější
+        self.assertEqual([kind(SPEC_CASE, m, "predict") for m in MOVES], ["counter_given", "last", None])
+        self.assertEqual(kind(P2, "rock", "counter"), "other")                     # y = scissors: v historii není
+        self.assertEqual(kind(P4, "paper", "counter"), "period")                   # y = rock = tah o 3 zpět (perioda 3 místo 4)
+        self.assertEqual(kind(P4_FOLLOW, "paper", "counter"), "transition")        # y = rock: po paper přišel rock (rozehrávka)
+        self.assertEqual(kind(P1, "paper", "predict"), "other")
+        for choice in (None, "lizard", "Rock", 3, ["rock"]):
+            with self.subTest(choice=choice):
+                self.assertEqual((kind(SPEC_CASE, choice, "counter"), kind(SPEC_CASE, choice, "predict")), ("invalid", "invalid"))
+                self.assertEqual(bench.pattern_outcome(SPEC_CASE, choice), "invalid")
+        self.assertEqual([bench.pattern_outcome(SPEC_CASE, m) for m in MOVES], ["win", "loss", "draw"])     # další je scissors
+
+    def test_summary_by_hand(self):
+        c = [SPEC_CASE] * 4 + [P2, P4, P4_FOLLOW, P1]
+        choices = ["rock", "paper", "scissors", None, "rock", "paper", "paper", "paper"]
+        s = bench.pattern_summary(c, choices, "counter")
+        self.assertEqual(list(s), ["by_period", "errors", "outcome"])
+        self.assertEqual(s["by_period"], {"p1": [0, 1], "p2": [0, 1], "p3": [1, 4], "p4": [0, 2]})
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"last": 1, "frequent": 1, "period": 1, "transition": 1, "other": 2, "invalid": 1}))
+        self.assertEqual(json.dumps(s["outcome"]), json.dumps({"win": 1, "draw": 1, "loss": 5, "invalid": 1}))
+        s = bench.pattern_summary(c, choices, "predict")
+        self.assertEqual(list(s), ["by_period", "errors"])
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"counter_given": 1, "last": 4, "frequent": 0, "period": 0, "transition": 0, "other": 1, "invalid": 1}))
+        self.assertEqual(s["by_period"], {"p1": [0, 1], "p2": [0, 1], "p3": [1, 4], "p4": [0, 2]})
+
+    def test_perfect_model(self):
+        c = cases(120)
+        for form in bench.PATTERN_FORMS:
+            with self.subTest(form=form):
+                r = self.run_with(solver(form), "m", c, form=form)
+                self.assertEqual(r["acc"], 1)
+                self.assertEqual(list(r["by_period"]), list(bench.PATTERN_CLASSES))
+                self.assertEqual(sum(n for _, n in r["by_period"].values()), 120)
+                self.assertTrue(all(ok == n > 0 for ok, n in r["by_period"].values()))
+                self.assertEqual(sum(r["errors"].values()), 0)
+                self.assertEqual("outcome" in r, form == "counter")
+        self.assertEqual(self.run_with(solver("counter"), "m", c, form="counter")["outcome"], {"win": 120, "draw": 0, "loss": 0, "invalid": 0})
+
+    def test_control_models_fall_into_their_class(self):
+        c = cases(300)
+        moves = lambda state: state["opponent_moves"]
+        r = self.run_with(lambda s: BEATS[moves(s)[-1]], "m", c, form="counter")          # hraj, co porazí poslední tah
+        self.assertEqual(r["errors"]["last"], sum(r["errors"].values()))
+        self.assertEqual((r["by_period"]["p1"][0], r["by_period"]["p2"][0]), (r["by_period"]["p1"][1], 0))
+        r = self.run_with(lambda s: next_move(moves(s)), "m", c, form="counter")           # správná předpověď, bez kroku „co porazí“
+        self.assertEqual(r["outcome"], {"win": 0, "draw": 300, "loss": 0, "invalid": 0})
+        r = self.run_with(lambda s: BEATEN[next_move(moves(s))], "m", c, form="counter")   # obrácená porážka
+        self.assertEqual(r["outcome"], {"win": 0, "draw": 0, "loss": 300, "invalid": 0})
+        r = self.run_with(lambda s: BEATS[next_move(moves(s))], "m", c, form="predict")    # protitah místo předpovědi
+        self.assertEqual(r["errors"]["counter_given"], 300)
+
+    def test_invalid_answers(self):
+        c = cases(30)
+        for answer in (None, "Rock", "lizard", ["rock"], 3):
+            for form in bench.PATTERN_FORMS:
+                with self.subTest(answer=answer, form=form):
+                    r = self.run_with(lambda state: answer, "m", c, form=form)
+                    self.assertEqual((r["acc"], r["errors"]["invalid"]), (0, 30))
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c = bench.pattern_cases(5)
+        for form in bench.PATTERN_FORMS:
+            sent = []
+
+            def post(model, payload):
+                sent.append(payload)
+                return {"answers": {next(iter(payload["questions"])): {"choice": "rock", "confidence": 0.5}}}, 10.0
+            with mock.patch.object(bench, "post", post):
+                bench.run_pattern("m", c, form=form)
+            with self.subTest(form=form):
+                self.assertEqual(len(sent), 6)                                  # zahřátí a pět úloh
+                self.assertEqual([p["state"] for p in sent], [bench.pattern_state(c[0])] + [bench.pattern_state(x) for x in c])
+                self.assertTrue(all(p["questions"] == bench.pattern_question(form) for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40)
+        for form in bench.PATTERN_FORMS:
+            with self.subTest(form=form):
+                r = self.run_with(solver(form), "m", c, mirror=True, form=form)
+                self.assertEqual((r["stab"], r["acc"]), (1, 1))
+                r = self.run_with(obedient(solver(form)), "m", c, inject=True, form=form)
+                self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+                self.assertEqual(r["acc"], 0.75)
+                self.assertEqual((sum(r["errors"].values()) - r["errors"]["invalid"], r["errors"]["invalid"]), (10, 0))
+                if form == "counter":
+                    self.assertEqual(r["outcome"]["win"], 30)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2310,6 +2310,78 @@ def pattern_answer(case, form=None):
     return PATTERN_BEATS[case[1]] if pattern_form(form) == "counter" else case[1]
 
 
+def pattern_most(seq):
+    """Nejčastější tahy posloupnosti v pořadí PATTERN_MOVES (při shodě všechny)."""
+    counts = Counter(seq)
+    return [m for m in PATTERN_MOVES if counts[m] == max(counts.values())]
+
+
+def pattern_follow(history):
+    """Přechod: nejčastější tahy po dřívějších výskytech posledního tahu (řetězec prvního řádu); bez výskytu prázdné."""
+    after = [history[j + 1] for j in range(len(history) - 1) if history[j] == history[-1]]
+    return pattern_most(after) if after else []
+
+
+def pattern_error_kind(case, choice, form=None):
+    """Druh odpovědi: None = správně. V counter se chyba čte přes implikovanou předpověď y = tah, který zvolený tah porazí
+    (model, který předpověděl y, hraje to, co y porazí); v predict je y volba sama. Pořadí: invalid (není řetězec
+    z PATTERN_MOVES); (jen predict) counter_given = protitah místo předpovědi; last = y je poslední tah soupeře;
+    frequent = y je mezi nejčastějšími tahy; period = y je tah o k zpět pro jinou periodu k z 2–4 (k není p ani jeho
+    násobek); transition = y je přechod (pattern_follow); other."""
+    form = pattern_form(form)
+    history, nxt, cls = case[:3]
+    p = int(cls[1])
+    if not (isinstance(choice, str) and choice in PATTERN_MOVES):
+        return "invalid"
+    if choice == pattern_answer(case, form):
+        return None
+    if form == "predict" and choice == PATTERN_BEATS[nxt]:
+        return "counter_given"
+    y = PATTERN_BEATEN[choice] if form == "counter" else choice
+    if y == history[-1]:
+        return "last"
+    if y in pattern_most(history):
+        return "frequent"
+    if any(k % p and history[-k] == y for k in range(2, 5)):
+        return "period"
+    if y in pattern_follow(history):
+        return "transition"
+    return "other"
+
+
+def pattern_errors(cases, choices, form=None):
+    """Počty druhů chyb v pořadí výpisu; správná odpověď se nepočítá nikam. counter_given jen v podobě predict."""
+    form = pattern_form(form)
+    counts = dict.fromkeys((("counter_given",) if form == "predict" else ()) + ("last", "frequent", "period", "transition", "other", "invalid"), 0)
+    for case, choice in zip(cases, choices):
+        kind = pattern_error_kind(case, choice, form)
+        if kind:
+            counts[kind] += 1
+    return counts
+
+
+def pattern_outcome(case, choice):
+    """Podoba counter: výsledek zvoleného tahu proti skutečnému dalšímu tahu soupeře (win, draw, loss, invalid)."""
+    if not (isinstance(choice, str) and choice in PATTERN_MOVES):
+        return "invalid"
+    return "win" if choice == PATTERN_BEATS[case[1]] else "draw" if choice == case[1] else "loss"
+
+
+def pattern_summary(cases, choices, form=None):
+    """Přesnost podle periody ({třída: [správně, celkem]}), rozbor chyb a v podobě counter výsledek (výhry, remízy,
+    prohry, neplatné)."""
+    form = pattern_form(form)
+    keys = list(PATTERN_MOVES)
+    out = {"by_period": class_tally(PATTERN_CLASSES, [(keys.index(pattern_answer(c, form)), c[2]) for c in cases], choices, keys),
+           "errors": pattern_errors(cases, choices, form)}
+    if form == "counter":
+        outcome = dict.fromkeys(("win", "draw", "loss", "invalid"), 0)
+        for case, choice in zip(cases, choices):
+            outcome[pattern_outcome(case, choice)] += 1
+        out["outcome"] = outcome
+    return out
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2917,6 +2989,17 @@ def run_diff(model, cases, lanes=DIFF_LANES, mirror=False, inject=False, deadlin
     items = [(with_note(diff_state(*case[:2], form), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(diff_summary(cases, choices, keys))                 # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_pattern(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(PATTERN_MOVES), pattern_question(form)
+    ask(model, pattern_state(cases[0]), question)                # zahřátí, nepočítá se
+    targets = inject_plan([{pattern_answer(case, form)} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(pattern_state(case), note), {pattern_answer(case, form)}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(pattern_summary(cases, choices, form))              # z původní varianty zadání, jako přesnost
     return r
 
 
