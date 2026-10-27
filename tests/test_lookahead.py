@@ -549,6 +549,43 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
                      "t('lookahead.deadEnd'", "t('answer.invalid')", "LOOKAHEAD_COLOR[lookaheadOutcome(", "drawLookahead(r, y)"):
             self.assertIn(part, body)
 
+    def test_row_gap_of_the_scenario(self):              # všechna místa s GAP: definice, překážky, výchozí rowBase, spawn a odhad kroku berou rozestup scénáře
+        lines = [l.strip() for l in page_source().split("\n") if re.search(r"\bGAP\b", l)]
+        self.assertEqual(len(lines), 5, lines)
+        for part in ("const ROWS = 12, CELL = 44, GAP = 4,", "sinceSpawn: GAP, crashes: 0", "gap: GAP,",
+                     "const gap = SC.gap ?? GAP;", "const rows = len => Math.ceil(len / (SC.gap ?? GAP)) + 1;"):
+            self.assertEqual(sum(part in l for l in lines), 1, part)
+        self.assertIn("sinceSpawn: this.gap", page_source())
+        self.assertIn("statsView.speed / this.gap", page_source())
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_step_spawns_by_the_gap_of_the_scenario(self):
+        code = "const GAP = 4, ROWS = 12; let SC;" + page_function("step") + (
+            "const run = gap => { const ys = []; SC = { gap, move() {}, onStep() {}, spawnRow: (g, y) => ys.push(y) };"
+            " const g = { dist: 0, sinceSpawn: gap ?? GAP }; step(g, 0); step(g, 13); return ys; };"
+            "process.stdout.write(JSON.stringify([run(6), run(undefined)]));")
+        self.assertEqual(run_page_js(code), [[12, 5, 11], [12, 3, 7, 11]])      # rozestup 6: sinceSpawn 13 → 7 → 1; GAP 4: 13 → 9 → 5 → 1
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_rows_pass_at_the_scenario_point(self):      # dva kroky: řada je projetá, když se jí auto dotkne (passAt), ne až ve středu
+        body = page_source().split("\nconst rowBase = {", 1)[1].split("\n};\n", 1)[0]
+        method = lambda name: re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+        code = "const base = { passAt: 0, keep: 2, steer() {}, rowTask: r => r," + method("onStep") + "," + method("nextTask") + "," + method("move") + "};" + (
+            "const g = sc => ({ rows: [{ y: 0.3, result: null, chosen: 2, truth: 2, asked: false }, { y: 0.5, result: null, asked: false }, { y: -1.9, result: 'ok' }],"
+            " history: [], good: 0, bad: 0, late: 0 });"
+            "const a = g(), b = g(), o = { __proto__: base, passAt: 0.4, keep: 5 };"
+            "base.onStep.call(base, a); o.onStep(b); const askA = base.nextTask.call(base, g(), 0)?.y, askB = o.nextTask(g(), 0.2)?.y;"
+            "const m = g(); o.move(m, 0.2); const n = g(); base.move.call(base, n, 0.2);"
+            "process.stdout.write(JSON.stringify([a.rows.map(r => r.result), b.rows.map(r => r.result), askA, askB ?? null, m.rows.length, n.rows.length]));")
+        self.assertEqual(run_page_js(code), [[None, None, "ok"], ["ok", None, "ok"], 0.3, 0.5, 3, 2])
+
+    def test_car_size_and_pose_hooks(self):              # dva kroky: nižší auto a poloha bez vyhlazování; ostatní scénáře beze změny
+        draw = page_function("draw")
+        for part in ("const pose = SC.carPose?.(g);", "g.visLane = pose ? pose.lane : g.visLane + (g.lane - g.visLane) * 0.35;",
+                     "h = SC.carH ?? 44", "ctx.globalAlpha = pose?.alpha ?? 1;", "CAR_Y - h / 2", "CAR_Y - h * 13 / 44", "h * 10 / 44"):
+            self.assertIn(part, draw)
+        self.assertNotIn("CAR_Y - 22", draw)
+
 
 if __name__ == "__main__":
     unittest.main()

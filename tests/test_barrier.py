@@ -671,7 +671,7 @@ class Page(unittest.TestCase):                                         # scéná
         method = lambda src: re.search(r"\n  onStep\(g\) \{.*?\n  \},", src, re.S).group(0)[1:-1]
         core = method(page.split("\nconst rowBase = {", 1)[1].split("\n};\n", 1)[0])
         own = method(page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0])
-        code = page_function("barrierOutcome") + "const base = { steer() {}," + core + "}; const b = { __proto__: base," + own + "};" + (
+        code = page_function("barrierOutcome") + "const base = { passAt: 0, steer() {}," + core + "}; const b = { __proto__: base," + own + "};" + (
             "const C = [[0, 1], [undefined, 1], [1, 0], [-1, 1], [-1, 0], [0, 0], [1, 1]];"        # [chosen, truth]
             "process.stdout.write(JSON.stringify(C.map(([chosen, truth]) => {"
             " const g = { rows: [{ y: 0, result: null, chosen, truth }, { y: 3, result: null, chosen: 1, truth: 1 }], history: [], flash: 0.3, good: 0, bad: 0, late: 0 };"

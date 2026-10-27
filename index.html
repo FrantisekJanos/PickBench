@@ -1248,13 +1248,14 @@ function renderLegend() {
 // Scénář dodá: rowTask(řada) → úloha, laneOf(řada, rozhodnutí) → pruh, kam rozhodnutí vede; řada nese .truth (správné rozhodnutí).
 // Volitelně: stateOf(úloha, varianta) = stav podle varianty zadání; newRow dostane počet možností, když není LANES.
 const rowBase = {
-  baseGame: () => ({ lane: startLane(), visLane: startLane(), rows: [], history: [], nextId: 1, dist: 0, sinceSpawn: GAP, flash: 0, dirty: false, good: 0, bad: 0, late: 0 }),
+  gap: GAP, passAt: 0, keep: 2,                            // rozestup řad, bod vyhodnocení řady (y), jak daleko za autem řada zůstává
+  baseGame() { return { lane: startLane(), visLane: startLane(), rows: [], history: [], nextId: 1, dist: 0, sinceSpawn: this.gap, flash: 0, dirty: false, good: 0, bad: 0, late: 0 }; },
   newRow: (g, y, data, options = LANES) => ({ id: g.nextId++, y, target: null, chosen: undefined, asked: false, result: null, passLane: null,
                              inject: rollInject([data.truth], options), fooled: false, ...data }),     // inject = podstrčená špatná možnost, nebo null; fooled = model ji zvolil (i pozdě)
-  move(g, cells) { for (const r of g.rows) r.y -= cells; g.rows = g.rows.filter(r => r.y > -2); },
+  move(g, cells) { for (const r of g.rows) r.y -= cells; g.rows = g.rows.filter(r => r.y > -this.keep); },
   steer(g) { const r = g.rows.find(r => r.result === null); if (r && r.target !== null) g.lane = r.target; },
   onStep(g) {
-    for (const r of g.rows) if (r.result === null && r.y <= 0) {     // řada právě minula auto
+    for (const r of g.rows) if (r.result === null && r.y <= this.passAt) {     // řada právě minula auto
       r.passLane = g.lane;
       r.result = r.chosen === undefined ? 'late' : r.chosen === r.truth ? 'ok' : 'bad';
       g[r.result === 'ok' ? 'good' : r.result]++;
@@ -1265,9 +1266,9 @@ const rowBase = {
     this.steer(g);
   },
   nextTask(g, eta = 0) {                                   // nejbližší řada, kterou model ještě stihne (dál než eta polí); jinak nejvzdálenější
-    const open = g.rows.filter(r => r.result === null && !r.asked && r.y > 0);
+    const open = g.rows.filter(r => r.result === null && !r.asked && r.y > this.passAt);
     if (!open.length) return null;
-    const reachable = open.filter(r => r.y > eta);
+    const reachable = open.filter(r => r.y > eta + this.passAt);
     const r = (reachable.length ? reachable : open).reduce((a, b) => (reachable.length ? b.y < a.y : b.y > a.y) ? b : a);
     r.asked = true;
     return this.rowTask(r);
@@ -1295,7 +1296,7 @@ const rowBase = {
     return [[inGame && passed ? `${g.good} / ${passed} (${pctOf(g.good / passed)})` : '—', match, this.matchTip],
             [inGame ? g.bad : '—', t('result.bad'), t('row.tip.bad')], [inGame ? g.late : '—', t('result.late'), t('row.tip.late')],
             [pctText(s.acc), t('row.tile.acc'), t('row.tip.acc')], [pctText(s.conf), t('tile.conf.label'), t('tile.conf')],
-            [`${inGame && statsView.realtime ? f(statsView.speed / GAP, 2) : '—'} / ${f(s.rate, 2)}`, rate, t('row.tip.rate')]];
+            [`${inGame && statsView.realtime ? f(statsView.speed / this.gap, 2) : '—'} / ${f(s.rate, 2)}`, rate, t('row.tip.rate')]];
   },
 };
 
@@ -1843,7 +1844,7 @@ const barrier = {
 // ---------- scénář: dva kroky dopředu ----------
 // Každá řada je blok LOOKAHEAD_ROWS tenkých řad s překážkami (lookaheadRow ve sdíleném bloku), auto stojí v pruhu úlohy a model volí tah
 // pro nejbližší řadu: 0 left, 1 stay, 2 right, −1 neplatná odpověď. r.y je nejbližší tenká řada; blok se vyhodnotí, když dojede k autu.
-const LOOKAHEAD_THIN = 0.5;                                // výška tenké řady v polích: blok 2 pole, mezi bloky GAP = 4 pole
+const LOOKAHEAD_THIN = 0.5;                                // výška tenké řady v polích: blok 2 pole, mezi bloky rozestup scénáře
 // jméno tahu v TEXTS (komentář nad řádkem: test čte řádek až po „};“ na jeho konci)
 const LOOKAHEAD_MOVE_NAME = { left: 'lookahead.move.left', stay: 'lookahead.move.stay', right: 'lookahead.move.right' };
 function lookaheadLane(r, move) {                          // pruh po tahu; mimo silnici zůstane auto na kraji (náraz ukáže kroužek)
@@ -2939,9 +2940,10 @@ function renderTiles(box, tiles) {
 
 // ---------- jádro: hra ----------
 function step(g, cells) {
+  const gap = SC.gap ?? GAP;                               // rozestup řad scénáře v polích (dva kroky dopředu delší)
   g.dist += cells; g.sinceSpawn += cells;
   SC.move(g, cells);
-  while (g.sinceSpawn >= GAP) { g.sinceSpawn -= GAP; SC.spawnRow(g, ROWS - g.sinceSpawn); }
+  while (g.sinceSpawn >= gap) { g.sinceSpawn -= gap; SC.spawnRow(g, ROWS - g.sinceSpawn); }
   SC.onStep(g);
 }
 
@@ -3387,7 +3389,7 @@ let HOSTED_GAP = 2000;                                     // ms mezi kroky u ho
 function stepEstimate(kind, s) {                           // horní odhad dotazů a dolarů kroku s hostovaným modelem z aktuálního scénáře; jinak null
   const h = s.driver === 'model' ? hostedOf(s.model) : null;
   if (!h) return null;
-  const rows = len => Math.ceil(len / GAP) + 1;
+  const rows = len => Math.ceil(len / (SC.gap ?? GAP)) + 1;
   let tasks;
   if (kind === 'bench') tasks = s.benchn;
   else if (s.mode === 'ladder') tasks = SC === obstacles ? Math.ceil(LADDER.reduce((t, v) => t + LEVEL / v, 0) * 1000 / HOSTED_MIN_MS) : rows(LADDER.length * LEVEL);
@@ -3769,15 +3771,18 @@ function draw(g) {
   for (let i = 1; i < LANES; i++) { ctx.beginPath(); ctx.moveTo(i * LW, 0); ctx.lineTo(i * LW, H); ctx.stroke(); }
   ctx.setLineDash([]);
   SC.drawItems(g);
-  g.visLane += (g.lane - g.visLane) * 0.35;
-  const x = g.visLane * LW + LW * 0.24, w = LW * 0.52;
+  const pose = SC.carPose?.(g);                            // dva kroky dopředu: poloha auta z trasy bloku (bez vyhlazování) a průhlednost vraku
+  g.visLane = pose ? pose.lane : g.visLane + (g.lane - g.visLane) * 0.35;
+  const x = g.visLane * LW + LW * 0.24, w = LW * 0.52, h = SC.carH ?? 44;   // výška auta v px: scénář ji smí zmenšit
   for (const lane of g.ghosts || []) if (lane >= 0) {       // zrcadla: kam by jely zbylé dvě varianty zadání (při shodě schované pod autem)
     ctx.globalAlpha = 0.45; ctx.fillStyle = '#e69f00';
-    ctx.beginPath(); ctx.roundRect(lane * LW + LW * 0.24, CAR_Y - 22, w, 44, 9); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(lane * LW + LW * 0.24, CAR_Y - h / 2, w, h, Math.min(9, h / 3)); ctx.fill();
     ctx.globalAlpha = 1;
   }
-  ctx.fillStyle = '#4cc2ff'; ctx.beginPath(); ctx.roundRect(x, CAR_Y - 22, w, 44, 9); ctx.fill();
-  ctx.fillStyle = '#0b2536'; ctx.fillRect(x + w * 0.13, CAR_Y - 13, w * 0.74, 10);
+  ctx.globalAlpha = pose?.alpha ?? 1;
+  ctx.fillStyle = '#4cc2ff'; ctx.beginPath(); ctx.roundRect(x, CAR_Y - h / 2, w, h, Math.min(9, h / 3)); ctx.fill();
+  ctx.fillStyle = '#0b2536'; ctx.fillRect(x + w * 0.13, CAR_Y - h * 13 / 44, w * 0.74, h * 10 / 44);
+  ctx.globalAlpha = 1;
   SC.drawVehicle?.(g, x, w);                               // zákazy a výjimky: štítek vozidla pod autem; závora: brzdová světla; ostatní scénáře nic
   SC.drawTrail?.(g);                                       // paměťová stopa: pás historie pod silnicí; ostatní scénáře nic
   if (g.flash > 0) g.flash = Math.max(0, g.flash - 0.05);
