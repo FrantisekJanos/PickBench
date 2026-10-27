@@ -1743,7 +1743,7 @@ const barrier = {
   panels: ['confPanel'], get extraTitle() { return t('scenario.barrier.extraTitle'); },
   get extraTip() { return t('scenario.barrier.extraTip'); },
   get matchTip() { return t('scenario.barrier.tip.match'); },
-  lanes: () => 4,
+  fixedLanes: 4, lanes: () => 4,
   newGame() { return { ...this.baseGame(), cases: [], probs: [] }; },
   task(d, row = null, inject = row ? row.inject : rollInject([d.go ? 0 : 1], 2)) {      // úloha bez pokynu pole note nemá; base = stav bez pokynu pro obrácenou otázku
     return { row, base: d.state, state: withNoulNote(d.state, inject === null ? null : NOUL_TARGET[inject]), go: d.go, rule: d.rule, cls: d.cls, truth: d.go ? 0 : 1, inject };
@@ -2012,7 +2012,7 @@ const rule = {
   panels: ['confPanel', 'trail'], get extraTitle() { return t('scenario.rule.extraTitle'); },
   get extraTip() { return t('scenario.rule.extraTip'); },
   get matchTip() { return t('scenario.rule.tip.match'); },
-  lanes: () => 3,
+  fixedLanes: 3, lanes: () => 3,
   newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
   task(d, row = null, inject = row ? row.inject : rollInject([d.truth], 3)) {
     const state = ruleState(d.log, d.order);
@@ -3806,6 +3806,9 @@ function syncControls() {                                  // co jde měnit jen 
   $('lanes').disabled = running || !SC.lanesFree;
   for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);     // dva kroky dopředu: od 3 pruhů
   if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;
+  const lanes = $('lanes');                                // závora a skryté pravidlo: zamčený volič ukazuje pevný počet pruhů, volba uživatele se vrátí
+  if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }
+  else if (lanes.dataset.free !== undefined) { lanes.value = lanes.dataset.free; delete lanes.dataset.free; }
   $('extra').disabled = running || !SC.hasExtra;
   $('speed').disabled = running && $('mode').value === 'ladder';
   $('mirror').disabled = $('inject').disabled = running || !!SC.benchOnly;      // veřejná sada: zrcadla ani trojský kůň nejsou
