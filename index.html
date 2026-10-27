@@ -1673,7 +1673,8 @@ const memory = {
 
 // ---------- scénář: závora ----------
 // Každá řada je křižovatka (barrierCase ve sdíleném bloku), model odpoví otázkou noul. Rozhodnutí: 0 jeď, 1 stůj, −1 neplatná odpověď;
-// řada nese truth 0 / 1. Pruhy úloha nemá: auto jede pořád ve stejném pruhu a nezpomaluje, „stůj“ ukazují brzdová světla a závora.
+// řada nese truth 0 / 1. Pruhy úloha nemá: auto jede pořád ve stejném pruhu. „Stůj“ = auto u závory zastaví na BARRIER_HOLD s
+// (závora dole, brzdová světla), pak se závora zvedne a jede dál; „jeď“ = závora se zvedne s předstihem.
 const BARRIER_RULE_NAME = ['barrier.rule.police', 'barrier.rule.emergency', 'barrier.rule.pedestrian', 'barrier.rule.light', 'barrier.rule.sign'];      // jméno pravidla 1–5 v TEXTS
 const BARRIER_CLASS_NAME = { agree: 'barrier.class.agree', conflict_high: 'barrier.class.conflictHigh', conflict_light: 'barrier.class.conflictLight', last: 'barrier.class.last' };
 const NOUL_TARGET = ['go', 'stop'];                        // cíl pokynu trojského koně podle špatného rozhodnutí (index 0 jeď, 1 stůj)
@@ -1688,14 +1689,16 @@ function barrierOutcome(result, truth, chosen) {
   return truth ? 'lateCrash' : 'late';
 }
 
-// Závora je nahoře, když řada projela, model řekl jeď, nebo je řada do půl pole od auta: auto nezpomaluje, závora se zvedne těsně před ním.
+// Závora je nahoře, když řada projela, model řekl jeď, auto u ní dostálo (hold 2), nebo je řada do půl pole od auta.
+// Stůj = závora dole, dokud auto nedostojí (hold 1); bez zastavení (pozdní odpověď) se zvedne těsně před autem.
 function barrierOpen(r) {
-  return r.result !== null || r.chosen === 0 || r.y < 0.5;
+  return r.result !== null || r.chosen === 0 || r.hold === 2 || (r.y < 0.5 && r.hold !== 1);
 }
 
 const BARRIER_GLYPH = { police: '👮', emergency: '🚑', pedestrian: '🚶' };      // emoji potřebují barevné písmo jako vozidla u zákazů
 const BARRIER_LAMP = { red: '#f85149', yellow: '#d29922', green: '#3fb950' };
 const BARRIER_COLOR = { go: '#3fb950', stop: '#3fb950', falseGo: '#f85149', lateCrash: '#f85149', needless: '#8b9aa8', late: '#8b9aa8', invalid: '#8b9aa8' };     // kroužek podle barrierOutcome
+const BARRIER_STOP_Y = 1.05, BARRIER_HOLD = 0.8;            // bod zastavení před přechodem (y řady v polích) a doba stání v s skutečného času, i po tazích
 
 // Přechod, břevno, semafor, značka a piktogramy jedné řady; divák vidí všech pět polí stavu jako model (bez note). globalAlpha nastaví volající.
 // Vejde se i do dvou pruhů (W = 200): vlevo trojský kůň a sloupek břevna, pak policista a záchranka, vpravo značka a semafor, chodec na přechodu v pruhu auta.
@@ -1798,9 +1801,13 @@ const barrier = {
     ctx.fillStyle = BARRIER_COLOR[out]; ctx.fillText(word, right ? x + gap : x - gap, y, (right ? W - x : x) - gap - 4);
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   },
-  drawVehicle(g, x, w) {                                   // brzdová světla, když model u nejbližší neprojeté řady s odpovědí řekl stůj (bližší řadu jádro mohlo přeskočit)
+  stopAhead(g) {                                           // nejbližší řada, kde model včas řekl stůj a auto u ní ještě nestálo: kolik polí k bodu zastavení
+    const r = g.rows.filter(r => r.result === null && r.chosen === 1 && !r.hold).reduce((a, b) => a && a.y <= b.y ? a : b, null);
+    return r ? { row: r, cells: Math.max(0, r.y - BARRIER_STOP_Y), ms: BARRIER_HOLD * 1000 } : null;
+  },
+  drawVehicle(g, x, w) {                                   // brzdová světla, když model u nejbližší neprojeté řady s odpovědí řekl stůj (bližší řadu jádro mohlo přeskočit); po zastavení zhasnou
     const r = g.rows.find(r => r.result === null && r.chosen !== undefined);
-    if (!r || r.chosen !== 1) return;
+    if (!r || r.chosen !== 1 || r.hold === 2) return;
     ctx.fillStyle = '#f85149'; ctx.fillRect(x + 3, CAR_Y + 16, w * 0.24, 5); ctx.fillRect(x + w - 3 - w * 0.24, CAR_Y + 16, w * 0.24, 5);
   },
   describeLast(task, res) {                                // stav jedním řádkem, jak ho dostal model (i s note), p(jeď), volba a rozhodující pravidlo
@@ -3033,6 +3040,7 @@ async function decide(driver, task, mirror = false) {
 let G, S;
 function newStats() {
   return { lat: [], oll: [], n: 0, correct: 0, confSum: 0, confN: 0, t0: performance.now(), t1: null,
+           held: 0,                                        // ms, kdy auto stálo u závory; doba běhu pro rozhodnuto/s je bez nich
            usd: [], retries: 0,                            // hostovaný model: cena každého dotazu v dolarech; kolikrát server dotaz opakoval
            cal: [],                                        // [jistota, správně?] pro kalibraci
            pairs: [],                                      // [správný štítek, odpověď nebo null] u scénářů s třídami (e-maily, veřejná sada)
@@ -3074,7 +3082,7 @@ function calib(cal) {                                      // 10 pásem jistoty;
 }
 
 function summary() {
-  const secs = ((S.t1 ?? performance.now()) - S.t0) / 1000;
+  const secs = runSecs(S.t1 ?? performance.now());
   const cm = S.pairs.length ? classMetrics(S.pairs, SC.oos ? SC.oos() : null) : null;      // metriky po třídách (stejné jako metrics.py)
   return { cm, f1: cm ? cm.macro_f1 : NaN, n: S.n, avg: avg(S.lat), p50: pct(S.lat, .5), p95: pct(S.lat, .95), min: Math.min(...S.lat), max: Math.max(...S.lat),
            rate: S.n / secs, oll: avg(S.oll), acc: S.n ? S.correct / S.n : NaN, conf: S.confN ? S.confSum / S.confN : NaN,
@@ -3795,12 +3803,32 @@ let mirrorOn = false;                                      // zrcadla v právě 
 let runLimit = 0;                                          // délka průjezdu právě běžící (nebo poslední) hry v polích; 0 = bez limitu (i žebřík a benchmark)
 let runWhy = '';                                           // proč poslední běh skončil: 'limit' | 'ladder' | 'done' | 'stop' | 'error'; za běhu ''
 
-function drive(cells) {                                    // posun běžící hry; na délce průjezdu běh sám skončí
-  if (!running) return;
+// Zastavení u závory: G.hold = { row, from, until } v ms skutečného času; řada nese hold 1 (auto stojí) a 2 (dostálo).
+function startHold(stop, now) {
+  G.hold = { row: stop.row, from: now, until: now + stop.ms };
+  stop.row.hold = 1;
+}
+function endHold(now) {
+  S.held += now - G.hold.from;
+  G.hold.row.hold = 2;
+  G.hold = null;
+}
+function runSecs(now) {                                    // doba běhu v s bez stání u závory (i toho, které právě běží)
+  return (now - S.t0 - S.held - (G?.hold ? now - G.hold.from : 0)) / 1000;
+}
+
+function drive(cells) {                                    // posun běžící hry; na délce průjezdu běh sám skončí; vrací ujetá pole (při stání 0)
+  if (!running) return 0;
+  const now = performance.now();
+  if (G.hold) { if (now < G.hold.until) return 0; endHold(now); }
   const end = runLimit + 1e-6;                             // o chlup za limit: řada přesně na něm se ještě započítá
   if (runLimit) cells = Math.min(cells, end - G.dist);
+  const halt = SC.stopAhead?.(G) ?? null, holdNow = halt !== null && halt.cells <= cells;   // závora: auto dojede k bodu zastavení a stojí
+  if (holdNow) cells = halt.cells;
   if (cells > 0) step(G, cells);
+  if (holdNow) startHold(halt, now);
   if (runLimit && G.dist >= end - 1e-9) { runWhy = 'limit'; stop(); }
+  return Math.max(0, cells);
 }
 
 // Žebřík: rychlost stoupá po úrovních; úroveň = LEVEL polí, zvládnutá při nejvýš 1 chybě.
@@ -3905,8 +3933,9 @@ async function warmup() {
 }
 
 async function advance(id, cells) {                        // režim po tazích: popojet plynule o daný počet polí
-  const n = Math.max(1, Math.ceil(cells * 6));
-  for (let i = 0; i < n && id === runId; i++) { drive(cells / n); await sleep(20); }
+  const n = Math.max(1, Math.ceil(cells * 6)), part = cells / n;
+  let left = cells;                                        // sčítá skutečně ujetá pole: během stání u závory drive vrací 0 a smyčka čeká
+  while (left > 1e-9 && id === runId) { left -= drive(Math.min(part, left)); await sleep(20); }
 }
 
 async function start() {
@@ -3941,6 +3970,7 @@ async function start() {
       requestAnimationFrame(frame);
     })(last);
     while (id === runId) {                                  // rozhodovací smyčka
+      if (G.hold) { drive(0); await sleep(15); continue; }   // závora: auto stojí, nový dotaz neodchází; drive(0) zastavení po tazích ukončí
       const eta = realtime ? +$('speed').value * pct(S.lat.slice(-10), .5) / 1000 : 0;   // polí ujetých během jednoho očekávaného rozhodnutí
       const task = SC.nextTask(G, eta || 0);
       if (!task) { if (mode === 'turn') await advance(id, 1); else await sleep(15); continue; }
@@ -3956,7 +3986,9 @@ async function start() {
 
 function stop() {
   if (!running) return;
-  runId++; S.t1 = performance.now(); setRunning(false);
+  const now = performance.now();
+  if (G?.hold) endHold(now);                               // Stop během stání: doba stání se do rozhodnuto/s nepočítá
+  runId++; S.t1 = now; setRunning(false);
   if (!runWhy) runWhy = runKind === 'game' && ladder && ladder.done ? 'ladder' : 'stop';
   if (runKind === 'bench') { addResult({ mode: 'bench', aborted: true }, false); renderStats(false); finishRun(); return; }
   if (runWhy === 'limit') { const n = runLimit; status(() => t('run.limitDone', { n })); }      // hodnoty z konce běhu: větu z nich po přepnutí jazyka složí renderLang znovu (stejně žebřík níž)

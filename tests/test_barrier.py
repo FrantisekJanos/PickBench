@@ -590,9 +590,10 @@ class Page(unittest.TestCase):                                         # scéná
             "process.stdout.write(JSON.stringify([[['ok', 0, 0], ['ok', 1, 1], ['bad', 1, 0], ['bad', 0, 1], ['late', 0, undefined], ['late', 1, undefined],"
             " ['bad', 0, -1], ['bad', 1, -1]].map(([r, t, c]) => barrierOutcome(r, t, c)),"
             " [{ result: null, chosen: undefined, y: 3 }, { result: null, chosen: 0, y: 3 }, { result: null, chosen: 1, y: 3 },"
-            "  { result: null, chosen: 1, y: 0.4 }, { result: null, chosen: undefined, y: 0.4 }, { result: 'ok', chosen: 1, y: -0.5 }].map(barrierOpen)]));")
+            "  { result: null, chosen: 1, y: 0.4 }, { result: null, chosen: undefined, y: 0.4 }, { result: 'ok', chosen: 1, y: -0.5 },"
+            "  { result: null, chosen: 1, y: 0.4, hold: 1 }, { result: null, chosen: 1, y: 1.05, hold: 2 }].map(barrierOpen)]));")
         self.assertEqual(run_page_js(code), [["go", "stop", "falseGo", "needless", "late", "lateCrash", "invalid", "invalid"],
-                                             [False, True, False, True, True, True]])            # stůj: závora dole, zvedne se těsně před autem
+                                             [False, True, False, True, True, True, False, True]])   # auto stojí: závora dole; dostálo: nahoře            # stůj: závora dole, zvedne se těsně před autem
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_parse_reads_only_the_asked_key(self):          # stojí za háčkem parse v askModel: odpověď se čte jen pod klíčem otázky dané varianty
@@ -648,9 +649,9 @@ class Page(unittest.TestCase):                                         # scéná
         code = "const CAR_Y = 540; let lit = 0; const ctx = { fillRect() { lit++; } }; const b = {" + draw + "};" + (
             "const R = [[{ result: 'ok', chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }, { result: null, chosen: 1 }],"
             " [{ result: null, chosen: undefined }, { result: null, chosen: 0 }], [{ result: null, chosen: -1 }, { result: null, chosen: 1 }],"
-            " [{ result: null, chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }], []];"
+            " [{ result: null, chosen: 0 }, { result: null, chosen: 1 }], [{ result: null, chosen: undefined }], [], [{ result: null, chosen: 1, hold: 2 }]];"
             "process.stdout.write(JSON.stringify(R.map(rows => { lit = 0; b.drawVehicle({ rows }, 0, 40); return lit > 0; })));")
-        self.assertEqual(run_page_js(code), [True, True, False, False, False, False, False])      # neplatná (−1) bez světel
+        self.assertEqual(run_page_js(code), [True, True, False, False, False, False, False, False])      # po zastavení světla zhasnou      # neplatná (−1) bez světel
 
     def test_drawing_shows_every_field_and_writes_only_through_t(self):
         page = page_source()
@@ -678,6 +679,42 @@ class Page(unittest.TestCase):                                         # scéná
             " b.onStep(g); return [g.rows[0].result, g.flash, g.rows[1].result]; })));")
         self.assertEqual(run_page_js(code), [["bad", 1, None], ["late", 1, None], ["bad", 0.3, None], ["bad", 0.3, None],
                                              ["bad", 0.3, None], ["ok", 0.3, None], ["ok", 0.3, None]])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_holds_at_the_barrier(self):            # stůj: auto dojede k bodu zastavení, BARRIER_HOLD stojí (G.dist ani řady se nehýbou), pak jede dál
+        page = page_source()
+        consts = re.search(r"\nconst BARRIER_STOP_Y = [^\n]*\n", page).group(0)
+        stop_ahead = re.search(r"\n  stopAhead\(g\) \{.*?\n  \},", page.split("\nconst barrier = {", 1)[1].split("\n};\n", 1)[0], re.S).group(0)[1:-1]
+        code = "(() => { let T = 0; const performance = { now: () => T }; let running = true, runLimit = 0, runWhy = '', G, S; const GAP = 4, ROWS = 12, stop = () => {};" + (
+            consts + "".join(page_function(f) for f in ("step", "drive", "startHold", "endHold", "runSecs")) +
+            "const rows = [{ y: 3, result: null, chosen: 1 }, { y: 0.5, result: null, chosen: 1 }];"
+            "const SC = { gap: 4, move(g, c) { for (const r of g.rows) r.y -= c; }, spawnRow() {}, onStep() {}," + stop_ahead + "};"
+            "const out = [];"
+            "G = { dist: 0, sinceSpawn: 0, rows: [rows[0]] }; S = { held: 0, t0: -1000, t1: null };"
+            "const snap = moved => out.push([+moved.toFixed(3), +G.dist.toFixed(3), G.hold ? 'hold' : null, rows[0].hold ?? null]);"
+            "snap(drive(1)); snap(drive(2)); T = 500; snap(drive(1)); out.push(runSecs(500));"
+            "T = 900; snap(drive(1)); snap(drive(1)); out.push(runSecs(1000));"
+            "G = { dist: 0, sinceSpawn: 0, rows: [rows[1]] }; T = 2000; out.push(drive(0.3), G.hold ? rows[1].hold : null);"
+            "process.stdout.write(JSON.stringify(out)); })()")
+        self.assertEqual(run_page_js(code), [[1, 1, None, None], [0.95, 1.95, "hold", 1], [0, 1.95, "hold", 1], 1.0,
+                                             [1, 2.95, None, 2], [1, 3.95, None, 2], 1.1, 0, 1])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_run_time_leaves_out_the_hold(self):        # rozhodnuto/s: doba běhu bez zastavení, i když zastavení právě běží; Stop ho ukončí
+        code = "(() => { let G = { hold: { from: 400 } }, S = { held: 300, t0: 0 };" + page_function("runSecs") + (
+            "const a = runSecs(1000); G = { hold: null }; process.stdout.write(JSON.stringify([a, runSecs(1000)])); })()")
+        self.assertEqual(run_page_js(code), [0.1, 0.7])
+        page = page_source()
+        self.assertIn("const secs = runSecs(S.t1 ?? performance.now());", page_function("summary"))
+        self.assertIn("if (G?.hold) endHold(now);", re.search(r"\nfunction stop\(\) \{.*?\n\}\n", page, re.S).group(0))
+        self.assertIn("held: 0", re.search(r"\nfunction newStats\(\) \{.*?\n\}\n", page, re.S).group(0))
+
+    def test_decision_loop_waits_during_the_hold(self):  # rozhodovací smyčka během zastavení neposílá dotazy; po tazích advance zastavení přečká
+        page = page_source()
+        start = re.search(r"\nasync function start\(\) \{.*?\n\}\n", page, re.S).group(0)
+        self.assertRegex(start, r"while \(id === runId\) \{ +// rozhodovací smyčka\n +if \(G\.hold\) \{ drive\(0\); await sleep\(15\); continue; \}")
+        advance = re.search(r"\nasync function advance\(id, cells\) \{.*?\n\}\n", page, re.S).group(0)
+        self.assertIn("left -= drive(", advance)
 
 
 if __name__ == "__main__":
