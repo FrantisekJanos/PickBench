@@ -22,7 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient, recording
 from test_golden import Clock, fake_urlopen
-from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 GATES = ("gate_1", "gate_2", "gate_3")
@@ -523,9 +523,6 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--rule:     ", text)
             self.assertIn("\n--labeled, --matched-by:  ", text)
             self.assertIn(bench.RULE_FORM + ".", text)
-
-
-REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"
 
 
 def rule_body():

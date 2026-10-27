@@ -21,7 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient, recording
 from test_golden import Clock, fake_urlopen
-from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 EXAMPLE = (".#..", "..#.", "###.", "....")           # příklad z rešerše: auto v pruhu 2 (index 1); správně right, hladový left
@@ -456,9 +456,6 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--lookahead:  ", text)
             self.assertIn("\n--rows, --blocked:  ", text)
             self.assertIn(bench.LOOKAHEAD_FORM + ".", text)
-
-
-REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"
 
 
 def lookahead_body():

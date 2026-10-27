@@ -22,6 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient, recording
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY                 # registr scénářů je zapsaný jen tam
 
 LANG_ENV = "PICKBENCH_LANG"
 TEN = bench.MEMORY_SIGNS[:10] if hasattr(bench, "MEMORY_SIGNS") else []      # circle … hexagon; ručně sestavená historie
@@ -474,7 +475,7 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertEqual(page.count('<div id="stage"><div id="road-col"><canvas id="road" width="300" height="600"></canvas>'
                                     '<canvas id="trail" width="300" height="70" hidden></canvas></div>'), 1)
         self.assertEqual(page.count("#road-col:has(#trail:not([hidden])) canvas#road { height:calc((min(600px, 100vh - 96px) - 8px) * 600 / 670); }"), 1)
-        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
         self.assertEqual(page.count("['queue', 'legend', 'confPanel', 'trail'].forEach("), 1)        # pás se schovává jako ostatní panely scénáře
         self.assertEqual(page.count("SC.drawTrail?.(g);"), 1)
         self.assertEqual(page.count("drawTrail(g) {"), 2)                                         # háček má paměťová stopa (historie) a skryté pravidlo (deník)

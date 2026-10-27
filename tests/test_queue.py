@@ -21,7 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
-from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 EXAMPLE = (("car", "car"), ("truck",), ("bus", "van"))   # bez vah 2, 1, 2 (správně pruh 2); s vahami 2, 3, 4 (správně pruh 1)
@@ -371,6 +371,14 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--weighted:  ", text)
 
 
+def queue_body():
+    return page_source().split("\nconst queue = {", 1)[1].split("\n};\n", 1)[0]
+
+
+def method(body, name):                     # víceřádková metoda objektu scénáře, končí řádkem „  },“
+    return re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+
+
 class Page(unittest.TestCase):              # scénář ve stránce; počítání front, generátor a rozbor hlídá tests/test_parity.py (Queue)
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_variant_fills_in_the_lanes_like_bench(self):        # ALT_LANES má dvě větve: fronta bere číslo z „toll gate with N lanes“, dva kroky z „a N-lane road“
@@ -385,6 +393,63 @@ class Page(unittest.TestCase):              # scénář ve stránce; počítán�
         for q, by_variant in zip(questions, run_page_js(code)):
             for v, js in enumerate(by_variant):
                 self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        for value in ("queue", "queueWeighted"):
+            self.assertEqual(page.count(f'<option value="{value}" data-i18n="opt.scenario.{value}"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: nejkratší fronta ----------"), 1)
+        self.assertEqual(page.count("|| v === 'queue' || v === 'queueWeighted'"), 1)      # bez „) {“: další části podmínku prodlouží
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(queueWarm(LANES), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, queueRow(LANES, this.weighted, rnd))); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(queueRow(LANES, this.weighted, rnd)); },"), 1)
+        body = queue_body()
+        for call in ("id: 'queue', lanesFree: true, weighted: false,", "rollInject([d.truth])", "queueState(d.queues)",
+                     "injectText(INJECT_NOTE, laneKeys(LANES)[inject])", "variantOf(queueQuestion(LANES, this.weighted), v)",
+                     "classTally(QUEUE_GAPS, ", "queueErrors(", "t(this.weighted ? 'queue.errorsWeighted' : 'queue.errors', ", "QUEUE_GAP_NAME[",
+                     "laneOf: (r, move) => move,"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+        self.assertNotIn("SC.weighted", body)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_weighted_queue_inherits_and_asks_lane_weighted(self):    # vážená fronta je zděděný objekt; otázka i odpověď pod klíčem lane_weighted
+        page = page_source()
+        self.assertEqual(page.count("const queueWeighted = { __proto__: queue, id: 'queueWeighted', weighted: true,"), 1)
+        laneKeys = re.search(r"\nconst laneKeys = [^\n]*\n", page).group(0)
+        code = laneKeys + "let LANES = 3; const proto = {" + method(queue_body(), "parse") + "};" + (
+            "const plain = { __proto__: proto, weighted: false }, heavy = { __proto__: proto, weighted: true };"
+            "const a = { lane: { choice: 'lane_2' } }, b = { lane_weighted: { choice: 'lane_3', confidence: 0.7 } };"
+            "process.stdout.write(JSON.stringify([plain.parse(a).move, plain.parse(b).move, heavy.parse(a).move, heavy.parse(b)]));")
+        self.assertEqual(run_page_js(code), [1, -1, -1, {"move": 2, "conf": 0.7}])
+
+    def test_queue_rows_come_every_six_cells(self):               # fronta až 12 vozidel: rozestup 6; řada zmizí, až je budka pod plátnem
+        page = page_source()
+        self.assertEqual(page.count("const QUEUE_GAP = 6, QUEUE_SPAN = 4.6;"), 1)
+        self.assertIn("  gap: QUEUE_GAP, keep: QUEUE_SPAN + 1.5,", queue_body())
+        car_y, h, cell = (int(re.search(r"\b%s = (\d+)" % k, page).group(1)) for k in ("CAR_Y", "H", "CELL"))
+        self.assertGreaterEqual(4.6 + 1.5, 4.6 + (h - car_y) / cell)                              # pod autem je (H − CAR_Y) / CELL polí
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
+        laneKeys = re.search(r"\nconst laneKeys = [^\n]*\n", page_source()).group(0)
+        code = laneKeys + "let LANES = 3; const base = { tally() {} }; const o = { __proto__: base," + method(queue_body(), "tally") + "};" + (
+            "const g = { cases: [], choices: [] }, task = { queues: [['car'], ['bus', 'van'], ['truck']], answer: 0, cls: 'gap1', text: [0], count: 0, truth: 0, state: {} };"
+            "[1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"queues": [["car"], ["bus", "van"], ["truck"]], "answer": 0, "cls": "gap1", "text": [0], "count": 0}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["lane_2", "lane_1", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_lists_the_queues(self):                 # fronty s délkou podle otázky (s vahami vážená), volba a správný pruh
+        from test_parity import run_js
+        code = "(() => { const laneName = i => t('lane.name', { n: i + 1 }); const proto = {" + method(queue_body(), "describeLast") + "};" + (
+            "const task = { queues: [['car', 'truck'], ['bus']], truth: 1 };"
+            "return [{ __proto__: proto, weighted: false }, { __proto__: proto, weighted: true }].map(o => o.describeLast(task, { move: 0 })); })()")
+        plain, heavy = run_js(code, None)
+        self.assertEqual(plain.split("\n"), ["fronty:  1: car truck (2)  ·  2: bus (1)", "zvoleno: pruh 1  (správně: pruh 2)"])
+        self.assertEqual(heavy.split("\n")[0], "fronty:  1: car truck (4)  ·  2: bus (3)")
+        self.assertEqual(run_js(code, None, "en")[0].split("\n")[1], "chosen:  lane 1  (correct: lane 2)")
 
 
 if __name__ == "__main__":
