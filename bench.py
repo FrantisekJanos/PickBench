@@ -2198,6 +2198,48 @@ def diff_summary(cases, choices, keys):
     return {"by_class": by_class, "by_mode": by_mode, "errors": errors}
 
 
+# ---------- scénář: vzor soupeře ----------
+# Úloha je n-tice (historie, další tah soupeře, třída, tvar, délka cyklické části, délka rozehrávky); historie je n-tice
+# tahů, nejstarší první. Soupeř odehraje rozehrávku a pak opakuje cyklus s periodou p (třída "p1" … "p4").
+PATTERN_MOVES = ("rock", "paper", "scissors")        # pořadí možností otázky
+PATTERN_BEATS = {"rock": "paper", "paper": "scissors", "scissors": "rock"}    # PATTERN_BEATS[x] = tah, který porazí x
+PATTERN_BEATEN = {v: k for k, v in PATTERN_BEATS.items()}                     # PATTERN_BEATEN[x] = tah, který x porazí
+PATTERN_CLASSES = ("p1", "p2", "p3", "p4")           # perioda cyklu 1–4; p1 je kontrolní třída
+PATTERN_FORMS = ("counter", "predict")
+PATTERN_FORM = "predict"                             # výchozí podoba otázky; rozhodl pokus nanečisto 2026-10-27 (counter: p1 pod 80 %)
+PATTERN_RUN = (8, 10)                                # délka cyklické části historie (od–do)
+PATTERN_WARMUP = (1, 3)                              # počet tahů rozehrávky (od–do); poslední z nich z cyklu vybočuje
+PATTERN_CHECK = 8                                    # řešitel čte periodu z posledních tolika tahů (zadání: „at least its last 8“)
+# Tvar cyklu čtený od dalšího tahu: písmeno A = další tah soupeře, tvar = posledních p tahů historie. Trojice vah patří
+# délkám cyklické části 8, 9, 10. Celá čísla z lineárního programu (pokus, oddíl „Hledání vah“), opsaná z prototypu doslova.
+PATTERN_WEIGHTS = {
+    "p1": {"A": (1, 1, 1)},
+    "p2": {"AB": (1, 1, 1)},
+    "p3": {"AAB": (2, 2, 13), "ABB": (41, 2, 2), "ABC": (14, 2, 2), "ABA": (2, 12, 2)},
+    "p4": {"AAAB": (1, 14, 1), "AABB": (1, 1, 1), "AABC": (1, 1, 1), "ABBB": (1, 1, 1), "ABBC": (1, 1, 1),
+           "ABCC": (10, 1, 25), "AABA": (1, 1, 1), "ABAA": (3, 1, 1), "ABAC": (1, 1, 1), "ABBA": (11, 1, 1),
+           "ABCA": (1, 1, 1), "ABCB": (5, 1, 7)},
+}
+
+
+def pattern_has_period(seq, q):
+    """Má posloupnost periodu q (každý tah je stejný jako tah o q dřív)?"""
+    return all(seq[i] == seq[i - q] for i in range(q, len(seq)))
+
+
+def pattern_solve(history):
+    """Ideální hráč: (perioda, další tah soupeře). Perioda je nejmenší q z 1–4, které mají posledních PATTERN_CHECK tahů;
+    další tah je history[-q]. Každá perioda 1–4, kterou posledních PATTERN_CHECK tahů má, musí dát stejný tah (věta
+    Fine–Wilf to zaručuje). Kratší historie, historie bez periody do 4 nebo s periodami, které se neshodnou = RuntimeError."""
+    if len(history) < PATTERN_CHECK:
+        raise RuntimeError(f"pattern_solve: history of {len(history)} moves is shorter than {PATTERN_CHECK}")
+    tail = history[-PATTERN_CHECK:]
+    periods = [q for q in range(1, 5) if pattern_has_period(tail, q)]
+    if not periods or len({history[-q] for q in periods}) != 1:
+        raise RuntimeError(f"pattern_solve: ambiguous history {list(history)}")
+    return periods[0], history[-periods[0]]
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
