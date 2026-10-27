@@ -918,6 +918,28 @@ class Rule(unittest.TestCase):
                      ".map(([rand, cls, length]) => { try { ruleCase(rand, cls, length); return null; } catch (e) { return e.message; } })", None)
         self.assertEqual(got, ["ruleCase: no eliminate short log after 10000 tries", "ruleCase: no guess short log", "ruleCase: no repeat medium log"])
 
+    def test_summary_matches_bench(self):                          # i neplatné volby: do perseverace se nepočítají
+        import bench
+        cases, rng, keys = bench.rule_cases(300, seed=4), random.Random(6), bench.gate_keys(3)
+        choices = [rng.choice(keys + keys + [None, "gate_4", 2]) for _ in cases]
+        js_cases = [{"log": [list(e) for e in log], "truth": top, "cls": cls, "old": old} for log, _, _, top, cls, old in cases]
+        got = run_js("ruleSummary(arg.cases, arg.choices, arg.keys)", {"cases": js_cases, "choices": choices, "keys": keys})
+        self.assertEqual(json.dumps(got), json.dumps(bench.rule_summary(cases, choices, keys)))      # i pořadí klíčů
+        self.assertEqual(run_js("ruleSummary([], [], arg)", keys)["persev"], [0, 0])                   # prázdná hra: stránka ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("ruleWarm()", None)
+        log = [tuple(e) for e in warm["log"]]
+        self.assertEqual(list(warm), ["log", "order", "truth", "cls", "old"])
+        self.assertEqual(len(log), bench.RULE_LOG[1])
+        self.assertTrue(all(ok for _, ok in log))                                                   # samé „correct“: nejdelší stav
+        self.assertEqual(bench.rule_read(log), ({warm["order"][warm["truth"]]}, warm["order"][warm["old"]], warm["cls"]))
+        self.assertEqual(warm["cls"], "repeat")
+        state = run_js("ruleState(arg.log, arg.order)", warm)
+        longest = max(len(json.dumps(bench.rule_state(c, "labeled"))) for c in bench.rule_cases(200, seed=2))
+        self.assertGreaterEqual(len(json.dumps(state)), longest)                                    # horní odhad délky dotazu ve stepEstimate
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2685,6 +2685,26 @@ function ruleCase(rand, cls, length) {
 function ruleRow(rand) {                                   // třída se losuje před délkou, jako rule_cases
   return ruleCase(rand, pickOf(rand, RULE_CLASSES), pickOf(rand, RULE_LENGTHS));
 }
+// Rozbor, stejný jako rule_summary (s class_tally) v bench.py: přesnost podle třídy a podle délky deníku ({třída: [správně, celkem]})
+// a perseverace = [kolikrát model ve třídě switch zvolil bránu starého pravidla, počet úloh switch]. Úloha c = { log, truth, cls, old }.
+// Neplatná odpověď (null, jiný text, jiný typ) se do perseverace nepočítá.
+function ruleSummary(cases, choices, keys) {
+  const tally = (order, groupOf) => {
+    const counts = Object.fromEntries(order.map(g => [g, [0, 0]]));
+    cases.forEach((c, i) => { const g = counts[groupOf(c)]; g[0] += choices[i] === keys[c.truth] ? 1 : 0; g[1]++; });
+    return counts;
+  };
+  const switchAt = cases.map((c, i) => [c, choices[i]]).filter(([c]) => c.cls === 'switch');
+  return { by_class: tally(RULE_CLASSES, c => c.cls),
+           by_length: tally(RULE_LENGTHS, c => c.log.length <= RULE_SHORT ? 'short' : 'long'),
+           persev: [switchAt.filter(([c, choice]) => choice === keys[c.old]).length, switchAt.length] };
+}
+// Jen pro stránku, bench.py ji nemá: zahřívací úloha bez rand. 10 správných pokusů (nejdelší deník, „correct“ je delší než „wrong“):
+// color ×3, shape ×3, count ×3, color; platí color (brána 1), staré pravidlo count (brána 3), třída repeat. Odhad délky dotazu ve stepEstimate je horní.
+function ruleWarm() {
+  const log = [...['color', 'shape', 'count'].flatMap(f => [[f, true], [f, true], [f, true]]), ['color', true]];
+  return { log, order: ['color', 'shape', 'count'], truth: 0, cls: 'repeat', old: 2 };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
