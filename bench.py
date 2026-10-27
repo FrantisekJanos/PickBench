@@ -1776,6 +1776,45 @@ def timetable_question():
     }}
 
 
+def timetable_errors(cases, choices):
+    """Rozbor chybných voleb; správná volba se nepočítá nikam. Třídy se zkoušejí v tomto pořadí:
+
+    missed: výjimka platí, zvolené je depo řádku trasy.
+    misapplied: výjimka neplatí (jiná služba), zvolené je depo výjimky.
+    neighbor: zvolené je depo řádku těsně nad nebo pod správným řádkem v pořadí PSČ.
+    other: ostatní chybné volby.
+    invalid: volba, která není řetězec z TIMETABLE_DEPOTS (None, jiný řetězec, jiný typ)."""
+    counts = {"neighbor": 0, "missed": 0, "misapplied": 0, "other": 0, "invalid": 0}
+    for (rows, _, z, _, exception, answer, _, _, rule), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in TIMETABLE_DEPOTS):
+            counts["invalid"] += 1
+            continue
+        if choice == answer:
+            continue
+        i = timetable_row([r[:2] for r in rows], z)
+        if rule == "applies" and choice == rows[i][2]:
+            counts["missed"] += 1
+        elif rule == "decoy" and choice == exception[1]:
+            counts["misapplied"] += 1
+        elif choice in {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < len(rows)}:
+            counts["neighbor"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def timetable_summary(cases, choices):
+    """Přesnost podle velikosti tabulky a výjimky ze všech úloh, podle polohy PSČ jen z úloh s výjimkou
+    v TIMETABLE_POSITION_RULES ({třída: [správně, celkem]}), a rozbor chyb."""
+    keys = list(TIMETABLE_DEPOTS)
+    picked = [(case, choice) for case, choice in zip(cases, choices) if case[8] in TIMETABLE_POSITION_RULES]
+    return {"by_size": class_tally(TIMETABLE_SIZES, [(keys.index(c[5]), c[6]) for c in cases], choices, keys),
+            "by_position": class_tally(TIMETABLE_POSITIONS, [(keys.index(c[5]), c[7]) for c, _ in picked],
+                                       [choice for _, choice in picked], keys),
+            "by_rule": class_tally(TIMETABLE_RULES, [(keys.index(c[5]), c[8]) for c in cases], choices, keys),
+            "errors": timetable_errors(cases, choices)}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2265,6 +2304,17 @@ def run_cruise(model, cases, mirror=False, inject=False, deadline=None):
     items = [(with_note(cruise_state(*case[:3]), note), {keys[case[3] - 1]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(cruise_summary(cases, [choice_level(c) for c in choices]))     # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_timetable(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(TIMETABLE_DEPOTS), timetable_question()
+    ask(model, timetable_state(cases[0], form), question)        # zahřátí, nepočítá se
+    targets = inject_plan([{case[5]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(timetable_state(case, form), note), {case[5]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(timetable_summary(cases, choices))                  # z původní varianty zadání, jako přesnost
     return r
 
 

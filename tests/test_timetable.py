@@ -303,5 +303,79 @@ class Question(unittest.TestCase):
         self.assertLess((longest + len(q)) / 4, 600)
 
 
+class RunTimetable(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_timetable(*args, **kw)
+
+    def test_errors_and_classes_by_hand(self):
+        trap = DECOY[:4] + (("economy", "birch"),) + DECOY[5:]           # výjimka na depo souseda: výjimka navíc má přednost před sousedem
+        c = [DECOY] * 7 + [APPLIES] * 3 + [trap]
+        choices = ["maple", "birch", "cedar", "pine", "alder", None, "Depot Alder", "maple", "birch", "cedar", "birch"]
+        s = bench.timetable_summary(c, choices)
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"neighbor": 3, "missed": 1, "misapplied": 2, "other": 1, "invalid": 2}))
+        self.assertEqual(s["by_size"], {"small": [2, 11], "medium": [0, 0], "large": [0, 0]})
+        self.assertEqual(s["by_position"], {"inner": [0, 0], "near": [1, 8], "bound": [0, 0]})       # jen none a decoy (V4)
+        self.assertEqual(s["by_rule"], {"none": [0, 0], "applies": [1, 3], "decoy": [1, 8]})
+        self.assertEqual(bench.timetable_errors(c, choices), s["errors"])
+
+    def test_perfect_model(self):
+        c = cases(120)
+        for form in bench.TIMETABLE_FORMS:
+            with self.subTest(form=form):
+                r = self.run_with(solve, "m", c, form=form)
+                self.assertEqual(r["acc"], 1)
+                self.assertEqual(list(r["by_size"]), list(bench.TIMETABLE_SIZES))
+                self.assertEqual((list(r["by_position"]), list(r["by_rule"])), (list(bench.TIMETABLE_POSITIONS), list(bench.TIMETABLE_RULES)))
+                self.assertEqual(sum(n for _, n in r["by_size"].values()), 120)
+                self.assertEqual(sum(n for _, n in r["by_position"].values()), sum(x[8] in bench.TIMETABLE_POSITION_RULES for x in c))
+                self.assertTrue(all(ok == n > 0 for part in ("by_size", "by_position", "by_rule") for ok, n in r[part].values()))
+                self.assertEqual(json.dumps(r["errors"]), json.dumps({"neighbor": 0, "missed": 0, "misapplied": 0, "other": 0, "invalid": 0}))
+
+    def test_control_models_fall_into_their_error_class(self):
+        c = cases(300)
+        for model, key, wrong in ((exclusive, "neighbor", lambda x: x[7] == "bound" and x[8] != "applies"),
+                                  (never_exception, "missed", lambda x: x[8] == "applies"),
+                                  (always_exception, "misapplied", lambda x: x[8] == "decoy")):
+            with self.subTest(model=model.__name__):
+                r = self.run_with(model, "m", c)
+                n = sum(map(wrong, c))
+                self.assertGreater(n, 0)
+                self.assertEqual(r["errors"], {"neighbor": 0, "missed": 0, "misapplied": 0, "other": 0, "invalid": 0} | {key: n})
+                self.assertEqual(r["acc"], (300 - n) / 300)
+
+    def test_invalid_answers(self):
+        c = cases(30)
+        for answer in (None, "Depot Oak", "hub", ["oak"], 3):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", c)
+                self.assertEqual((r["acc"], r["errors"]["invalid"]), (0, 30))
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c = bench.timetable_cases(5)
+        for form in bench.TIMETABLE_FORMS:
+            sent = []
+
+            def post(model, payload):
+                sent.append(payload)
+                return {"answers": {next(iter(payload["questions"])): {"choice": "oak", "confidence": 0.5}}}, 10.0
+            with mock.patch.object(bench, "post", post):
+                bench.run_timetable("m", c, form=form)
+            with self.subTest(form=form):
+                self.assertEqual(len(sent), 6)                                  # zahřátí a pět úloh
+                self.assertEqual([p["state"] for p in sent], [bench.timetable_state(c[0], form)] + [bench.timetable_state(x, form) for x in c])
+                self.assertTrue(all(p["questions"] == bench.timetable_question() for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40)
+        r = self.run_with(solve, "m", c, mirror=True)
+        self.assertEqual((r["stab"], r["acc"]), (1, 1))
+        r = self.run_with(obedient(solve), "m", c, inject=True)
+        self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+        self.assertEqual(r["acc"], 0.75)
+        e = r["errors"]
+        self.assertEqual((e["neighbor"] + e["missed"] + e["misapplied"] + e["other"], e["invalid"]), (10, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
