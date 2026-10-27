@@ -1271,5 +1271,52 @@ class Bet(unittest.TestCase):
                 self.assertGreaterEqual(len(json.dumps(bench.bet_state(rewards, chances))), longest)      # horní odhad délky dotazu
 
 
+CRUISE_HAND = [[97, "icy", "none"], [130, "wet", "dense"], [19, "dry", "none"], [300, "dry", "light"], [8, "dry", "none"], [150, "icy", "dense"]]
+# příklad ze specu Tempomatu, HAND_A a HAND_C z tests/test_cruise.py, kraje CRUISE_DIST a zahřívací úloha
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Cruise(unittest.TestCase):
+    def test_constants_and_tables_match_bench(self):
+        import bench
+        js = run_js("({ top: CRUISE_TOP, bands: CRUISE_BANDS, dist: CRUISE_DIST, edge: CRUISE_EDGE, road: CRUISE_ROAD, fog: CRUISE_FOG,"
+                    " classes: CRUISE_CLASSES, places: CRUISE_PLACES, weights: CRUISE_WEIGHTS, ins: CRUISE_INS })", None)
+        self.assertEqual((js["top"], js["bands"], js["dist"], js["edge"]),
+                         (bench.CRUISE_TOP, list(bench.CRUISE_BANDS), list(bench.CRUISE_DIST), bench.CRUISE_EDGE))
+        self.assertEqual(json.dumps(js["road"]), json.dumps(bench.CRUISE_ROAD))           # i pořadí: cruise_case hledá slovo podle srážky
+        self.assertEqual(json.dumps(js["fog"]), json.dumps(bench.CRUISE_FOG))
+        self.assertEqual((js["classes"], js["places"]), (list(bench.CRUISE_CLASSES), list(bench.CRUISE_PLACES)))
+        self.assertEqual(list(js["weights"]), list(bench.CRUISE_WEIGHTS))
+        for cls, combos in bench.CRUISE_WEIGHTS.items():
+            self.assertEqual(js["weights"][cls], [[list(k), w] for k, w in combos.items()], cls)     # pořadí rozhoduje o losování
+        self.assertEqual(js["ins"], bench.CRUISE_INS)
+        ms = list(range(0, 401))
+        got = run_js("({ band: arg.map(bandLevel), edge: arg.map(nearEdge), neighbor: arg.filter(m => m >= 8 && m <= 300).map(neighborLevel),"
+                     " range: [1, 2, 3, 4, 5, 6, 7].map(bandRange) })", ms)
+        self.assertEqual(got["band"], [bench.band_level(m) for m in ms])
+        self.assertEqual(got["edge"], [bench.near_edge(m) for m in ms])
+        self.assertEqual(got["neighbor"], [bench.neighbor_level(m) for m in range(8, 301)])
+        self.assertEqual(got["range"], [list(bench.band_range(k)) for k in range(1, 8)])
+        combos = [[m, road, fog] for m in range(8, 301, 3) for road in bench.CRUISE_ROAD for fog in bench.CRUISE_FOG]
+        self.assertEqual(run_js("arg.map(([m, road, fog]) => cruiseLevel(m, road, fog))", combos),
+                         [bench.cruise_level(*c) for c in combos])                               # bez ořezu, i pod 1
+
+    def test_state_question_and_choice_level_match_bench(self):
+        import bench
+        tasks = CRUISE_HAND + [list(c[:3]) for c in bench.cruise_cases(60, seed=5)]
+        for task, state in zip(tasks, run_js("arg.map(([m, road, fog]) => cruiseState(m, road, fog))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.cruise_state(*task)), task)  # bajtově, i pořadí klíčů
+        self.assertEqual(json.dumps(run_js("cruiseQuestion()", None)), json.dumps(bench.cruise_question()))
+        self.assertEqual(run_js("levelKeys()", None), bench.level_keys())
+        picks = [f"level_{k}" for k in range(0, 9)] + [None, "3", 3, ["level_1"], "Level 3", "level_03", True]
+        self.assertEqual(run_js("arg.map(choiceLevel)", picks), [bench.choice_level(p) for p in picks])
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  speed: '([^'\\]*)',$", alt, re.M), [bench.ALT["speed"]])
+
+
 if __name__ == "__main__":
     unittest.main()

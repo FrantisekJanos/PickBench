@@ -5,7 +5,9 @@ import json
 import math
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -20,6 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 BANDS = (20, 40, 60, 100, 150, 220)
@@ -383,6 +386,18 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --cruise tev1", text)
             self.assertIn("\n--cruise:   ", text)
             self.assertRegex(text, r"python bench\.py \[N\] --cruise .*\[--mirror\] \[--inject\] \[--deadline-ms L\] model1 model2 \.\.\.")
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; tabulka pásem, generátor a rozbor hlídá tests/test_parity.py (Cruise)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_matches_bench(self):                          # zrcadlo: obrácené pořadí stupňů a ALT.speed, jako bench.variant
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(bench.cruise_question()) + ";" + (
+            "process.stdout.write(JSON.stringify([0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(Q)), v))));")
+        for v, js in enumerate(run_page_js(code)):
+            self.assertEqual(json.dumps(js), json.dumps(bench.variant(bench.cruise_question(), v)), v)
 
 
 if __name__ == "__main__":

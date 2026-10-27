@@ -1077,6 +1077,7 @@ const ALT = {                                              // jinak formulované
   lane: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.',
   lane_weighted: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.',
   bet: 'Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.',
+  speed: 'The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.',
 };
 const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
@@ -3613,6 +3614,48 @@ function betSummary(cases, choices, keys) {
 // marže BET_MARGIN platí). Stav je nejdelší možný: odměny mají tři číslice, šance 100 je nejvýš jednou, ostatní dvě číslice.
 function betWarm(gates) {
   return { rewards: Array(gates).fill(390), chances: [100, ...Array(gates - 1).fill(95)], answer: 0, level: 'general', topReward: null, topChance: 0, truth: 0 };
+}
+// Tempomat: konstanty, tabulka pásem, stav a otázka, stejné jako v bench.py (CRUISE_*, band_level, band_range, near_edge, neighbor_level,
+// cruise_level, level_keys, choice_level, cruise_state, cruise_question). Úloha je { m, road, fog, answer, cls, place }: vzdálenost překážky
+// v m, povrch, mlha, správný stupeň 1–7, třída a poloha. CRUISE_WEIGHTS: třída → [[stupeň ze vzdálenosti, srážka povrch, srážka mlha], váha]
+// v pořadí slovníku Pythonu (pořadí rozhoduje o losování). Stránka má jen podobu otázky choice. Co jde do modelu, je anglicky.
+const CRUISE_TOP = 7;                                      // nejvyšší stupeň (škála 1–7)
+const CRUISE_BANDS = [20, 40, 60, 100, 150, 220];          // hranice pásem: pod 20 m stupeň 1, 20–39 m 2, …, 220 m a víc 7
+const CRUISE_DIST = [8, 300];                              // nejkratší a nejdelší vzdálenost překážky v m
+const CRUISE_EDGE = 3;                                     // u hranice: b − 3 ≤ m ≤ b + 2 pro některou hranici b
+const CRUISE_ROAD = { dry: 0, wet: 1, icy: 2 };            // o kolik stupňů níž
+const CRUISE_FOG = { none: 0, light: 1, dense: 2 };
+const CRUISE_CLASSES = ['table', 'road', 'fog', 'both'];   // platí žádná podmínka, jen povrch, jen mlha, obě
+const CRUISE_PLACES = ['edge', 'middle'];
+const CRUISE_ONE = [[[2, 1], 1], [[3, 1], 1], [[3, 2], 4], [[4, 1], 12], [[4, 2], 22], [[5, 1], 6], [[5, 2], 11], [[6, 1], 1], [[6, 2], 17], [[7, 1], 2], [[7, 2], 22]];
+const CRUISE_WEIGHTS = {                                   // váhy kombinací z prototypu, jako CRUISE_WEIGHTS v bench.py
+  table: [[[1, 0, 0], 20], [[2, 0, 0], 10], [[3, 0, 0], 10], [[4, 0, 0], 20], [[5, 0, 0], 10], [[6, 0, 0], 10], [[7, 0, 0], 20]],
+  road: CRUISE_ONE.map(([[level, p], w]) => [[level, p, 0], w]),
+  fog: CRUISE_ONE.map(([[level, f], w]) => [[level, 0, f], w]),
+  both: [[[3, 1, 1], 1], [[4, 1, 1], 25], [[4, 1, 2], 1], [[4, 2, 1], 1], [[5, 1, 1], 1], [[5, 1, 2], 1], [[5, 2, 1], 1], [[5, 2, 2], 24],
+         [[6, 1, 1], 1], [[6, 1, 2], 16], [[6, 2, 1], 9], [[6, 2, 2], 1], [[7, 1, 1], 1], [[7, 1, 2], 16], [[7, 2, 1], 9], [[7, 2, 2], 1]],
+};
+const bandLevel = m => 1 + CRUISE_BANDS.filter(b => m >= b).length;      // stupeň podle vzdálenosti, bez srážek
+function bandRange(level) {                                // nejmenší a největší vzdálenost pásma, oříznutá na CRUISE_DIST
+  return [level === 1 ? CRUISE_DIST[0] : CRUISE_BANDS[level - 2], level === CRUISE_TOP ? CRUISE_DIST[1] : CRUISE_BANDS[level - 1] - 1];
+}
+const nearEdge = m => CRUISE_BANDS.some(b => b - CRUISE_EDGE <= m && m <= b + CRUISE_EDGE - 1);
+function neighborLevel(m) {                                // stupeň pásma za nejbližší hranicí (omyl „sousední pásmo“); hranice jsou sudé, shoda nenastane
+  const b = CRUISE_BANDS.reduce((a, x) => Math.abs(m - x + 0.5) < Math.abs(m - a + 0.5) ? x : a);
+  return m >= b ? bandLevel(b - 1) : bandLevel(b);
+}
+const cruiseLevel = (m, road, fog) => bandLevel(m) - CRUISE_ROAD[road] - CRUISE_FOG[fog];      // správný stupeň, bez ořezu
+const CRUISE_INS = 'Choose the cruise control speed level, from 1 (slowest) to 7 (fastest). Start from obstacle_m, the distance in meters to the nearest obstacle ahead: under 20 m is level 1, 20 to 39 m level 2, 40 to 59 m level 3, 60 to 99 m level 4, 100 to 149 m level 5, 150 to 219 m level 6, 220 m or more level 7. Then go one level lower on a wet road and two levels lower on an icy road. Then go one level lower in light fog and two levels lower in dense fog.';
+const levelKeys = () => [...Array(CRUISE_TOP)].map((_, i) => `level_${i + 1}`);
+function choiceLevel(choice) {                             // stupeň ze zvolené možnosti; cokoli mimo levelKeys() (i ne-řetězec) je null
+  const keys = levelKeys();
+  return typeof choice === 'string' && keys.includes(choice) ? keys.indexOf(choice) + 1 : null;
+}
+const cruiseState = (m, road, fog) => ({ obstacle_m: m, road, fog });      // klíče vždy všechny tři, v tomto pořadí
+function cruiseQuestion() {                                // popisy stupňů jako cruise_question v bench.py
+  const criteria = {};
+  for (let k = 1; k <= CRUISE_TOP; k++) criteria[`level_${k}`] = `Level ${k}` + (k === 1 ? ' (slowest)' : k === CRUISE_TOP ? ' (fastest)' : '');
+  return { speed: { type: 'choice', instructions: CRUISE_INS, criteria } };
 }
 // ==== sdíleno s Pythonem: konec ====
 
