@@ -280,5 +280,28 @@ class State(unittest.TestCase):
                 self.assertEqual(bench.timetable_solve(b), x[5])
 
 
+INSTRUCTIONS = ("Route the parcel to a depot. Each row of routes covers the ZIP codes from zip_from to zip_to, both included, "
+                "and sends those parcels to its depot. exceptions override routes: a parcel whose service matches an exception "
+                "goes to that exception's depot instead. Choose the depot for the parcel.")
+ALT_TEXT = ("Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. "
+            "Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.")
+
+
+class Question(unittest.TestCase):
+    def test_question_and_its_alternative_wording(self):
+        q = bench.timetable_question()
+        self.assertEqual(list(q), [KEY])
+        self.assertEqual((q[KEY]["type"], q[KEY]["instructions"]), ("choice", INSTRUCTIONS))
+        self.assertEqual(json.dumps(q[KEY]["criteria"]), json.dumps({d: f"Depot {d.capitalize()}" for d in DEPOTS}))
+        self.assertEqual(bench.ALT[KEY], ALT_TEXT)
+        self.assertEqual(bench.variant(q, 2)[KEY]["instructions"], ALT_TEXT)
+        self.assertEqual(list(bench.variant(q, 1)[KEY]["criteria"]), list(DEPOTS)[::-1])
+
+    def test_prompt_stays_under_600_tokens(self):          # odhad: 4 znaky JSON na token; cíl pro hru 600, limit tev1 2050
+        q = json.dumps(bench.timetable_question())
+        longest = max(len(json.dumps(bench.with_note(bench.timetable_state(x, form), "pine"))) for x in cases() for form in bench.TIMETABLE_FORMS)
+        self.assertLess((longest + len(q)) / 4, 600)
+
+
 if __name__ == "__main__":
     unittest.main()

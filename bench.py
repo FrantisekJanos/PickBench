@@ -1765,6 +1765,17 @@ def timetable_cases(n, seed=1):
             for _ in range(n)]
 
 
+def timetable_question():
+    """Otázka choice s pevnou nabídkou šesti dep (stejná pro všechny úlohy)."""
+    return {"depot": {
+        "type": "choice",
+        "instructions": ("Route the parcel to a depot. Each row of routes covers the ZIP codes from zip_from to zip_to, both "
+                         "included, and sends those parcels to its depot. exceptions override routes: a parcel whose service "
+                         "matches an exception goes to that exception's depot instead. Choose the depot for the parcel."),
+        "criteria": {d: f"Depot {d.capitalize()}" for d in TIMETABLE_DEPOTS},
+    }}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -1782,6 +1793,7 @@ ALT = {                                              # jinak formulované zadán
     "lane_weighted": "The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.",
     "bet": "Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.",
     "speed": "The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.",
+    "depot": "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
