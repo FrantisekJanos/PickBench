@@ -2538,13 +2538,13 @@ const bet = {
       drawBet(r, y);
       ctx.globalAlpha = 1;
       if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.rewards.length) {      // volba modelu před průjezdem
-        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 24, 2 * hw, 48);
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 24, 2 * hw, 48); ctx.lineWidth = 1;
       }
       if (r.result) {
         ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         for (let i = 0; i < r.rewards.length; i++) {
           ctx.fillStyle = i === r.truth ? '#3fb950' : '#8b9aa8';
-          ctx.fillText(`= ${betPayout(r, i)}`, (i + 0.5) * LW, y + 34, LW - 4);
+          ctx.fillText(`= ${betPayout(r, i)}`, (i + 0.5) * LW, y - 32, LW - 4);      // nad horním okrajem brány, aby ho nepřekryl štítek
         }
         const lab = betLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 52, H - 10));
       }
