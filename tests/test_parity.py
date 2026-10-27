@@ -1274,6 +1274,19 @@ class Bet(unittest.TestCase):
 CRUISE_HAND = [[97, "icy", "none"], [130, "wet", "dense"], [19, "dry", "none"], [300, "dry", "light"], [8, "dry", "none"], [150, "icy", "dense"]]
 # příklad ze specu Tempomatu, HAND_A a HAND_C z tests/test_cruise.py, kraje CRUISE_DIST a zahřívací úloha
 
+# Generátor Tempomatu stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy cruiseRow.
+CRUISE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "cruiseRow(rand)")
+assert CRUISE_ROWS_JS != ROWS_JS
+CRUISE_PAGE = {}
+
+
+def cruise_page(n=3000, seed=1):
+    """Úlohy generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (m, road, fog, answer, cls, place)."""
+    if (n, seed) not in CRUISE_PAGE:
+        raw = run_js(CRUISE_ROWS_JS, {"seed": seed, "n": n})
+        CRUISE_PAGE[n, seed] = raw, [(r["m"], r["road"], r["fog"], r["answer"], r["cls"], r["place"]) for r in raw]
+    return CRUISE_PAGE[n, seed]
+
 
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class Cruise(unittest.TestCase):
@@ -1316,6 +1329,88 @@ class Cruise(unittest.TestCase):
         page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
         alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
         self.assertEqual(re.findall(r"^  speed: '([^'\\]*)',$", alt, re.M), [bench.ALT["speed"]])
+
+    def test_generated_rows_keep_the_guarantees(self):             # jako tests/test_cruise.py (záruky, podmínky třídy, poloha u hranice)
+        import bench
+        from test_cruise import BANDS, band_level_check
+        raw, cases = cruise_page()
+        classes = {"table": (False, False), "road": (True, False), "fog": (False, True), "both": (True, True)}
+        for r, (m, road, fog, answer, cls, place) in zip(raw, cases):
+            with self.subTest(r=r):
+                self.assertEqual(list(r), ["m", "road", "fog", "answer", "cls", "place", "truth"])
+                self.assertIsInstance(m, int)
+                self.assertTrue(8 <= m <= 300)
+                self.assertTrue(1 <= answer <= 7)
+                self.assertEqual(answer, band_level_check(m) - bench.CRUISE_ROAD[road] - bench.CRUISE_FOG[fog])
+                self.assertEqual(r["truth"], answer - 1)
+                self.assertEqual((road != "dry", fog != "none"), classes[cls])
+                self.assertEqual(any(b - 3 <= m <= b + 2 for b in BANDS), place == "edge")
+                self.assertIn((band_level_check(m), bench.CRUISE_ROAD[road], bench.CRUISE_FOG[fog]), bench.CRUISE_WEIGHTS[cls])   # jen kombinace s vahou
+
+    def test_classes_and_places_are_spread(self):                  # meze jako tests/test_cruise.py
+        import bench
+        _, cases = cruise_page()
+        classes = Counter(x[4] for x in cases)
+        for cls in bench.CRUISE_CLASSES:
+            sub = [x for x in cases if x[4] == cls]
+            with self.subTest(cls=cls):
+                self.assertTrue(0.22 <= classes[cls] / len(cases) <= 0.28, classes)
+                self.assertTrue(0.45 <= sum(x[5] == "edge" for x in sub) / len(sub) <= 0.55)
+
+    def test_cheap_shortcuts_are_balanced(self):                   # stejné zkratky a meze jako tests/test_cruise.py
+        import bench
+        from test_cruise import band_level_check, cheap_shortcuts
+        _, cases = cruise_page()
+        for cls in ("road", "fog", "both"):
+            sub = [x for x in cases if x[4] == cls]
+            for name, guess in cheap_shortcuts().items():
+                with self.subTest(cls=cls, shortcut=name):
+                    self.assertLessEqual(sum(guess(x) == x[3] for x in sub) / len(sub), 0.35)
+        for cls, want in (("table", 1.0), ("road", 0.0), ("fog", 0.0), ("both", 0.0)):
+            sub = [x for x in cases if x[4] == cls]
+            self.assertEqual(sum(band_level_check(x[0]) == x[3] for x in sub) / len(sub), want, cls)      # jen vzdálenost
+        for x in (x for x in cases if x[4] == "both"):                                    # vynechaná mlha / vynechaný povrch nikdy netrefí
+            band, p, f = band_level_check(x[0]), bench.CRUISE_ROAD[x[1]], bench.CRUISE_FOG[x[2]]
+            self.assertNotIn(x[3], (band - p, band - f), x)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(CRUISE_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(CRUISE_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(CRUISE_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_bad_arguments_and_a_broken_guarantee_raise(self):     # jako tests/test_cruise.py: nic se neopravuje potichu
+        got = run_js("[['floor', 'edge'], ['table', 'near'], ['toString', 'edge']]"
+                     ".map(([cls, place]) => { try { cruiseCase(Math.random, cls, place); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["cruiseCase: unsupported class floor or place edge", "cruiseCase: unsupported class table or place near",
+                               "cruiseCase: unsupported class toString or place edge"])
+        broken = run_js("(() => { CRUISE_WEIGHTS.both = [[[1, 1, 1], 1]];"                 # stupeň 1 − 2 je pod 1
+                        " try { cruiseCase(Math.random, 'both', 'middle'); return null; } catch (e) { return e.message; } })()", None)
+        self.assertEqual(broken, "cruiseCase: generated task breaks its guarantees")
+
+    def test_summary_matches_bench(self):                          # i neplatné odpovědi: v MAE počítají 6, do rozboru jako neplatné
+        import bench
+        from test_cruise import HAND, HAND_LEVELS
+        cases, rng = bench.cruise_cases(300, seed=4), random.Random(6)
+        levels = [c[3] if i < 40 else rng.choice([1, 2, 3, 4, 5, 6, 7, None]) for i, c in enumerate(cases)]
+        cases, levels = cases + HAND, levels + HAND_LEVELS                                # ruční úlohy s každým druhem chyby
+        js_cases = [{"m": m, "road": road, "fog": fog, "answer": a, "cls": cls, "place": place} for m, road, fog, a, cls, place in cases]
+        got = run_js("cruiseSummary(arg.cases, arg.levels)", {"cases": js_cases, "levels": levels})
+        py = bench.cruise_summary(cases, levels)
+        same(self, got, py)
+        self.assertEqual([list(got), list(got["scale"]), list(got["errors"])], [list(py), list(py["scale"]), list(py["errors"])])   # pořadí klíčů
+        self.assertTrue(all(v > 0 for v in got["errors"].values()), got["errors"])
+        empty = run_js("cruiseSummary([], [])", None)
+        self.assertEqual(empty["scale"], {"within": None, "mae": None, "fast": 0, "slow": 0})      # NaN: prázdná hra ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("cruiseWarm()", None)
+        self.assertEqual(list(warm), ["m", "road", "fog", "answer", "cls", "place", "truth"])
+        self.assertEqual(warm["answer"], bench.cruise_level(warm["m"], warm["road"], warm["fog"]))
+        self.assertEqual((warm["truth"], warm["place"] == "edge"), (warm["answer"] - 1, bench.near_edge(warm["m"])))
+        self.assertIn((bench.band_level(warm["m"]), bench.CRUISE_ROAD[warm["road"]], bench.CRUISE_FOG[warm["fog"]]), bench.CRUISE_WEIGHTS[warm["cls"]])
+        longest = max(len(json.dumps(bench.cruise_state(*c[:3]))) for c in bench.cruise_cases(300, seed=2))
+        self.assertGreaterEqual(len(json.dumps(bench.cruise_state(warm["m"], warm["road"], warm["fog"]))), longest)   # horní odhad délky dotazu
 
 
 if __name__ == "__main__":

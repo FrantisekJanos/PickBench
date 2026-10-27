@@ -3657,6 +3657,64 @@ function cruiseQuestion() {                                // popisy stupňů ja
   for (let k = 1; k <= CRUISE_TOP; k++) criteria[`level_${k}`] = `Level ${k}` + (k === 1 ? ' (slowest)' : k === CRUISE_TOP ? ' (fastest)' : '');
   return { speed: { type: 'choice', instructions: CRUISE_INS, criteria } };
 }
+// Generátor Tempomatu: stejné kroky a pořadí losování jako cruise_case a cruise_cases v bench.py, náhoda z předané funkce rand (stránka dává rnd, test vlastní).
+// Jiné úlohy než bench.py, protože Python má jiný generátor náhody. Nezamítá: kombinaci losuje podle vah třídy, pak vzdálenost z pásma se správnou polohou.
+function cruiseCase(rand, cls, place) {
+  if (!Object.hasOwn(CRUISE_WEIGHTS, cls) || !CRUISE_PLACES.includes(place)) throw new Error(`cruiseCase: unsupported class ${cls} or place ${place}`);
+  const combos = CRUISE_WEIGHTS[cls];
+  const [level, p, f] = pickCum(rand, combos.map(([k]) => k), cumWeights(combos.map(([, w]) => w)));
+  const [lo, hi] = bandRange(level);
+  const ms = [];
+  for (let x = lo; x <= hi; x++) if (nearEdge(x) === (place === 'edge')) ms.push(x);
+  const m = pickOf(rand, ms);
+  const road = Object.keys(CRUISE_ROAD).find(k => CRUISE_ROAD[k] === p);
+  const fog = Object.keys(CRUISE_FOG).find(k => CRUISE_FOG[k] === f);
+  const answer = cruiseLevel(m, road, fog);
+  if (!(answer >= 1 && answer <= CRUISE_TOP) || bandLevel(m) !== level) throw new Error('cruiseCase: generated task breaks its guarantees');
+  return { m, road, fog, answer, cls, place };
+}
+function cruiseRow(rand) {                                 // třída před polohou, jako argumenty v cruise_cases
+  const c = cruiseCase(rand, pickOf(rand, CRUISE_CLASSES), pickOf(rand, CRUISE_PLACES));
+  return { ...c, truth: c.answer - 1 };
+}
+function cruiseErrors(cases, levels) {                     // druhy chyb jako cruise_errors; levels[i] je stupeň 1–7, nebo null (neplatná)
+  const errors = { distance: 0, omitted: 0, flat: 0, neighbor: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => {
+    const level = levels[i];
+    if (level === null || level === undefined) { errors.invalid++; return; }
+    if (level === c.answer) return;
+    const band = bandLevel(c.m), p = CRUISE_ROAD[c.road], f = CRUISE_FOG[c.fog];
+    if (level === band) errors.distance++;
+    else if (level === band - p || level === band - f) errors.omitted++;
+    else if (level === band - (p > 0) - (f > 0)) errors.flat++;
+    else if (nearEdge(c.m) && level === neighborLevel(c.m) - p - f) errors.neighbor++;
+    else errors.other++;
+  });
+  return errors;
+}
+function cruiseSummary(cases, levels) {                    // port cruise_summary: přesnost podle třídy a polohy, škála a druhy chyb
+  const by_class = {}, by_place = {};
+  CRUISE_CLASSES.forEach(c => { by_class[c] = [0, 0]; });
+  CRUISE_PLACES.forEach(p => { by_place[p] = [0, 0]; });
+  let within = 0, mae = 0, fast = 0, slow = 0;
+  cases.forEach((c, i) => {
+    const level = levels[i] === undefined ? null : levels[i];
+    const ok = level === c.answer ? 1 : 0;
+    for (const tally of [by_class[c.cls], by_place[c.place]]) { tally[0] += ok; tally[1] += 1; }
+    if (level === null) { mae += CRUISE_TOP - 1; return; }
+    mae += Math.abs(level - c.answer);
+    if (Math.abs(level - c.answer) <= 1) within++;
+    if (level > c.answer) fast++;
+    if (level < c.answer) slow++;
+  });
+  const n = cases.length;
+  return { by_class, by_place, scale: { within: within / n, mae: mae / n, fast, slow }, errors: cruiseErrors(cases, levels) };
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. 150 m má tři číslice a leží na hranici pásma, dense je nejdelší slovo mlhy
+// (povrch má vždy tři písmena), tedy nejdelší stav; pásmo 6 − 2 − 2 = 2.
+function cruiseWarm() {
+  return { m: 150, road: 'icy', fog: 'dense', answer: 2, cls: 'both', place: 'edge', truth: 1 };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
