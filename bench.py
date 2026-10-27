@@ -1687,8 +1687,9 @@ TIMETABLE_TRIES = 1000                               # mez pokusů o losování 
 
 
 def timetable_table(rng, n):
-    """n souvislých řádků přes celý TIMETABLE_ZIP. Hranice jsou libovolná čísla (ne kulatá: s nimi by zkratka „společný
-    začátek PSČ“ trefila hranici), nejužší interval má aspoň TIMETABLE_MIN_WIDTH, sousední řádky mají jiné depo."""
+    """n souvislých řádků přes celý TIMETABLE_ZIP. Hranice se losují jako libovolná čísla, ne jako násobky stovky (s nimi
+    by zkratka „společný začátek PSČ“ trefila hranici); násobek stovky tak padne jen náhodou, asi u jedné hranice ze sta.
+    Nejužší interval má aspoň TIMETABLE_MIN_WIDTH, sousední řádky mají jiné depo."""
     for _ in range(TIMETABLE_TRIES):
         cuts = sorted(rng.sample(range(TIMETABLE_ZIP[0] + 1, TIMETABLE_ZIP[1] + 1), n - 1))
         starts = [TIMETABLE_ZIP[0]] + cuts
@@ -1803,11 +1804,14 @@ def timetable_question():
 def timetable_errors(cases, choices):
     """Rozbor chybných voleb; správná volba se nepočítá nikam. Třídy se zkoušejí v tomto pořadí:
 
+    invalid: volba, která není řetězec z TIMETABLE_DEPOTS (None, jiný řetězec, jiný typ).
     missed: výjimka platí, zvolené je depo řádku trasy.
     misapplied: výjimka neplatí (jiná služba), zvolené je depo výjimky.
     neighbor: zvolené je depo řádku těsně nad nebo pod správným řádkem v pořadí PSČ.
     other: ostatní chybné volby.
-    invalid: volba, která není řetězec z TIMETABLE_DEPOTS (None, jiný řetězec, jiný typ)."""
+
+    Odpověď je depo, ne řádek: když vzdálený řádek sdílí depo se sousedem nebo s výjimkou, jeho volba padne do neighbor
+    nebo misapplied."""
     counts = {"neighbor": 0, "missed": 0, "misapplied": 0, "other": 0, "invalid": 0}
     for (rows, _, z, _, exception, answer, _, _, rule), choice in zip(cases, choices):
         if not (isinstance(choice, str) and choice in TIMETABLE_DEPOTS):
