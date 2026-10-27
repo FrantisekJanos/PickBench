@@ -282,5 +282,29 @@ class RunDiff(unittest.TestCase):
                 self.assertEqual((e["twin"] + e["neighbor"] + e["other"], e["invalid"]), (10, 0))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_class(self):
+        r = {"by_class": {"num1": [5, 10], "numnew": [9, 10], "word1": [3, 10], "wordnew": [10, 10]}}
+        for lang, want in (("cs", "(číslo o 1 5/10, jiné číslo 9/10, slovo o písmeno 3/10, jiné slovo 10/10)"),
+                           ("en", "(number off by 1 5/10, other number 9/10, word off by a letter 3/10, other word 10/10)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.diff_note(r), want)
+
+    def test_line_in_both_languages(self):
+        r = {"by_mode": {"plain": [19, 20], "repeat": [12, 20]}, "errors": {"twin": 5, "neighbor": 2, "other": 1, "invalid": 1}}
+        self.assertEqual(printed("cs", bench.print_diff, r),
+                         [" " * 20 + "řady bez opakování 19/20, s opakováním 12/20; chyby: stejná hodnota v jiném pruhu 5, sousední pruh 2, jiné 1, neplatné 1"])
+        self.assertEqual(printed("en", bench.print_diff, r),
+                         [" " * 20 + "rows without repeats 19/20, with repeats 12/20; errors: same value in another lane 5, next lane 2, other 1, invalid 1"])
+
+    def test_lines_with_one_task(self):
+        r = {"by_class": {"num1": [0, 0], "numnew": [0, 0], "word1": [1, 1], "wordnew": [0, 0]},
+             "by_mode": {"plain": [0, 0], "repeat": [1, 1]}, "errors": {"twin": 0, "neighbor": 0, "other": 0, "invalid": 0}}
+        with i18n.process("en"):
+            self.assertEqual(bench.diff_note(r), "(number off by 1 0/0, other number 0/0, word off by a letter 1/1, other word 0/0)")
+        self.assertEqual(printed("en", bench.print_diff, r),
+                         [" " * 20 + "rows without repeats 0/0, with repeats 1/1; errors: same value in another lane 0, next lane 0, other 0, invalid 0"])
+
+
 if __name__ == "__main__":
     unittest.main()

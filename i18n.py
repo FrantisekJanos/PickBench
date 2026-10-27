@@ -224,6 +224,14 @@ TEXTS = {
                         "en": "hint: help {help} pp, harm {hurt} pp, pull {pull} pp; incongruent: errors on the hint {hint}, other {other}, "
                               "invalid {invalid}; flipped {flipped}/{pairs}"},
     "bench.hint.byGap": {"cs": "konfliktní podle rozdílu: {list}", "en": "incongruent by gap: {list}"},
+    # Co se změnilo (--diff): jména tříd v poznámce za řádkem modelu a řádek pod ním ({plain}, {repeat} = „správně/celkem“,
+    # ostatní = počty chybných odpovědí).
+    "bench.diff.num1": {"cs": "číslo o 1", "en": "number off by 1"},
+    "bench.diff.numnew": {"cs": "jiné číslo", "en": "other number"},
+    "bench.diff.word1": {"cs": "slovo o písmeno", "en": "word off by a letter"},
+    "bench.diff.wordnew": {"cs": "jiné slovo", "en": "other word"},
+    "bench.diff.line": {"cs": "řady bez opakování {plain}, s opakováním {repeat}; chyby: stejná hodnota v jiném pruhu {twin}, sousední pruh {neighbor}, jiné {other}, neplatné {invalid}",
+                        "en": "rows without repeats {plain}, with repeats {repeat}; errors: same value in another lane {twin}, next lane {neighbor}, other {other}, invalid {invalid}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "

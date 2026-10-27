@@ -2927,6 +2927,18 @@ def print_hint(r):
     print(" " * 20 + i18n.t("bench.hint.byGap", list=gaps), flush=True)
 
 
+def diff_note(r):
+    """Poznámka za řádkem modelu: přesnost podle třídy změny."""
+    return class_note(r["by_class"], {"num1": i18n.t("bench.diff.num1"), "numnew": i18n.t("bench.diff.numnew"),
+                                      "word1": i18n.t("bench.diff.word1"), "wordnew": i18n.t("bench.diff.wordnew")})
+
+
+def print_diff(r):
+    """Řádek pod modelem: přesnost podle podoby řady (bez opakování / s opakováním) a rozbor chyb."""
+    plain, repeat = (f"{ok}/{n}" for ok, n in r["by_mode"].values())
+    print(" " * 20 + i18n.t("bench.diff.line", plain=plain, repeat=repeat, **r["errors"]), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
