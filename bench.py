@@ -1162,6 +1162,52 @@ def rule_summary(cases, choices, keys):
             "persev": [sum(choice == keys[old] for old, choice in switch), len(switch)]}
 
 
+# ---------- scénář: nejkratší fronta ----------
+# Fronta je n-tice jmen vozidel; pruh je číslo od nuly (pruh 1 je index 0).
+QUEUE_VEHICLES = ("car", "van", "bus", "truck", "motorbike", "tractor", "minibus", "pickup")
+QUEUE_WEIGHTS = {"bus": 3, "truck": 3, "tractor": 3}   # ostatní vozidla váží 1
+QUEUE_SIZE = (1, 12)                                    # nejmenší a největší počet vozidel ve frontě
+QUEUE_GAPS = ("gap1", "gap2-3", "gap4+")                # rozdíl nejkratší a druhé nejkratší fronty: 1, 2–3, 4 a víc
+QUEUE_COUNT_SHARE = 0.5                                 # podíl vážených úloh, kde je nejkratší podle počtu jiná
+QUEUE_TRIES = 2000000
+
+
+def queue_length(queue, weighted=False):
+    """Délka fronty: počet vozidel, s vahami součet vah (nákladní auto, autobus a traktor za tři)."""
+    if weighted:
+        return sum(QUEUE_WEIGHTS.get(v, 1) for v in queue)
+    return len(queue)
+
+
+def queue_class(gap):
+    """Třída rozdílu nejkratší a druhé nejkratší fronty: 1, 2-3, 4 a víc."""
+    if gap < 1:
+        raise ValueError(f"queue_class: gap must be at least 1, got {gap}")
+    return "gap1" if gap == 1 else "gap2-3" if gap <= 3 else "gap4+"
+
+
+def queue_text(queues):
+    """Pruh s nejkratším JSON zápisem seznamu (tak ho model čte v dotazu); shoda vybere dřívější pruh."""
+    return min(range(len(queues)), key=lambda i: len(json.dumps(list(queues[i]))))
+
+
+def queue_count(queues):
+    """Jediný pruh s nejméně vozidly (bez vah), nebo None, když jich je víc."""
+    sizes = [len(q) for q in queues]
+    return sizes.index(min(sizes)) if sizes.count(min(sizes)) == 1 else None
+
+
+def queue_heavy(queues):
+    """Kontrolní zkratka: pruh s nejméně těžkými vozidly (s vahou 3); shoda vybere dřívější pruh."""
+    return min(range(len(queues)), key=lambda i: sum(v in QUEUE_WEIGHTS for v in queues[i]))
+
+
+def queue_text_share(lanes):
+    """Cílový podíl úloh, kde nejkratší text trefí správný pruh. Při dvou pruzích 1/2: jedna třetina by byla pod
+    náhodou a obrátila by zkratku (kde nejkratší text netrefí, trefí ho nejdelší text)."""
+    return 1 / 2 if lanes == 2 else 1 / 3
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
