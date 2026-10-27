@@ -21,6 +21,8 @@ Testy:
                Stupně tempa jsou 0,25 až 2násobek sériové rychlosti modelu (nebo --rates v dotazech za sekundu),
                N dotazů na stupeň (výchozí 200); hledá se nejvyšší tempo, při kterém p99 zůstane do --p99-ms
                (výchozí 1000). Stupeň, který limit nesplní nebo nedoběhne, je poslední.
+  cache        stejný stav N× po sobě (výchozí 10) proti N pokaždé jiným stavům, 3 kola: medián prvního dotazu,
+               p50 opakování, p50 jiných stavů a poměr stejný ÷ jiný (pod 1 = opakovaný stav je rychlejší)
 
 Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
 server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.

@@ -21,6 +21,8 @@ Tests:
                The rate levels are 0.25 to 2 times the serial speed of the model (or --rates in requests per second),
                N requests per level (default 200); the test looks for the highest rate at which p99 stays within --p99-ms
                (default 1000). A level that misses the limit or does not finish is the last one.
+  cache        the same state N times in a row (default 10) against N different states, 3 rounds: the median of the first request,
+               p50 of the repeats, p50 of the different states and the ratio same ÷ different (below 1 = the repeated state is faster)
 
 The names follow MLPerf: latency = SingleStream (reports p90), concurrency = Offline (the highest throughput),
 server = Server. This is a measurement in the style of MLPerf, not a result submitted under the MLCommons rules.

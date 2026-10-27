@@ -339,6 +339,39 @@ class Sampler(unittest.TestCase):
         self.assertEqual(len(s.stop()), 1)
 
 
+class Cache(unittest.TestCase):
+    ROUND = [50.0, 10.0, 10.0, 10.0, 40.0, 40.0, 40.0, 40.0]           # kolo při n = 4: první dotaz, tři opakování, čtyři jiné stavy
+
+    def test_same_state_n_times_then_n_fresh_states_in_every_round(self):
+        post = FakePost()
+        r = hwbench.run_cache("m", n=4, rounds=3, post=post)
+        states = [str(sorted(p["state"].items())) for p in post.calls[1:]]          # bez zahřívacího dotazu
+        self.assertEqual(len(states), 3 * 8)
+        for k in range(3):
+            block = states[k * 8:(k + 1) * 8]
+            self.assertEqual(len(set(block[:4])), 1)                   # stejný stav čtyřikrát po sobě
+            self.assertEqual(len(set(block[4:])), 4)                   # pak čtyři jiné
+            self.assertNotIn(block[0], block[4:])
+        self.assertEqual(len({states[k * 8] for k in range(3)}), 3)    # každé kolo má nový stav
+        self.assertEqual((r["n"], r["rounds"]), (4, 3))
+
+    def test_latencies_go_to_first_same_and_fresh(self):
+        r = hwbench.run_cache("m", n=4, rounds=3, post=FakePost(ms=[99.0] + self.ROUND * 3))
+        self.assertEqual((r["first"], r["same"], r["fresh"]), (50.0, 10.0, 40.0))
+        self.assertAlmostEqual(r["ratio"], 0.25)
+
+    def test_one_request_per_state_has_no_repeats(self):
+        r = hwbench.run_cache("m", n=1, rounds=2, post=FakePost())
+        self.assertTrue(r["same"] != r["same"] and r["ratio"] != r["ratio"])       # NaN
+        self.assertEqual(r["first"], 10.0)
+
+    def test_row(self):
+        a = hwbench.parse_args(["cache", "--n", "4", "m"])
+        head, rows, csv_head, csv_rows, notes = hwbench.measure(a, "m", FakePost(ms=[99.0] + self.ROUND * 3))
+        self.assertEqual((rows, csv_rows, notes, csv_head), ([["m", 4, "50.0", "10.0", "40.0", "0.25"]], rows, [], head))
+        self.assertEqual(len(hwbench.measure(hwbench.parse_args(["cache", "m"]), "m", FakePost())[1][0]), 6)      # bez --n: 10 opakování
+
+
 class Cli(unittest.TestCase):
     def test_parse_args(self):
         a = hwbench.parse_args(["latency", "--n", "200", "tev1", "nimble"])
@@ -845,6 +878,7 @@ class Language(unittest.TestCase):
         "context": (["model", "cíl tokenů", "input_tokens", "ms"], ["model", "target tokens", "input tokens", "ms"]),
         "soak": (["model", "minuta", "N", "p50 ms", "p95 ms", "°C", "W", "MHz"], ["model", "minute", "N", "p50 ms", "p95 ms", "°C", "W", "MHz"]),
         "server": (["model", "tempo/s", "dosaženo/s", "p50 ms", "p99 ms", "včas"], ["model", "rate/s", "achieved/s", "p50 ms", "p99 ms", "in time"]),
+        "cache": (["model", "N", "první ms", "stejný p50 ms", "jiný p50 ms", "poměr"], ["model", "N", "first ms", "same p50 ms", "fresh p50 ms", "ratio"]),
     }
     SOAK_CSV = (["model", "čas s", "ms", "°C", "W", "MHz"], ["model", "time s", "ms", "°C", "W", "MHz"])
     SAMPLES = [(float(t), 50, 40.0, 1500) for t in range(0, 81, 5)]      # vzorky GPU přes celý běh testu soak s hodinami FakeClock(20.0)

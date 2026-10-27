@@ -59,6 +59,7 @@ HWBENCH = {                                          # jméno zlatého souboru �
     "hwbench-latency": ["latency", "--n", "20", "m1"],
     "hwbench-questions": ["questions", "m1", "m2"],
     "hwbench-context": ["context", "m1"],
+    "hwbench-cache": ["cache", "--n", "3", "m1", "m2"],
 }
 USAGE = ("bench", "hwbench", "fetch_datasets")       # nástroje, jejichž nápověda (spuštění bez argumentů) má zlatý soubor <jméno>-usage.txt
 ENGLISH = [*BENCH, *HWBENCH]                         # příkazy, které už mají anglický zlatý soubor v tests/golden/en/
@@ -249,7 +250,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-timetable", "bench-timetable-shuffled", "hwbench-latency", "hwbench-questions", "hwbench-context"):
+        for name in ("bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-timetable", "bench-timetable-shuffled", "hwbench-latency", "hwbench-questions", "hwbench-context", "hwbench-cache"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)

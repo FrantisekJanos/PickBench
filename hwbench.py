@@ -21,6 +21,8 @@ Testy:
                Stupně tempa jsou 0,25 až 2násobek sériové rychlosti modelu (nebo --rates v dotazech za sekundu),
                N dotazů na stupeň (výchozí 200); hledá se nejvyšší tempo, při kterém p99 zůstane do --p99-ms
                (výchozí 1000). Stupeň, který limit nesplní nebo nedoběhne, je poslední.
+  cache        stejný stav N× po sobě (výchozí 10) proti N pokaždé jiným stavům, 3 kola: medián prvního dotazu,
+               p50 opakování, p50 jiných stavů a poměr stejný ÷ jiný (pod 1 = opakovaný stav je rychlejší)
 
 Pojmenování podle MLPerf: latency = SingleStream (uvádí p90), concurrency = Offline (nejvyšší propustnost),
 server = Server. Jde o měření ve stylu MLPerf, ne o výsledek podaný podle pravidel MLCommons.
@@ -56,6 +58,8 @@ Tests:
                The rate levels are 0.25 to 2 times the serial speed of the model (or --rates in requests per second),
                N requests per level (default 200); the test looks for the highest rate at which p99 stays within --p99-ms
                (default 1000). A level that misses the limit or does not finish is the last one.
+  cache        the same state N times in a row (default 10) against N different states, 3 rounds: the median of the first request,
+               p50 of the repeats, p50 of the different states and the ratio same ÷ different (below 1 = the repeated state is faster)
 
 The names follow MLPerf: latency = SingleStream (reports p90), concurrency = Offline (the highest throughput),
 server = Server. This is a measurement in the style of MLPerf, not a result submitted under the MLCommons rules.
@@ -85,9 +89,10 @@ import gpu
 import i18n
 import providers
 
-TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server")
+TESTS = ("latency", "cold", "concurrency", "questions", "context", "soak", "server", "cache")
 SERVER_SHARES = (0.25, 0.5, 0.7, 0.85, 1.0, 1.25, 1.5, 2.0)      # stupně tempa testu server jako podíl sériové rychlosti (1000 ÷ medián latence)
 SERVER_SLACK, SERVER_DRAIN = 30.0, 120.0                         # s: rezerva stupně nad poslední příchod; čekání na dotazy, které po stupni ještě běží
+CACHE_ROUNDS = 3                                                 # test cache: kola (nový stav N× po sobě, pak N jiných stavů)
 NAN = float("nan")
 KEYS = bench.lane_keys(3)
 QUESTION = bench.lane_question(3)
@@ -318,6 +323,26 @@ def run_server(model, n=200, limit_ms=1000, rates=None, post=None, clock=time.pe
             "best": max((r["rate"] for r in rows if r["ok"]), default=None), "interrupted": interrupted, "limit_ms": limit_ms}
 
 
+def run_cache(model, n=10, rounds=CACHE_ROUNDS, post=None):
+    """Vliv cache promptu. Každé kolo: nový stav n× po sobě, pak n pokaždé jiných stavů (úlohy jako bench.py, překážky, 3 pruhy).
+
+    Vrací first = medián prvních dotazů s novým stavem, same = p50 opakování (2. až n. dotaz), fresh = p50 jiných stavů
+    a ratio = same ÷ fresh (pod 1 = opakovaný stav je rychlejší). n = 1: opakování nejsou, same a ratio jsou NaN."""
+    post = post or bench.post
+    warm(model, post)
+    work = payloads(rounds * (n + 1))
+    firsts, same, fresh = [], [], []
+    for r in range(rounds):
+        block = work[r * (n + 1):(r + 1) * (n + 1)]
+        lat = [post(model, block[0])[1] for _ in range(n)]
+        firsts.append(lat[0])
+        same += lat[1:]
+        fresh += [post(model, p)[1] for p in block[1:]]
+    s, f = percentile(same, .5), percentile(fresh, .5)
+    return {"n": n, "rounds": rounds, "first": statistics.median(firsts), "same": s, "fresh": f,
+            "ratio": s / f if s == s and f == f and f > 0 else NAN}
+
+
 class GpuSampler:
     """Vlákno, které po dobu měření čte stav GPU. Vzorek = (čas od startu v s, teplota, příkon, takt)."""
 
@@ -445,6 +470,8 @@ def heads(test):
         head = [model, i18n.t("hw.col.questions"), i18n.t("hw.col.msRequest"), i18n.t("hw.col.msQuestion")]
     elif test == "context":
         head = [model, i18n.t("hw.col.target"), i18n.t("hw.col.inputTokens"), i18n.t("hw.col.ms")]
+    elif test == "cache":
+        head = [model, n, i18n.t("hw.col.first"), i18n.t("hw.col.sameP50"), i18n.t("hw.col.freshP50"), i18n.t("hw.col.ratio")]
     else:                                            # soak
         card = [i18n.t("hw.col.temp"), i18n.t("hw.col.power"), i18n.t("hw.col.clock")]
         return ([model, i18n.t("hw.col.minute"), n, i18n.t("hw.col.p50"), i18n.t("hw.col.p95"), *card],
@@ -515,6 +542,10 @@ def measure(a, model, post=None, sampler=None, stop=ollama_stop, clock=time.perf
     if a.test == "context":
         rows = [[model, r["target"], r["tokens"] or "—", num(r["ms"], 1) if r["fit"] else i18n.t("hw.didNotFit")] for r in run_context(model, post=post)]
         return head, rows, csv_head, rows, [] if local else [i18n.t("hw.note.truncation", model=model)]
+    if a.test == "cache":
+        r = run_cache(model, a.n or 10, post=post)
+        rows = [[model, r["n"], num(r["first"], 1), num(r["same"], 1), num(r["fresh"], 1), num(r["ratio"], 2)]]
+        return head, rows, csv_head, rows, []
     if not local and not a.hosted_soak:
         return head, [], csv_head, [], [i18n.t("hw.skip.soak", model=model)]
     r = run_soak(model, a.minutes, post, clock, (sampler or GpuSampler()) if local else None)

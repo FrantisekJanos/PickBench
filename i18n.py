@@ -286,6 +286,11 @@ TEXTS = {
     "hw.col.power": {"cs": "W", "en": "W"},
     "hw.col.clock": {"cs": "MHz", "en": "MHz"},
     "hw.col.time": {"cs": "čas s", "en": "time s"},
+    # Test cache: medián prvního dotazu s novým stavem, p50 opakování téhož stavu, p50 pokaždé jiných stavů, poměr stejný ÷ jiný.
+    "hw.col.first": {"cs": "první ms", "en": "first ms"},
+    "hw.col.sameP50": {"cs": "stejný p50 ms", "en": "same p50 ms"},
+    "hw.col.freshP50": {"cs": "jiný p50 ms", "en": "fresh p50 ms"},
+    "hw.col.ratio": {"cs": "poměr", "en": "ratio"},
     # Buňky tabulky: stupeň, který server odmítl; podíl dotazů včas (česky s mezerou jako dosud, anglicky bez ní jako ve stránce).
     "hw.didNotFit": {"cs": "nevešlo se", "en": "did not fit"},
     "hw.pct": {"cs": "{value:.0f} %", "en": "{value:.0f}%"},
