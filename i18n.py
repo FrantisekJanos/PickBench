@@ -103,8 +103,14 @@ TEXTS = {
     "bench.intro.memoryCount": {"cs": "{n} úloh s historií značek (počítání polohy v seznamu), {lanes} bran, stejných pro všechny modely",
                                 "en": "{n} {n|task|tasks} with a history of signs (counting the position in a list), {lanes} gates, the same for all models"},
     # Závora: {go} = podíl úloh se správnou odpovědí jeď, v celých procentech.
+    # Dva kroky dopředu: úvodní věta jmenuje počet řad a podobu stavu ({form} = rows / blocked, nepřekládá se).
+    "bench.intro.lookahead": {"cs": "{n} úloh se {rows} řadami před autem (podoba stavu {form}), {lanes} pruhů, stejných pro všechny modely",
+                              "en": "{n} {n|task|tasks} with {rows} rows ahead of the car (state form {form}), {lanes} lanes, the same for all models"},
     "bench.intro.barrier": {"cs": "{n} křižovatek, 5 pravidel s pořadím, {go} % jeď, stejných pro všechny modely",
                             "en": "{n} {n|intersection|intersections}, 5 rules in order of priority, {go}% go, the same for all models"},
+    # Skryté pravidlo: úvodní věta jmenuje podobu stavu ({form} = labeled / matched_by, nepřekládá se).
+    "bench.intro.rule": {"cs": "{n} úloh se skrytým pravidlem (podoba stavu {form}), 3 brány, stejných pro všechny modely",
+                         "en": "{n} {n|task|tasks} with a hidden rule (state form {form}), 3 gates, the same for all models"},
     "bench.intro.emails": {"cs": "{n} e-mailů ze sady „{name}“ ({categories} kategorií), stejných pro všechny modely",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} úloh ze sady „{name}“ ({labels} štítků), stejných pro všechny modely",
@@ -137,12 +143,22 @@ TEXTS = {
     # (semafor přebíjí značku), {last} hotové zlomky („0/17“), {invalid} počet, {auroc} a {threshold} čísla na dvě desetinná
     # místa (AUROC bez úloh jedné třídy „—“), {best} vyvážená přesnost při nejlepším prahu v procentech („95%“).
     "bench.barrier.rule": {"cs": "pravidlo {n}", "en": "rule {n}"},
+    # Dva kroky dopředu (--lookahead): popisek třídy v poznámce za řádkem modelu ({d} = 1, 2, 3+) a řádek chyb pod ním.
+    "bench.lookahead.depth": {"cs": "hloubka {d}", "en": "depth {d}"},
+    "bench.lookahead.errors": {"cs": "chyby: tah hladového řidiče {greedy}, náraz nebo mimo silnici {crash}, jiné {other}, neplatné {invalid}",
+                               "en": "errors: greedy driver's move {greedy}, crash or off the road {crash}, other {other}, invalid {invalid}"},
     "bench.barrier.errors": {"cs": "falešný průjezd {false_go}, zbytečné stání {needless}, neplatné {invalid}; shodné {agree}, "
                                    "přebitý semafor {conflict_high}, semafor přebil značku {conflict_light}, poslední pravidlo {last}; "
                                    "AUROC {auroc}, nejlepší práh {threshold} → vyvážená {best}",
                              "en": "false go {false_go}, needless stop {needless}, invalid {invalid}; agree {agree}, "
                                    "light overridden {conflict_high}, light over sign {conflict_light}, last rule {last}; "
                                    "AUROC {auroc}, best threshold {threshold} → balanced {best}"},
+    # Skryté pravidlo (--rule): jména tříd v poznámce za řádkem modelu a řádek pod ním ({short}, {long}, {persev} = „správně/celkem“).
+    "bench.rule.repeat": {"cs": "opakování", "en": "repeat"},
+    "bench.rule.switch": {"cs": "přepnutí", "en": "switch"},
+    "bench.rule.eliminate": {"cs": "vyloučení", "en": "eliminate"},
+    "bench.rule.line": {"cs": "deník krátký {short}, dlouhý {long}; perseverace {persev}",
+                        "en": "log short {short}, long {long}; perseveration {persev}"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -173,7 +189,12 @@ TEXTS = {
                               "en": "The --mirror and --inject options cannot be combined with --public."},
     "bench.err.pairsSigns": {"cs": "Volba --pairs jde jen s --signs.", "en": "The --pairs option works only with --signs."},
     "bench.err.countMemory": {"cs": "Volba --count jde jen s --memory.", "en": "The --count option works only with --memory."},
+    "bench.err.formLookahead": {"cs": "Volby --rows a --blocked jdou jen s --lookahead.",
+                                "en": "The --rows and --blocked options work only with --lookahead."},
     "bench.err.lanesBarrier": {"cs": "Volba --lanes se s --barrier nekombinuje.", "en": "The --lanes option cannot be combined with --barrier."},
+    "bench.err.lanesRule": {"cs": "Volba --lanes se s --rule nekombinuje.", "en": "The --lanes option cannot be combined with --rule."},
+    "bench.err.formRule": {"cs": "Volby --matched-by a --labeled jdou jen s --rule.",
+                           "en": "The --matched-by and --labeled options work only with --rule."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",

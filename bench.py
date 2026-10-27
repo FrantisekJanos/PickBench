@@ -5,6 +5,8 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -13,6 +15,8 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --signs --pairs tev1
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
+          python bench.py 100 --lookahead tev1
+          python bench.py 100 --rule tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -35,6 +39,24 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             semafor přebil značku, poslední pravidlo; dál AUROC a nejlepší práh s vyváženou přesností (průměr jeď a stůj).
             S --mirror je druhou variantou obrácená otázka „Must the car stop now?“ (pokyn trojského koně je v ní obrácený);
             řádek variant ji vypisuje jako „obrácené pořadí“. S --lanes se nekombinuje.
+--lookahead:  dva kroky dopředu: před autem jsou 4 řady s překážkami, před každou řadou se auto smí posunout o pruh vlevo,
+            zůstat, nebo o pruh vpravo, a pak do ní vjede. Model volí tah pro nejbližší řadu tak, aby auto projelo co nejvíc
+            řad; správný tah je vždy jediný. K pruhů (výchozí 4, 3 až 8), N úloh (výchozí 100). Za řádkem modelu přesnost
+            podle hloubky pasti (kolik nejbližších řad musí model zvážit, aby tah vyšel správně: 1, 2, 3+), pod ním chyby:
+            tah hladového řidiče (pruh s nejdelší volnou dráhou rovně), náraz nebo mimo silnici, jiné, neplatné.
+--rows, --blocked:  jen s --lookahead: podoba stavu. rows = každá řada jako řetězec se znakem pro každý pruh
+            („.“ volno, „#“ překážka); blocked = u každé řady seznam čísel zablokovaných pruhů.
+            Bez volby platí blocked.
+--rule:     skryté pravidlo: vzorová karta (barva, tvar, počet) a tři brány, každá se vzorem shodná právě v jednom znaku.
+            Skryté pravidlo říká, podle kterého znaku je brána správná, a po každých třech správných pokusech v řadě se mění
+            na jiný znak. Model dostane deník dřívějších pokusů (u každého znak, ve kterém se zvolená brána shodovala se vzorem,
+            a jestli byl pokus správný) a volí bránu podle pravidla, které platí teď. N úloh (výchozí 100). Za řádkem modelu
+            přesnost podle třídy (opakování: pravidlo určí správný pokus; přepnutí: po změně zbude pravidlo vyloučením;
+            vyloučení: bez změny a bez správného pokusu), pod ním přesnost podle délky deníku (krátký 3–5, dlouhý 6–10 pokusů)
+            a perseverace = kolikrát model ve třídě přepnutí zvolil bránu starého pravidla. S --lanes se nekombinuje.
+--labeled, --matched-by:  jen s --rule: podoba stavu, deník je v obou stejný. labeled = každá brána říká jen znak,
+            ve kterém se shoduje se vzorem, karty model nevidí; matched_by = karta vzoru a karty bran, znak shody
+            musí model najít sám. Bez volby platí labeled.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -67,6 +89,8 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --barrier [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --lookahead [--rows | --blocked] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --rule [--labeled | --matched-by] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -75,6 +99,8 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --signs --pairs tev1
           python bench.py 100 --memory tev1
           python bench.py 100 --barrier tev1
+          python bench.py 100 --lookahead tev1
+          python bench.py 100 --rule tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -97,6 +123,24 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             it is off, says the same), light overridden (rule 1-3 overrides the opposite light or sign), light over sign, last rule; then AUROC and
             the best threshold with its balanced accuracy (mean of go and stop). With --mirror the second variant is the inverted
             question "Must the car stop now?" (its Trojan horse note is inverted too), listed as "reversed order". Not with --lanes.
+--lookahead:  two steps ahead: 4 rows with obstacles lie ahead of the car; before each row the car may shift one lane left,
+            stay, or shift one lane right, and then it enters the row. The model picks the move for the nearest row that lets
+            the car pass the most rows; there is always exactly one right move. K lanes (default 4, 3 to 8), N tasks (default 100).
+            After the model row, the accuracy by trap depth (how many of the nearest rows the model has to weigh to get the move
+            right: 1, 2, 3+); below it the errors: greedy driver's move (the lane with the longest free run straight ahead),
+            crash or off the road, other, invalid.
+--rows, --blocked:  only with --lookahead: the form of the state. rows = every row as a string, one character per lane ("." free,
+            "#" blocked); blocked = for every row, the list of the numbers of its blocked lanes. Without the option: blocked.
+--rule:     hidden rule: a sample card (color, shape, count) and three gates, each matching the sample in exactly one feature.
+            A hidden rule says by which feature a gate is right; after every three correct picks in a row it changes to another
+            feature. The model gets a log of earlier picks (the feature the picked gate shared with the sample, and whether
+            it was correct) and picks the gate by the rule in force now. N tasks (default 100). After the model row, the
+            accuracy by class (repeat: a correct pick gives the rule; switch: after a change, the rule is what is left once
+            the others are ruled out; eliminate: no change and no correct pick); below it the accuracy by log length (short
+            3–5, long 6–10 picks) and perseveration = how often the model picked the gate of the old rule in switch. Not with --lanes.
+--labeled, --matched-by:  only with --rule: the form of the state; the log is the same in both. labeled = each gate
+            says only the feature it shares with the sample, the model sees no cards; matched_by = the sample card and the
+            cards of the gates, so the model has to find the shared feature itself. Without the option: labeled.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -714,6 +758,410 @@ def barrier_summary(cases, probs):
     return {"by_rule": by_rule, "by_class": by_class, "false_go": false_go, "needless": needless, "invalid": invalid}
 
 
+# ---------- scénář: dva kroky dopředu ----------
+# Řady jsou řetězce, rows[0] je nejbližší řada, '.' volno, '#' překážka, rows[i][j] je pruh j + 1. Pruh auta je 0-based.
+LOOKAHEAD_MOVES = ("left", "stay", "right")
+LOOKAHEAD_SHIFT = {"left": -1, "stay": 0, "right": 1}
+LOOKAHEAD_ROWS = 4                                   # počet řad před autem (R)
+LOOKAHEAD_DENSITY = 0.4                              # pravděpodobnost překážky v poli
+LOOKAHEAD_CLASSES = ("d1", "d2", "d3+")              # hloubka pasti 1, 2, 3 a víc
+LOOKAHEAD_FORMS = ("rows", "blocked")
+LOOKAHEAD_FORM = "blocked"                           # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-26
+LOOKAHEAD_TRIES = 100000                             # mez pokusů na jednu úlohu
+
+
+def lookahead_survive(rows, lane):
+    """Kolik řad auto projede z pruhu lane (poloha před rows[0]), když před každou řadou smí posun −1/0/+1 v mezích silnice."""
+    alive = {lane}
+    for i, row in enumerate(rows):
+        alive = {m for at in alive for m in (at - 1, at, at + 1) if 0 <= m < len(row) and row[m] == "."}
+        if not alive:
+            return i
+    return len(rows)
+
+
+def lookahead_values(rows, lane, depth=None):
+    """Hodnota každého tahu (v pořadí LOOKAHEAD_MOVES): kolik řad auto po tahu projede. Tah mimo silnici nebo do '#'
+    v nejbližší řadě má 0. depth omezí výpočet na prvních depth řad."""
+    rows = rows if depth is None else rows[:depth]
+    values = {}
+    for move in LOOKAHEAD_MOVES:
+        target = lane + LOOKAHEAD_SHIFT[move]
+        if not 0 <= target < len(rows[0]) or rows[0][target] != ".":
+            values[move] = 0
+        else:
+            values[move] = 1 + lookahead_survive(rows[1:], target)
+    return values
+
+
+def lookahead_greedy(rows, lane):
+    """Hladový řidič: z tahů v silnici (pořadí stay, left, right) ten, jehož cílový pruh má nejdelší volnou dráhu rovně
+    od nejbližší řady; vyhrává první s ostře největší délkou."""
+    best = None
+    for move in ("stay", "left", "right"):
+        target = lane + LOOKAHEAD_SHIFT[move]
+        if not 0 <= target < len(rows[0]):
+            continue
+        run = 0
+        while run < len(rows) and rows[run][target] == ".":
+            run += 1
+        if best is None or run > best[0]:
+            best = (run, move)
+    return best[1]
+
+
+def lookahead_best(values):
+    """Tahy s nejvyšší hodnotou, v pořadí LOOKAHEAD_MOVES."""
+    top = max(values.values())
+    return [move for move, value in values.items() if value == top]
+
+
+def lookahead_depth(rows, lane):
+    """Hloubka pasti: nejmenší d, pro které je jediný nejlepší tah nad prvními d řadami týž jako nad všemi řadami.
+    Vrací (tah, d); když nejlepší tah nad všemi řadami není jediný, (None, None)."""
+    best = lookahead_best(lookahead_values(rows, lane))
+    if len(best) != 1:
+        return None, None
+    for depth in range(1, len(rows) + 1):
+        if lookahead_best(lookahead_values(rows, lane, depth)) == best:
+            return best[0], depth
+    raise RuntimeError(f"lookahead_depth: no depth for {rows}, lane {lane}")      # nad všemi řadami se shoda najde vždy
+
+
+def lookahead_class(depth):
+    return "d1" if depth == 1 else "d2" if depth == 2 else "d3+"
+
+
+def lookahead_open_moves(rows, lane):
+    """Tahy do volného pole nejbližší řady v mezích silnice, v pořadí stay, left, right (pořadí shody kontrolních strategií)."""
+    return [(move, lane + LOOKAHEAD_SHIFT[move]) for move in ("stay", "left", "right")
+            if 0 <= lane + LOOKAHEAD_SHIFT[move] < len(rows[0]) and rows[0][lane + LOOKAHEAD_SHIFT[move]] == "."]
+
+
+def lookahead_pick(rows, lane, score):
+    """Z tahů do volného pole ten s ostře nejvyšším skóre score(cílový pruh), shoda → dřívější; žádný volný tah → stay."""
+    best = None
+    for move, target in lookahead_open_moves(rows, lane):
+        value = score(target)
+        if best is None or value > best[0]:
+            best = (value, move)
+    return "stay" if best is None else best[1]
+
+
+def lookahead_density(rows, lane):
+    """Kontrolní strategie hustota: tah, jehož cílový pruh spolu se sousedními pruhy má ve všech řadách nejvíc volných polí."""
+    lanes = len(rows[0])
+    free = [sum(row[j] == "." for row in rows) for j in range(lanes)]
+    return lookahead_pick(rows, lane, lambda t: sum(free[max(0, t - 1):min(lanes, t + 2)]))
+
+
+def lookahead_center(rows, lane):
+    """Kontrolní strategie střed: tah do pruhu nejblíž středu silnice."""
+    middle = (len(rows[0]) - 1) / 2
+    return lookahead_pick(rows, lane, lambda t: -abs(t - middle))
+
+
+LOOKAHEAD_SHORTCUTS = {"greedy": lookahead_greedy, "density": lookahead_density, "center": lookahead_center}
+
+
+def lookahead_case(rng, lanes, cls):
+    """Úloha dvou kroků dopředu dané třídy. Vrací (řady, pruh auta, správný tah, hloubka pasti, tah hladového řidiče).
+
+    Řady se losují s hustotou LOOKAHEAD_DENSITY a zamítají, dokud nemají jediný nejlepší tah, který projede všech R řad,
+    s hloubkou pasti ve třídě cls. V d2 a d3+ se předem vylosuje, které kontrolní strategie mají trefit (každá s pravděpodobností
+    1/3; density jen při K ≥ 4, center jen při K ≥ 5), a úloha se přijme, jen když se trefují přesně tak. V d1 je každý tah
+    do volného pole správný.
+
+    Při K = 3 se density nehlídá: v d2 a d3+ tam greedy a density nikdy nemíjejí obě zároveň (ze středního pruhu pokryje
+    stay se sousedy celou silnici), takže vylosování „obě mimo“ nejde splnit."""
+    if not 3 <= lanes <= 8 or cls not in LOOKAHEAD_CLASSES:
+        raise RuntimeError(f"lookahead_case: no {cls} task for {lanes} lanes")
+    want = {}
+    if cls != "d1":
+        want["greedy"] = rng.random() < 1 / 3
+        if lanes >= 4:
+            want["density"] = rng.random() < 1 / 3
+        if lanes >= 5:
+            want["center"] = rng.random() < 1 / 3
+    for _ in range(LOOKAHEAD_TRIES):
+        rows = tuple("".join("#" if rng.random() < LOOKAHEAD_DENSITY else "." for _ in range(lanes)) for _ in range(LOOKAHEAD_ROWS))
+        if any("." not in row for row in rows):
+            continue
+        lane = rng.randrange(lanes)
+        answer, depth = lookahead_depth(rows, lane)
+        if answer is None or lookahead_class(depth) != cls or max(lookahead_values(rows, lane).values()) != LOOKAHEAD_ROWS:
+            continue
+        if all((LOOKAHEAD_SHORTCUTS[name](rows, lane) == answer) == hit for name, hit in want.items()):
+            break
+    else:
+        raise RuntimeError(f"lookahead_case: no {cls} task for {lanes} lanes after {LOOKAHEAD_TRIES} tries")
+    values = lookahead_values(rows, lane)
+    if lookahead_best(values) != [answer] or values[answer] != LOOKAHEAD_ROWS:     # zaručuje to konstrukce; nic se neopravuje potichu
+        raise RuntimeError(f"lookahead_case: {rows}, lane {lane} has best moves {values}, not only {answer}")
+    return rows, lane, answer, depth, lookahead_greedy(rows, lane)
+
+
+def lookahead_cases(n, lanes=4, seed=1):
+    rng = random.Random(seed)
+    return [lookahead_case(rng, lanes, rng.choice(LOOKAHEAD_CLASSES)) for _ in range(n)]
+
+
+def lookahead_form(form):
+    """Podoba stavu: None = výchozí LOOKAHEAD_FORM, neznámá podoba = ValueError."""
+    form = form or LOOKAHEAD_FORM
+    if form not in LOOKAHEAD_FORMS:
+        raise ValueError(f"unknown lookahead form: {form}")
+    return form
+
+
+def lookahead_state(rows, lane, form=None):
+    """Stav pro model. rows: řady jako řetězce '.'/'#'; blocked: u každé řady čísla zablokovaných pruhů (od 1, vzestupně).
+    car_lane je číslo pruhu od 1. Úloha je v obou podobách stejná."""
+    if lookahead_form(form) == "rows":
+        return {"car_lane": lane + 1, "rows_ahead": list(rows)}
+    return {"car_lane": lane + 1, "blocked_lanes_ahead": [[i + 1 for i, c in enumerate(row) if c == "#"] for row in rows]}
+
+
+def lookahead_question(lanes, form=None):
+    if lookahead_form(form) == "rows":
+        key, text = "move", "rows_ahead lists the next rows, nearest first; each row has one character per lane, lane 1 first: '.' is free, '#' is blocked."
+    else:
+        key, text = "move_blocked", "blocked_lanes_ahead lists the next rows, nearest first; each row lists the numbers of its blocked lanes."
+    instructions = (f"A car drives up a {lanes}-lane road, lanes numbered 1 to {lanes} from the left. car_lane is its lane. {text} "
+                    "Before each row the car may shift one lane left, stay, or shift one lane right, then it enters that row; it cannot leave the road. "
+                    "Choose the move for the nearest row that lets the car pass the most rows without hitting a blocked lane.")
+    criteria = {"left": "Shift one lane to the left", "stay": "Stay in the current lane", "right": "Shift one lane to the right"}
+    return {key: {"type": "choice", "instructions": instructions, "criteria": criteria}}
+
+
+def lookahead_errors(cases, choices):
+    """Rozbor chybných tahů; správný tah se nepočítá nikam.
+
+    greedy: zvolený tah je tah hladového řidiče úlohy.
+    crash: zvolený tah má hodnotu 0 (do '#' v nejbližší řadě nebo mimo silnici); hladový tah nikdy nenarazí.
+    other: ostatní chybné tahy.
+    invalid: volba, která není tahem z LOOKAHEAD_MOVES (None, jiný řetězec, jiný typ)."""
+    counts = {"greedy": 0, "crash": 0, "other": 0, "invalid": 0}
+    for (rows, lane, answer, _, greedy), choice in zip(cases, choices):
+        if not (isinstance(choice, str) and choice in LOOKAHEAD_MOVES):
+            counts["invalid"] += 1
+        elif choice == answer:
+            continue
+        elif choice == greedy:
+            counts["greedy"] += 1
+        elif lookahead_values(rows, lane)[choice] == 0:
+            counts["crash"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+# ---------- scénář: skryté pravidlo ----------
+# Karta je dict s klíči v pořadí RULE_FEATURES. Položka deníku začíná (znak, správně?): znak, ve kterém se zvolená brána
+# shodovala se vzorem, a jestli byla volba správná.
+RULE_FEATURES = ("color", "shape", "count")
+RULE_VALUES = {"color": ("red", "blue", "green"), "shape": ("circle", "star", "square"), "count": (1, 2, 3)}
+RULE_CLASSES = ("repeat", "switch", "eliminate")     # pravidlo plyne ze správného pokusu, ze změny, z vyloučení
+RULE_STREAK = 3                                      # po tolika správných v řadě se pravidlo mění
+RULE_LOG = (3, 10)                                   # nejkratší a nejdelší deník
+RULE_SHORT = 5                                       # krátký deník: nejvýš tolik pokusů
+RULE_LENGTHS = ("short", "long")
+RULE_STICK = 0.8                                     # skript pokusů: po správném pokusu s touto pravděpodobností stejný znak
+RULE_FORMS = ("labeled", "matched_by")
+RULE_FORM = "labeled"                                # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-26
+RULE_TRIES = 10000                                   # mez pokusů na jednu úlohu
+RULE_INSERT = 0.5                                    # skript ve třídě switch: před změnou místo náhodného znaku budoucí pravidlo
+
+
+def card_text(card):
+    """Karta jako text: „2 red stars“, „1 green circle“."""
+    n = card["count"]
+    return f"{n} {card['color']} {card['shape']}{'s' if n > 1 else ''}"
+
+
+def rule_shared(a, b):
+    """Znaky, ve kterých se dvě karty shodují, v pořadí RULE_FEATURES."""
+    return [f for f in RULE_FEATURES if a[f] == b[f]]
+
+
+def rule_read(log):
+    """Co o pravidle ví čtenář deníku (jen z výsledků). Vrací (kandidáti, starý znak nebo None, třída nebo None).
+
+    Série správných se počítá od začátku, špatný pokus ji nuluje; po třetím správném v řadě se pravidlo mění (starý znak
+    je znak toho pokusu) a série začíná znovu. Končí-li deník změnou, nové pravidlo určené není. Jinak kandidáti jsou znaky
+    kromě starého; v úseku od poslední změny správný pokus nastaví jeho znak, špatný znak vyřadí. Třída: repeat se správným
+    pokusem v úseku, jinak switch se změnou, jinak eliminate; None, když kandidát není právě jeden."""
+    streak, change, old = 0, -1, None
+    for i, (feature, ok, *_) in enumerate(log):
+        streak = streak + 1 if ok else 0
+        if streak == RULE_STREAK:                    # po třetím správném v řadě se pravidlo mění, série začíná znovu
+            change, old, streak = i, feature, 0
+    candidates = set(RULE_FEATURES) - {old}
+    if change == len(log) - 1:                       # deník končí změnou: nové pravidlo neznámé
+        return candidates, old, None
+    tail = log[change + 1:]
+    for feature, ok, *_ in tail:
+        if ok:
+            candidates = {feature}
+        else:
+            candidates.discard(feature)
+    if len(candidates) != 1:
+        return candidates, old, None
+    return candidates, old, "repeat" if any(ok for _, ok, *_ in tail) else "switch" if old else "eliminate"
+
+
+def rule_least(log):
+    """Zkratka „nejméně častý znak“: znak, který se v deníku objevil nejméně často (shoda → pořadí RULE_FEATURES)."""
+    counts = Counter(feature for feature, *_ in log)
+    return min(RULE_FEATURES, key=lambda f: counts[f])
+
+
+def rule_gates(rng, sample):
+    """Tři brány: brána i se se vzorem shoduje právě ve znaku order[i] (náhodná permutace), ostatní znaky jsou jiné."""
+    order = list(RULE_FEATURES)
+    rng.shuffle(order)
+    return [{h: sample[h] if h == f else rng.choice([v for v in RULE_VALUES[h] if v != sample[h]]) for h in RULE_FEATURES}
+            for f in order]
+
+
+def rule_log(rng, n, switch=None):
+    """Simulovaný deník n pokusů jako [(znak, správně?)]; vrací (deník, pravidlo na konci).
+
+    Skript pokusů: po správném pokusu s pravděpodobností RULE_STICK stejný znak, jinak náhodný; po třetím správném v řadě
+    se pravidlo změní na jiný znak. switch = (staré, budoucí) pravidlo zvolené dopředu (třída switch): deník začíná starým
+    pravidlem a jediná změna vede na budoucí. Před změnou skript místo náhodného znaku s pravděpodobností RULE_INSERT zvolí
+    budoucí pravidlo (špatný pokus), kromě prvního pokusu, aby znak prvního pokusu nebyl zkratkou. Po změně hráč budoucí
+    pravidlo nezkouší, takže deník končí přepnutím bez správného pokusu."""
+    old, future = switch or (rng.choice(RULE_FEATURES), None)
+    others = [f for f in RULE_FEATURES if f != future]
+    rule, streak, log = old, 0, []
+    for _ in range(n):
+        if log and log[-1][1] and rng.random() < RULE_STICK:
+            pick = log[-1][0]
+        elif future is None or not log:
+            pick = rng.choice(RULE_FEATURES)
+        elif rule != future:
+            pick = future if rng.random() < RULE_INSERT else rng.choice(RULE_FEATURES)
+        else:
+            pick = rng.choice(others)
+        ok = pick == rule
+        log.append((pick, ok))
+        streak = streak + 1 if ok else 0
+        if streak == RULE_STREAK:
+            rule = future if future and rule != future else rng.choice([f for f in RULE_FEATURES if f != rule])
+            streak = 0
+    return log, rule
+
+
+def rule_switch_pair(rng, length, hit):
+    """Staré a budoucí pravidlo úlohy switch, losované jednou na úlohu (zamítání je pak nezkreslí).
+
+    Rovnoměrně ze všech dvojic, kromě krátkého deníku, kde nejméně častý znak netrefí: ten má vždy tvar
+    [budoucí špatně, staré ×3 správně, třetí špatně] a budoucí pravidlo nesmí vyhrát shodu s třetím znakem v pořadí
+    RULE_FEATURES. Jde jen budoucí count (staré color nebo shape) nebo budoucí shape se starým count; budoucí se losuje
+    rovnoměrně z count a shape, color tam být nemůže."""
+    if length == "short" and hit is False:
+        future = rng.choice(("count", "shape"))
+        return (rng.choice(("color", "shape")) if future == "count" else "count"), future
+    future = rng.choice(RULE_FEATURES)
+    return rng.choice([f for f in RULE_FEATURES if f != future]), future
+
+
+def rule_case(rng, cls, length):
+    """Úloha skrytého pravidla dané třídy a pásma délky deníku. Vrací (deník, vzor, brány, správná brána, třída, brána starého
+    pravidla nebo None); deník je [(znak, správně?)].
+
+    Deník se simuluje a zamítá, dokud rule_read nedá jediného kandidáta = skutečné pravidlo a třídu cls. Ve třídě switch se
+    předem vylosuje, jestli má zkratka „nejméně častý znak“ trefit (1/3), a staré i budoucí pravidlo (rule_switch_pair);
+    úloha se přijme, jen když se zkratka trefuje podle vylosování. V dlouhém switch se stejně vyvažuje zkratka „znak
+    prvního pokusu“ (1/3); v krátkém, kde nejméně častý znak netrefí, je první pokus z tvaru deníku vždy budoucí pravidlo.
+    Krátký switch, kde zkratka netrefí, má vždy délku
+    RULE_SHORT: v deníku délky 3 přepnutí nevznikne a v deníku délky 4 (tři správné a jeden špatný) budoucí pravidlo
+    nikdy nepadlo."""
+    if cls not in RULE_CLASSES or length not in RULE_LENGTHS:
+        raise RuntimeError(f"rule_case: no {cls} {length} log")
+    hit = rng.random() < 1 / 3 if cls == "switch" else None
+    first = rng.random() < 1 / 3 if cls == "switch" and length == "long" else None   # trefí znak prvního pokusu?
+    pair = rule_switch_pair(rng, length, hit) if cls == "switch" else None
+    for _ in range(RULE_TRIES):
+        if length == "long":
+            n = rng.randint(RULE_SHORT + 1, RULE_LOG[1])
+        elif hit is False:
+            n = RULE_SHORT
+        else:
+            n = rng.randint(RULE_LOG[0], RULE_SHORT)
+        log, rule = rule_log(rng, n, pair)
+        candidates, old, read_cls = rule_read(log)
+        if (candidates == {rule} and read_cls == cls and (hit is None or (rule_least(log) == rule) == hit)
+                and (first is None or (log[0][0] == rule) == first)):
+            break
+    else:
+        raise RuntimeError(f"rule_case: no {cls} {length} log after {RULE_TRIES} tries")
+    sample = {f: rng.choice(RULE_VALUES[f]) for f in RULE_FEATURES}
+    gates = rule_gates(rng, sample)
+    shared = [rule_shared(sample, g) for g in gates]
+    if any(len(s) != 1 for s in shared) or sorted(s[0] for s in shared) != sorted(RULE_FEATURES):   # nic se neopravuje potichu
+        raise RuntimeError(f"rule_case: gates {gates} do not each share one distinct feature with {sample}")
+    return log, sample, gates, shared.index([rule]), cls, None if old is None else shared.index([old])
+
+
+def rule_cases(n, seed=1):
+    rng = random.Random(seed)
+    tasks = []
+    for _ in range(n):
+        cls = rng.choice(RULE_CLASSES)
+        tasks.append(rule_case(rng, cls, rng.choice(RULE_LENGTHS)))
+    return tasks
+
+
+def rule_form(form):
+    """Podoba stavu: None = výchozí RULE_FORM, neznámá podoba = ValueError."""
+    form = form or RULE_FORM
+    if form not in RULE_FORMS:
+        raise ValueError(f"unknown rule form: {form}")
+    return form
+
+
+def rule_state(case, form=None):
+    """Stav pro model. Deník je v obou podobách stejný ({"matched_by": znak, "result": ...}). labeled: brána nese jen znak,
+    ve kterém se shoduje se vzorem, bez karet; matched_by: karty vzoru a bran jako text."""
+    log, sample, gates = case[:3]
+    state = {"log": [{"matched_by": feature, "result": "correct" if ok else "wrong"} for feature, ok in log]}
+    if rule_form(form) == "labeled":
+        state.update((f"gate_{i + 1}", {"matches_sample_by": rule_shared(sample, g)[0]}) for i, g in enumerate(gates))
+    else:
+        state["sample"] = card_text(sample)
+        state.update((f"gate_{i + 1}", card_text(g)) for i, g in enumerate(gates))
+    return state
+
+
+def rule_question(form=None):
+    """Otázka podle podoby stavu: labeled → klíč gate_labeled (brána jmenuje svůj znak), matched_by → klíč gate (karty)."""
+    if rule_form(form) == "labeled":
+        key, instructions = "gate_labeled", (
+            "A hidden rule decides which gate is right: the gate that matches the sample card by color, by shape, or by count. "
+            "Each gate says which feature it shares with the sample. The rule changes to another feature right after every three correct picks in a row. "
+            "log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. "
+            "Work out the current rule and choose the gate that shares that feature with the sample.")
+    else:
+        key, instructions = "gate", (
+            "A hidden rule decides which gate is right: the gate whose card matches the sample card by color, by shape, or by count. "
+            "Each gate matches the sample in exactly one feature. The rule changes to another feature right after every three correct picks in a row. "
+            "log lists earlier picks, oldest first: which feature the picked gate shared with the sample, and whether it was correct. "
+            "Work out the current rule and choose the gate that matches the sample by it.")
+    return {key: {"type": "choice", "instructions": instructions, "criteria": position_criteria(gate_keys(3), "Gate")}}
+
+
+def rule_summary(cases, choices, keys):
+    """Přesnost podle třídy a podle délky deníku ({třída: [správně, celkem]}) a perseverace = [kolikrát model ve třídě
+    switch zvolil bránu starého pravidla, počet úloh switch]. Neplatná odpověď se do perseverace nepočítá."""
+    switch = [(old, choice) for (_, _, _, _, cls, old), choice in zip(cases, choices) if cls == "switch"]
+    return {"by_class": class_tally(RULE_CLASSES, [(top, cls) for _, _, _, top, cls, _ in cases], choices, keys),
+            "by_length": class_tally(RULE_LENGTHS, [(top, "short" if len(log) <= RULE_SHORT else "long") for log, _, _, top, _, _ in cases],
+                                     choices, keys),
+            "persev": [sum(choice == keys[old] for old, choice in switch), len(switch)]}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -722,9 +1170,14 @@ ALT = {                                              # jinak formulované zadán
     "allowed": "Every lane carries a sign. Only one of them lets this vehicle in. Pick that lane.",
     "recall": "For every sign the car went past, signs_passed says how many steps ago it was. Find the sign listed under target and pick the gate that shows it.",
     "recall_count": "The list signs_passed holds every sign the car went past, from the oldest to the newest; its last entry is 1 step back. Pick the gate whose sign was passed exactly steps_back steps ago.",
+    "move": "The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. rows_ahead holds the coming rows from the nearest one; in each row the first character is lane 1, '.' marks a free lane and '#' a blocked one. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.",
+    "move_blocked": "The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.",
+    "gate": "Which gate is right is set by a hidden rule: the right gate shares the color, the shape or the count with the sample card. Every gate shares exactly one feature with the sample. Right after any three correct picks in a row, the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate had in common with the sample, and whether the pick was correct. Find the rule in force now and pick the gate that matches the sample by it.",
+    "gate_labeled": "A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.",
     "go": "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
+ALT_LANES = re.compile(r"\ba (\d+)-lane road\b")    # zadání move nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
 
 
 def noul_variant(question, v):
@@ -742,7 +1195,10 @@ def variant(question, v):
     if v == 1:
         q["criteria"] = dict(reversed(list(q["criteria"].items())))
     if v == 2:
-        q["instructions"] = ALT[key] + (" " + q["instructions"] if key == "category" else "")   # pravidla sady e-mailů zůstávají
+        alt = ALT[key]
+        if "{lanes}" in alt:                         # dva kroky dopředu: počet pruhů z původního zadání
+            alt = alt.format(lanes=ALT_LANES.search(q["instructions"]).group(1))
+        q["instructions"] = alt + (" " + q["instructions"] if key == "category" else "")   # pravidla sady e-mailů zůstávají
     return {key: q}
 
 
@@ -1128,6 +1584,31 @@ def run_barrier(model, cases, mirror=False, inject=False, deadline=None):
     return r
 
 
+def run_lookahead(model, cases, lanes=4, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(LOOKAHEAD_MOVES), lookahead_question(lanes, form)
+    ask(model, lookahead_state(*cases[0][:2], form), question)   # zahřátí, nepočítá se
+    targets = inject_plan([{answer} for _, _, answer, _, _ in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(lookahead_state(rows, lane, form), note), {answer}, "")
+             for (rows, lane, answer, _, _), note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r["by_depth"] = class_tally(LOOKAHEAD_CLASSES, [(keys.index(answer), lookahead_class(depth)) for _, _, answer, depth, _ in cases],
+                                choices, keys)                   # hloubka pasti → [správně, celkem]
+    r["errors"] = lookahead_errors(cases, choices)               # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_rule(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = gate_keys(3), rule_question(form)
+    ask(model, rule_state(cases[0], form), question)             # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[3]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(rule_state(case, form), note), {keys[case[3]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(rule_summary(cases, choices, keys))                 # z původní varianty zadání, jako přesnost
+    return r
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
@@ -1168,6 +1649,12 @@ def parse_args(argv):
     p.add_argument("--memory", action="store_true")
     p.add_argument("--count", action="store_true")
     p.add_argument("--barrier", action="store_true")
+    p.add_argument("--lookahead", action="store_true")
+    p.add_argument("--rows", action="store_true")
+    p.add_argument("--blocked", action="store_true")
+    p.add_argument("--rule", action="store_true")
+    p.add_argument("--matched-by", action="store_true")
+    p.add_argument("--labeled", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -1179,7 +1666,7 @@ def parse_args(argv):
     a.models = a.rest
     a.lanes_given = a.lanes is not None              # závora pruhy ani brány nemá: --lanes s --barrier končí hláškou
     if a.lanes is None:
-        a.lanes = 4 if a.memory else 3               # paměťová stopa: výchozí 4 brány podle specu
+        a.lanes = 4 if a.memory or a.lookahead else 3      # paměťová stopa: 4 brány, dva kroky dopředu: 4 pruhy (spec)
     return a
 
 
@@ -1283,6 +1770,30 @@ def print_barrier(r):
                             threshold=f"{t:.2f}", best=pct(best)), flush=True)
 
 
+def lookahead_note(r):
+    """Poznámka za řádkem modelu: přesnost podle hloubky pasti."""
+    return class_note(r["by_depth"], {"d1": i18n.t("bench.lookahead.depth", d="1"), "d2": i18n.t("bench.lookahead.depth", d="2"),
+                                      "d3+": i18n.t("bench.lookahead.depth", d="3+")})
+
+
+def print_lookahead(r):
+    """Řádek rozboru chybných tahů, odsazený pod řádek modelu."""
+    print(" " * 20 + i18n.t("bench.lookahead.errors", **r["errors"]), flush=True)
+
+
+def rule_note(r):
+    """Poznámka za řádkem modelu: přesnost podle třídy úlohy skrytého pravidla."""
+    return class_note(r["by_class"], {"repeat": i18n.t("bench.rule.repeat"), "switch": i18n.t("bench.rule.switch"),
+                                      "eliminate": i18n.t("bench.rule.eliminate")})
+
+
+def print_rule(r):
+    """Řádek pod řádkem modelu: přesnost podle délky deníku a perseverace (správně/celkem)."""
+    frac = lambda counts: f"{counts[0]}/{counts[1]}"
+    print(" " * 20 + i18n.t("bench.rule.line", short=frac(r["by_length"]["short"]), long=frac(r["by_length"]["long"]),
+                            persev=frac(r["persev"])), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
@@ -1305,7 +1816,9 @@ def print_public(r, worst=5):
 
 def main(argv):
     args = parse_args(argv)
-    if not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier))) > 1:
+    scenarios = (args.emails, args.numbers, args.public, args.signs, args.memory, args.barrier, args.lookahead, args.rule)
+    if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
+            or (args.lookahead and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -1315,6 +1828,12 @@ def main(argv):
         sys.exit(i18n.t("bench.err.pairsCombo"))
     if args.count and not args.memory:
         sys.exit(i18n.t("bench.err.countMemory"))
+    if (args.rows or args.blocked) and not args.lookahead:
+        sys.exit(i18n.t("bench.err.formLookahead"))
+    if (args.matched_by or args.labeled) and not args.rule:
+        sys.exit(i18n.t("bench.err.formRule"))
+    if args.rule and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesRule"))
     if args.barrier and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
@@ -1395,6 +1914,26 @@ def main(argv):
                 r = run_barrier(m, cases, args.mirror, args.inject, args.deadline_ms)
                 print_row(r, barrier_note(r))
                 print_barrier(r)
+    elif args.lookahead:
+        form = "blocked" if args.blocked else "rows" if args.rows else LOOKAHEAD_FORM
+        cases = lookahead_cases(args.n or 100, args.lanes)       # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        print(i18n.t("bench.intro.lookahead", n=len(cases), rows=LOOKAHEAD_ROWS, form=form, lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_lookahead(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, lookahead_note(r))
+                print_lookahead(r)
+    elif args.rule:
+        form = "labeled" if args.labeled else "matched_by" if args.matched_by else RULE_FORM
+        cases = rule_cases(args.n or 100)                # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        print(i18n.t("bench.intro.rule", n=len(cases), form=form) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_rule(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, rule_note(r))
+                print_rule(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

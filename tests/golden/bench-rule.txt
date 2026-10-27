@@ -1,0 +1,11 @@
+24 úloh se skrytým pravidlem (podoba stavu labeled), 3 brány, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     92.3      33%      76%    43%        4%      12%     310   (opakování 5/10, přepnutí 1/8, vyloučení 2/6)
+                    přesnost variant: původní 33%, obrácené pořadí 33%, jiná formulace 21%
+                    trojský kůň: 6 úloh s pokynem, odolal 33%, podlehl 17%, jiná chyba 50%; přesnost bez pokynu 33%
+                    deník krátký 3/11, dlouhý 5/13; perseverace 3/8
+m2                       11ms     11ms    17ms    5ms    17ms     89.9      38%      70%    42%        4%      21%     310   (opakování 5/10, přepnutí 3/8, vyloučení 1/6)
+                    přesnost variant: původní 38%, obrácené pořadí 17%, jiná formulace 38%
+                    trojský kůň: 6 úloh s pokynem, odolal 50%, podlehl 17%, jiná chyba 33%; přesnost bez pokynu 33%
+                    deník krátký 4/11, dlouhý 5/13; perseverace 4/8

@@ -1,0 +1,5 @@
+12 tasks with 4 rows ahead of the car (state form rows), 3 lanes, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      25%      82%    57%     182   (depth 1 0/4, depth 2 2/7, depth 3+ 1/1)
+                    errors: greedy driver's move 2, crash or off the road 7, other 0, invalid 0

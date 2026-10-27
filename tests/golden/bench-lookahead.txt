@@ -1,0 +1,11 @@
+12 úloh se 4 řadami před autem (podoba stavu blocked), 4 pruhů, stejných pro všechny modely
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      25%      76%    51%       17%       8%     180   (hloubka 1 2/6, hloubka 2 0/1, hloubka 3+ 1/5)
+                    přesnost variant: původní 25%, obrácené pořadí 33%, jiná formulace 25%
+                    trojský kůň: 3 úloh s pokynem, odolal 33%, podlehl 67%, jiná chyba 0%; přesnost bez pokynu 22%
+                    chyby: tah hladového řidiče 1, náraz nebo mimo silnici 4, jiné 4, neplatné 0
+m2                       11ms     11ms    17ms    5ms    17ms     91.6      25%      71%    46%        0%      17%     180   (hloubka 1 2/6, hloubka 2 0/1, hloubka 3+ 1/5)
+                    přesnost variant: původní 25%, obrácené pořadí 25%, jiná formulace 42%
+                    trojský kůň: 3 úloh s pokynem, odolal 0%, podlehl 100%, jiná chyba 0%; přesnost bez pokynu 33%
+                    chyby: tah hladového řidiče 2, náraz nebo mimo silnici 6, jiné 1, neplatné 0
