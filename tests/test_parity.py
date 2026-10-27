@@ -1130,5 +1130,106 @@ class Queue(unittest.TestCase):
                 self.assertGreaterEqual(len(json.dumps(bench.queue_state(queues))), longest)          # horní odhad délky dotazu ve stepEstimate
 
 
+# Generátor Sázky na pruh stránky se stejnou náhodou jako ROWS_JS: seed, lanes (= počet bran), n → řady betRow.
+BET_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "betRow(arg.lanes, rand)")
+assert BET_ROWS_JS != ROWS_JS
+BET_PAGE = {}
+
+
+def bet_page(n, gates, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.bet_case."""
+    if (n, gates, seed) not in BET_PAGE:
+        raw = run_js(BET_ROWS_JS, {"seed": seed, "lanes": gates, "n": n})
+        BET_PAGE[n, gates, seed] = raw, [(tuple(r["rewards"]), tuple(r["chances"]), r["answer"], r["level"], r["topReward"], r["topChance"])
+                                         for r in raw]
+    return BET_PAGE[n, gates, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Bet(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ levels: BET_LEVELS, rewards: BET_REWARDS, same: BET_SAME_CHANCES, chances: BET_CHANCES, margin: BET_MARGIN,"
+                    " share: BET_SHORTCUT_SHARE, tries: BET_TRIES,"
+                    " top: [[10, 30, 20], [30, 30, 20], [50, 50, 50]].map(betTop), second: [[10, 30, 20], [40, 30, 30]].map(betSecond) })", None)
+        self.assertEqual(js["levels"], list(bench.BET_LEVELS))
+        self.assertEqual((js["rewards"], js["same"], js["chances"]), (list(bench.BET_REWARDS), list(bench.BET_SAME_CHANCES), list(bench.BET_CHANCES)))
+        self.assertEqual((js["margin"], js["share"], js["tries"]), (bench.BET_MARGIN, bench.BET_SHORTCUT_SHARE, bench.BET_TRIES))
+        self.assertEqual(js["top"], [bench.bet_top(v) for v in ((10, 30, 20), (30, 30, 20), (50, 50, 50))])
+        self.assertEqual(js["second"], [list(bench.bet_second(v)) for v in ((10, 30, 20), (40, 30, 30))])
+        tasks = [[list(rewards), list(chances)] for gates in range(3, 9) for rewards, chances, *_ in bench.bet_cases(5, gates, seed=gates)]
+        for (rewards, chances), state in zip(tasks, run_js("arg.map(([r, c]) => betState(r, c))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.bet_state(rewards, chances)))       # bajtově, i pořadí klíčů
+        for gates, question in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => betQuestion(k))", None)):
+            self.assertEqual(json.dumps(question), json.dumps(bench.bet_question(gates)), gates)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  bet: '([^'\\]*)',$", alt, re.M), [bench.ALT["bet"]])
+
+    def test_generated_rows_keep_the_guarantees(self):             # záruky jako tests/test_bet.py (Generator.test_cases_keep_the_guarantees)
+        import bench
+        for gates, n in ((3, 900), (4, 900), (8, 300)):
+            raw, cases = bet_page(n, gates)
+            for r, (rewards, chances, answer, level, top_reward, top_chance) in zip(raw, cases):
+                with self.subTest(gates=gates, rewards=rewards, chances=chances):
+                    self.assertEqual(list(r), ["rewards", "chances", "answer", "level", "topReward", "topChance", "truth"])
+                    self.assertEqual(r["truth"], answer)
+                    self.assertEqual((len(rewards), len(chances)), (gates, gates))
+                    self.assertTrue(set(rewards) <= set(bench.BET_REWARDS))
+                    ev = [x * c for x, c in zip(rewards, chances)]
+                    self.assertGreaterEqual(100 * ev[answer], 105 * max(ev[:answer] + ev[answer + 1:]))     # aspoň o 5 % víc než druhá
+                    self.assertEqual((top_reward, top_chance), (bench.bet_top(rewards), bench.bet_top(chances)))
+                    if level == "same":
+                        self.assertEqual(len(set(chances)), 1)
+                        self.assertIn(chances[0], bench.BET_SAME_CHANCES)
+                        self.assertEqual((top_reward, top_chance), (answer, None))
+                    elif level == "round":
+                        self.assertEqual(sorted(chances), [50] * (gates - 1) + [100])
+                        self.assertEqual(top_reward, answer)
+                        self.assertNotEqual(top_chance, answer)
+                    else:
+                        self.assertEqual(level, "general")
+                        self.assertTrue(set(chances) <= set(bench.BET_CHANCES))
+                        self.assertNotIn(None, (top_reward, top_chance))
+
+    def test_levels_and_answers_are_spread(self):
+        import bench
+        for gates, n, low in ((3, 900, 0.2), (8, 300, 0.05)):
+            _, cases = bet_page(n, gates)
+            levels, answers = Counter(x[3] for x in cases), Counter(x[2] for x in cases)
+            for level in bench.BET_LEVELS:
+                self.assertTrue(0.22 <= levels[level] / n <= 0.45, (gates, levels))
+            for gate in range(gates):
+                self.assertGreaterEqual(answers[gate] / n, low, (gates, answers))
+
+    def test_general_shortcuts_are_balanced(self):                 # meze jako tests/test_bet.py: v general při K = 4 žádná zkratka nad 0,45
+        general = [x for x in bet_page(1800, 4)[1] if x[3] == "general"]
+        self.assertGreaterEqual(len(general), 550)
+
+        def elimination(x):                                        # brána bez nejvyšší odměny i šance; víc kandidátů → vyšší odměna, shoda → dřívější
+            rewards, _, _, _, top_reward, top_chance = x
+            rest = [i for i in range(len(rewards)) if i not in (top_reward, top_chance)]
+            return max(rest, key=lambda i: (rewards[i], -i))
+        shortcuts = {"reward": lambda x: x[4] == x[2], "chance": lambda x: x[5] == x[2], "elimination": lambda x: elimination(x) == x[2],
+                     "second": lambda x: x[0][x[2]] == sorted(x[0], reverse=True)[1]}
+        for name, hit in shortcuts.items():
+            with self.subTest(shortcut=name):
+                self.assertLessEqual(sum(map(hit, general)) / len(general), 0.45)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(BET_ROWS_JS, {"seed": 7, "lanes": 4, "n": 50})
+        self.assertEqual(run_js(BET_ROWS_JS, {"seed": 7, "lanes": 4, "n": 50}), first)
+        self.assertNotEqual(run_js(BET_ROWS_JS, {"seed": 8, "lanes": 4, "n": 50}), first)
+
+    def test_bounded_search_raises(self):                          # rand = 0: samé odměny 20 a šance 20, marže nikdy nevyjde
+        got = run_js("[[() => 0, 3, 'same'], [Math.random, 2, 'same'], [Math.random, 9, 'same'], [Math.random, 3, 'odd']]"
+                     ".map(([rand, k, level]) => { try { betCase(rand, k, level); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["betCase: no same task for 3 gates after 10000 tries", "betCase: unsupported task for 2 gates and level same",
+                               "betCase: unsupported task for 9 gates and level same", "betCase: unsupported task for 3 gates and level odd"])
+
+
 if __name__ == "__main__":
     unittest.main()

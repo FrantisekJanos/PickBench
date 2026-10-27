@@ -1051,6 +1051,7 @@ const ALT = {                                              // jinak formulované
   go: "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
   lane: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.',
   lane_weighted: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.',
+  bet: 'Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.',
 };
 const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
@@ -3376,6 +3377,72 @@ function queueErrors(cases, choices, keys, weighted) {
 function queueWarm(lanes) {
   const queues = [...Array(lanes)].map((_, i) => Array(i === lanes - 1 ? 11 : 12).fill('motorbike'));
   return { queues, answer: lanes - 1, cls: 'gap1', text: queueText(queues), count: lanes - 1, truth: lanes - 1 };
+}
+// Sázka na pruh: konstanty, generátor, stav a otázka, stejné jako v bench.py (BET_*, bet_top, bet_second, bet_case, bet_cases, bet_state, bet_question).
+// Výplata brány ev = odměna × šance v procentech, počítá se v celých číslech. Náhoda z předané funkce rand, stejné kroky a pořadí losování jako
+// v Pythonu; jiné úlohy než bench.py, protože Python má jiný generátor náhody. Co jde do modelu, je anglicky.
+const BET_LEVELS = ['same', 'round', 'general'];
+const BET_REWARDS = Array.from({ length: 38 }, (_, i) => 20 + 10 * i);          // range(20, 400, 10)
+const BET_SAME_CHANCES = Array.from({ length: 8 }, (_, i) => 20 + 10 * i);      // range(20, 100, 10)
+const BET_CHANCES = Array.from({ length: 18 }, (_, i) => 10 + 5 * i);           // range(10, 100, 5)
+const BET_MARGIN = 105, BET_SHORTCUT_SHARE = 1 / 3, BET_TRIES = 10000;          // správná brána má mít aspoň o 5 % vyšší ev než druhá
+function betTop(values) {                                  // index jediného maxima, při shodě na maximu null
+  const best = Math.max(...values);
+  return values.filter(v => v === best).length === 1 ? values.indexOf(best) : null;
+}
+function betSecond(rewards) {                              // brány s druhou hodnotou sestupně seřazených odměn, při shodě všechny, vzestupně
+  const second = [...rewards].sort((a, b) => b - a)[1];
+  return rewards.map((r, i) => r === second ? i : -1).filter(i => i >= 0);
+}
+// Úloha dané úrovně: port bet_case. V general se předem losuje, jestli má být správná brána s nejvyšší odměnou, nejvyšší šancí a při 4 a více
+// branách s druhou nejvyšší odměnou; úloha se přijme, jen když se zkratky trefují přesně tak. Vyčerpané pokusy a porušená záruka vyhodí výjimku.
+function betCase(rand, gates, level) {
+  if (!(Number.isInteger(gates) && gates >= 3 && gates <= 8) || !BET_LEVELS.includes(level)) throw new Error(`betCase: unsupported task for ${gates} gates and level ${level}`);
+  let want = null;
+  if (level === 'general') {
+    const top = rand() < BET_SHORTCUT_SHARE;
+    const chance = rand() < BET_SHORTCUT_SHARE;
+    const second = gates >= 4 ? !top && rand() < 1 / 2 : null;
+    want = [top, chance, second];
+  }
+  let found = null;
+  for (let t = 0; t < BET_TRIES && found === null; t++) {
+    let chances;
+    if (level === 'same') chances = Array(gates).fill(pickOf(rand, BET_SAME_CHANCES));
+    else if (level === 'round') {
+      chances = Array(gates).fill(50);
+      chances[Math.floor(rand() * gates)] = 100;
+    } else chances = [...Array(gates)].map(() => pickOf(rand, BET_CHANCES));
+    const rewards = [...Array(gates)].map(() => pickOf(rand, BET_REWARDS));
+    const ev = rewards.map((r, i) => r * chances[i]);
+    const order = [...Array(gates).keys()].sort((a, b) => ev[b] - ev[a]);
+    const answer = order[0];
+    if (100 * ev[answer] < BET_MARGIN * ev[order[1]]) continue;
+    const topReward = betTop(rewards), topChance = betTop(chances);
+    if (level === 'round' && topChance === answer) continue;
+    if (level === 'general') {
+      if (topReward === null || topChance === null) continue;
+      if ((topReward === answer) !== want[0] || (topChance === answer) !== want[1]) continue;
+      if (want[2] !== null && betSecond(rewards).includes(answer) !== want[2]) continue;
+    }
+    found = { rewards, chances, answer, level, topReward, topChance };
+  }
+  if (found === null) throw new Error(`betCase: no ${level} task for ${gates} gates after ${BET_TRIES} tries`);
+  if (level !== 'general' && found.topReward !== found.answer) throw new Error('betCase: generated task breaks its guarantees');
+  return found;
+}
+function betRow(gates, rand) {                             // úroveň se losuje před úlohou, jako bet_cases; truth = index správné brány
+  const c = betCase(rand, gates, pickOf(rand, BET_LEVELS));
+  return { ...c, truth: c.answer };
+}
+function betState(rewards, chances) {                      // stav pro model: gate_N → odměna a šance v procentech
+  const state = {};
+  rewards.forEach((r, i) => state[`gate_${i + 1}`] = { reward: r, chance_pct: chances[i] });
+  return state;
+}
+function betQuestion(gates) {                              // otázka choice: brána s nejvyšší očekávanou výplatou
+  const instructions = 'Each gate pays its reward with the given chance in percent, otherwise nothing. Choose the gate with the highest expected payout (reward times chance).';
+  return { bet: { type: 'choice', instructions, criteria: memoryQuestion(gates).recall.criteria } };
 }
 // ==== sdíleno s Pythonem: konec ====
 
