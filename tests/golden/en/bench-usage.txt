@@ -14,6 +14,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -31,6 +32,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -132,6 +134,15 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --counter, --predict:  only with --pattern: the form of the question; the tasks are the same in both. counter = your own
             move that beats the opponent's next move; predict = the opponent's next move, and the error line also counts a
             counter move given instead of the prediction. Without the option: predict.
+--tictactoe:  winning move (3×3 tic-tac-toe): the model plays the mark you (X or O) and picks one of nine cells by the
+            rules in the prompt, in this order: win, otherwise block the opponent, otherwise make a fork (two threats at
+            once). The correct cell is always the only one. N tasks (default 100), spread evenly over four classes: win,
+            block, win before block (both are possible, winning is correct), fork; X and O about half each. After the model
+            row, the accuracy by class; below it by mark and by free cells, and the errors: block instead of win, win missed,
+            block missed, opponent's fork, single threat only, occupied cell, other, invalid. The cell on the most lines
+            without an opponent's mark finds the fork in about three quarters of the tasks: partial reasoning. Not with --lanes.
+--board, --cells:  only with --tictactoe: the form of the state; the tasks are the same in both. --board = the three rows
+            of the board as strings ("." for a free cell); --cells = every cell by its name rNcM. Without the option: --cells.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.

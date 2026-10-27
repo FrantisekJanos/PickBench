@@ -14,6 +14,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -31,6 +32,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -132,6 +134,15 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --counter, --predict:  jen s --pattern: podoba otázky, úlohy jsou v obou stejné. counter = vlastní tah, který porazí
             další tah soupeře; predict = další tah soupeře, řádek chyb navíc počítá protitah místo předpovědi.
             Bez volby platí predict.
+--tictactoe:  tah na výhru (piškvorky 3×3): model hraje za značku you (X nebo O) a volí jedno z devíti polí podle pravidel
+            v zadání, v tomto pořadí: vyhraj, jinak zablokuj soupeře, jinak udělej vidličku (dvě hrozby naráz). Správné pole
+            je vždy jediné. N úloh (výchozí 100), rovnoměrně ve čtyřech třídách: výhra, blok, výhra před blokem (vyhrát jde
+            i zablokovat, správně je vyhrát), vidlička; X i O asi napůl. Za řádkem modelu přesnost podle třídy, pod ním podle
+            značky a počtu volných polí a chyby: blok místo výhry, přehlédnutá výhra, přehlédnutý blok, vidlička soupeře,
+            jen jedna hrozba, obsazené pole, jiné, neplatné. Pole na nejvíc linkách bez soupeřovy značky trefí vidličku asi
+            ve třech čtvrtinách úloh; i to je uvažování o linkách, jen neúplné. S --lanes se nekombinuje.
+--board, --cells:  jen s --tictactoe: podoba stavu, úlohy jsou v obou stejné. --board = tři řádky desky jako řetězce
+            („.“ volné pole); --cells = každé pole jménem rNcM. Bez volby platí --cells.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.

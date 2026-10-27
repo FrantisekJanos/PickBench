@@ -510,5 +510,103 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(printed("en", bench.print_tictactoe, r)), 2)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--tictactoe", "m1"])
+        self.assertEqual((a.n, a.tictactoe, a.board, a.cells, a.lanes_given, a.models), (40, True, False, False, False, ["m1"]))
+        a = bench.parse_args(["--cells", "--tictactoe", "m1"])
+        self.assertEqual((a.tictactoe, a.board, a.cells), (True, False, True))
+        self.assertTrue(bench.parse_args(["--tictactoe", "--board", "m1"]).board)
+
+    def test_first_line_and_rows(self):
+        form = {"rows": ("deska po řádcích", "board as rows"), "cells": ("pole jménem", "cells by name")}
+        for argv, n_cs, n_en in ((["1", "--tictactoe", "m1"], "1 úloha", "1 task"), (["7", "--tictactoe", "--cells", "m1"], "7 úloh", "7 tasks"),
+                                 (["3", "--board", "--tictactoe", "m1"], "3 úlohy", "3 tasks")):
+            words = form["cells"] if "--cells" in argv else form["rows"] if "--board" in argv else form[bench.TICTACTOE_FORM]
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0],
+                                 f"{n_cs} s piškvorkami 3×3 (tah na výhru, {words[0]}); sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0],
+                                 f"{n_en} of 3×3 tic-tac-toe (winning move, {words[1]}), the same for all models")
+        self.assertTrue(self.cli("--tictactoe", "m1")[0].startswith("100 úloh s piškvorkami"))     # výchozí počet úloh
+        en = self.cli("6", "--tictactoe", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 6)
+        self.assertRegex(en[3], r"^m1 .*   \(win \d+/\d+, block \d+/\d+, win before block \d+/\d+, fork \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}plays X \d+/\d+, plays O \d+/\d+; free cells 2–3 \d+/\d+, 4–6 \d+/\d+$")
+        self.assertRegex(en[5], r"^ {20}errors: block instead of win \d+, win missed \d+, block missed \d+, opponent's fork \d+, "
+                                r"single threat only \d+, occupied cell \d+, other \d+, invalid \d+$")
+        self.assertEqual(len(self.cli("1", "--tictactoe", "m1")[0].splitlines()), 6)          # jediná úloha: prázdné třídy 0/0
+
+    def test_option_errors_in_both_languages(self):
+        form_cs, form_en = "Volby --board a --cells jdou jen s --tictactoe.", "The --board and --cells options work only with --tictactoe."
+        for argv, cs, en in (
+                (["6", "--tictactoe", "--lanes", "3", "m1"], "Volba --lanes se s --tictactoe nekombinuje.",
+                 "The --lanes option cannot be combined with --tictactoe."),
+                (["6", "--cells", "m1"], form_cs, form_en),
+                (["--board", "--queue", "m1"], form_cs, form_en),
+                (["--tictactoe", "--rows", "m1"], "Volby --rows a --blocked jdou jen s --lookahead.", "The --rows and --blocked options work only with --lookahead."),
+                (["--tictactoe", "--shuffled", "m1"], "Volby --sorted a --shuffled jdou jen s --timetable.",
+                 "The --sorted and --shuffled options work only with --timetable.")):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--tictactoe", "--queue", "m1"], ["--tictactoe", "--timetable", "m1"], ["--tictactoe", "--rule", "m1"],
+                     ["--tictactoe", "--board", "--cells", "m1"], ["--tictactoe", "--lanes", "9", "m1"], ["--tictactoe"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_tasks(self):
+        self.cli("6", "--tictactoe", "--board", "m1")
+        rows, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--tictactoe", "--cells", "m1")
+        cells = [json.loads(body) for body in self.sent]
+        self.assertEqual((len(rows), len(cells)), (7, 7))                        # zahřátí a šest úloh
+        self.assertTrue(all(list(p["questions"]) == ["cell"] for p in rows))
+        self.assertTrue(all(list(p["questions"]) == ["cell_cells"] for p in cells))
+        self.assertEqual([(board_of(p["state"]), p["state"]["you"]) for p in rows], [(board_of(p["state"]), p["state"]["you"]) for p in cells])
+
+    def test_mirror_and_inject_work_with_tictactoe(self):
+        out, code = self.cli("8", "--tictactoe", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("hraje X "), lines[6])
+        self.assertTrue(lines[7].strip().startswith("chyby: blok místo výhry "), lines[7])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --tictactoe tev1", text)
+            self.assertIn("\n--tictactoe:  ", text)
+            self.assertIn("\n--board, --cells:  ", text)
+            self.assertIn({"rows": "--board", "cells": "--cells"}[bench.TICTACTOE_FORM] + ".\n", text)
+
+
 if __name__ == "__main__":
     unittest.main()

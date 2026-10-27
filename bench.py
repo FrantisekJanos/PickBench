@@ -14,6 +14,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -31,6 +32,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -132,6 +134,15 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --counter, --predict:  jen s --pattern: podoba otázky, úlohy jsou v obou stejné. counter = vlastní tah, který porazí
             další tah soupeře; predict = další tah soupeře, řádek chyb navíc počítá protitah místo předpovědi.
             Bez volby platí predict.
+--tictactoe:  tah na výhru (piškvorky 3×3): model hraje za značku you (X nebo O) a volí jedno z devíti polí podle pravidel
+            v zadání, v tomto pořadí: vyhraj, jinak zablokuj soupeře, jinak udělej vidličku (dvě hrozby naráz). Správné pole
+            je vždy jediné. N úloh (výchozí 100), rovnoměrně ve čtyřech třídách: výhra, blok, výhra před blokem (vyhrát jde
+            i zablokovat, správně je vyhrát), vidlička; X i O asi napůl. Za řádkem modelu přesnost podle třídy, pod ním podle
+            značky a počtu volných polí a chyby: blok místo výhry, přehlédnutá výhra, přehlédnutý blok, vidlička soupeře,
+            jen jedna hrozba, obsazené pole, jiné, neplatné. Pole na nejvíc linkách bez soupeřovy značky trefí vidličku asi
+            ve třech čtvrtinách úloh; i to je uvažování o linkách, jen neúplné. S --lanes se nekombinuje.
+--board, --cells:  jen s --tictactoe: podoba stavu, úlohy jsou v obou stejné. --board = tři řádky desky jako řetězce
+            („.“ volné pole); --cells = každé pole jménem rNcM. Bez volby platí --cells.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -173,6 +184,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -190,6 +202,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -291,6 +304,15 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --counter, --predict:  only with --pattern: the form of the question; the tasks are the same in both. counter = your own
             move that beats the opponent's next move; predict = the opponent's next move, and the error line also counts a
             counter move given instead of the prediction. Without the option: predict.
+--tictactoe:  winning move (3×3 tic-tac-toe): the model plays the mark you (X or O) and picks one of nine cells by the
+            rules in the prompt, in this order: win, otherwise block the opponent, otherwise make a fork (two threats at
+            once). The correct cell is always the only one. N tasks (default 100), spread evenly over four classes: win,
+            block, win before block (both are possible, winning is correct), fork; X and O about half each. After the model
+            row, the accuracy by class; below it by mark and by free cells, and the errors: block instead of win, win missed,
+            block missed, opponent's fork, single threat only, occupied cell, other, invalid. The cell on the most lines
+            without an opponent's mark finds the fork in about three quarters of the tasks: partial reasoning. Not with --lanes.
+--board, --cells:  only with --tictactoe: the form of the state; the tasks are the same in both. --board = the three rows
+            of the board as strings ("." for a free cell); --cells = every cell by its name rNcM. Without the option: --cells.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -3403,6 +3425,9 @@ def parse_args(argv):
     p.add_argument("--pattern", action="store_true")
     p.add_argument("--counter", action="store_true")
     p.add_argument("--predict", action="store_true")
+    p.add_argument("--tictactoe", action="store_true")
+    p.add_argument("--board", action="store_true")
+    p.add_argument("--cells", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -3687,9 +3712,11 @@ def main(argv):
     scenarios += (args.hint,)                        # rušivá nápověda
     scenarios += (args.diff,)                        # co se změnilo
     scenarios += (args.pattern,)                     # vzor soupeře
+    scenarios += (args.tictactoe,)                   # tah na výhru
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
-            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score) or (args.counter and args.predict)):
+            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score) or (args.counter and args.predict)
+            or (args.board and args.cells)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.dicts and args.lists:
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
@@ -3721,6 +3748,10 @@ def main(argv):
         sys.exit(i18n.t("bench.err.formPattern"))
     if args.pattern and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesPattern"))
+    if (args.board or args.cells) and not args.tictactoe:
+        sys.exit(i18n.t("bench.err.formTictactoe"))
+    if args.tictactoe and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesTictactoe"))
     if args.cruise and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesCruise"))
     if (args.as_choice or args.as_score) and not args.cruise:
@@ -3905,6 +3936,19 @@ def main(argv):
                 r = run_pattern(m, cases, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, pattern_note(r))
                 print_pattern(r)
+    elif args.tictactoe:
+        form = "cells" if args.cells else "rows" if args.board else TICTACTOE_FORM
+        cases = tictactoe_cases(args.n or 100)           # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        if form == "cells":
+            print(i18n.t("bench.intro.tictactoeCells", n=len(cases)) + "\n")
+        else:
+            print(i18n.t("bench.intro.tictactoe", n=len(cases)) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_tictactoe(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, tictactoe_note(r))
+                print_tictactoe(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")
