@@ -356,7 +356,8 @@ COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "
             "scenario.queueWeighted": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.bet": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.cruise": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.timetable": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.hint": "cellsOf: known('scenario.' + v.scenario, …)",
-            "scenario.diff": "cellsOf: known('scenario.' + v.scenario, …)"}
+            "scenario.diff": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.pattern": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -365,7 +366,7 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
         "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
-        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád", "scénář: rušivá nápověda", "scénář: co se změnilo"]
+        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád", "scénář: rušivá nápověda", "scénář: co se změnilo", "scénář: vzor soupeře"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -570,7 +571,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 14)                                     # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád, rušivá nápověda, co se změnilo
+        self.assertEqual(len(blocks), 15)                                   # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád, rušivá nápověda, co se změnilo, vzor soupeře
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -598,7 +599,7 @@ class PageTexts(unittest.TestCase):
         for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
             self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
-        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.diff", "scenario.hint", "scenario.lookahead", "scenario.memory", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.timetable"])
+        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.diff", "scenario.hint", "scenario.lookahead", "scenario.memory", "scenario.pattern", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.timetable"])
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("výjim", self.texts[key]["cs"], key)
             self.assertIn("bans and exceptions", self.texts[key]["en"], key)
@@ -784,6 +785,20 @@ class PageTexts(unittest.TestCase):
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("Co se změnilo", self.texts[key]["cs"], key)
             self.assertIn("what changed", self.texts[key]["en"], key)
+
+    def test_pattern_texts_match_bench_and_name_the_scenario(self):           # perioda a řádek chyb jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = re.findall(r"(\w+): 'pattern\.move\.\w+'", piece(r"^const PATTERN_MOVE_NAME = \{.*?\};$"))
+        self.assertEqual(names, ["rock", "paper", "scissors"])                                          # pořadí PATTERN_MOVES = pořadí bran
+        kinds = re.findall(r"(\w+): 'pattern\.kind\.\w+'", piece(r"^const PATTERN_KIND_NAME = \{.*?\};$"))
+        self.assertEqual(kinds, ["counter_given", "last", "frequent", "period", "transition"])
+        for code in ("cs", "en"):
+            self.assertEqual(self.texts["pattern.period"][code], i18n.TEXTS["bench.pattern.period"][code], code)
+            self.assertEqual(self.texts["pattern.errors"][code], i18n.TEXTS["bench.pattern.errorsPredict"][code], code)
+            self.assertIn(self.texts["opt.scenario.pattern"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.pattern.extraTitle"][code], self.texts["scenario.pattern.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("vzor", self.texts[key]["cs"], key)
+            self.assertIn("opponent's pattern", self.texts[key]["en"], key)
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
@@ -1306,6 +1321,12 @@ class Results(unittest.TestCase):
         pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
         self.assertEqual(node(pick, rows), [["co se změnilo", 8]])
         self.assertEqual(node(pick, rows, lang="en"), [["what changed", 8]])
+
+    def test_pattern_row_reads_in_both_languages(self):                       # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.pattern
+        rows = [{"vals": {**VALS, "scenario": "pattern", "lanes": 3}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["vzor soupeře", 3]])
+        self.assertEqual(node(pick, rows, lang="en"), [["opponent's pattern", 3]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
@@ -2028,6 +2049,7 @@ class PageStatic(unittest.TestCase):
                      "scénář: jízdní řád",
                      "scénář: rušivá nápověda",
                      "scénář: co se změnilo",
+                     "scénář: vzor soupeře",
                      "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:

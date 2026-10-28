@@ -5,7 +5,9 @@ import itertools
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -20,6 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 MOVES = ("rock", "paper", "scissors")
@@ -510,6 +513,36 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--counter, --predict:  ", text)
         self.assertIn(f"Bez volby platí {FORM}.", bench.__doc__)
         self.assertIn(f"Without the option: {FORM}.", bench.USAGE_EN)
+
+
+def pattern_body():
+    return page_source().split("\nconst pattern = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; řešitel, generátor a rozbor hlídá tests/test_parity.py (Pattern)
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="pattern" data-i18n="opt.scenario.pattern"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertIn(" pattern }[v];", REGISTRY)
+        self.assertEqual(page.count("// ---------- scénář: vzor soupeře ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(patternWarm(), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, patternRow(rnd), 3)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(patternRow(rnd)); },"), 1)
+        body = pattern_body()
+        for call in ("rollInject([d.truth], 3)", "patternState(d.moves)", "injectText(INJECT_NOTE, PATTERN_MOVES[inject])", "variantOf(patternQuestion(), v)",
+                     "a.opponent_throw?.choice", "patternSummary(", "fixedLanes: 3, lanes: () => 3,", "panels: ['confPanel', 'trail', 'legend']"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", pattern_body(), re.S).group(0)[1:-1]
+        code = ("const PATTERN_MOVES = ['rock', 'paper', 'scissors']; const base = { tally() {} }; const o = { __proto__: base," + tally + "};"
+                "const g = { cases: [], choices: [] }, task = { moves: ['rock'], next: 'paper', cls: 'p1', truth: 1, state: {} };"
+                "[1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"moves": ["rock"], "next": "paper", "cls": "p1"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["paper", "rock", None]})
 
 
 if __name__ == "__main__":
