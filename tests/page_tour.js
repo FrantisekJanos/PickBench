@@ -48,7 +48,7 @@ async () => {
   const log = [];
 
   await sleep(1500); snap();                                // po načtení, s prvním stavem GPU
-  for (const scenario of ['numbers', 'signs', 'memory', 'barrier', 'lookahead', 'rule', 'queue', 'queueWeighted', 'bet', 'cruise', 'timetable', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
+  for (const scenario of ['numbers', 'signs', 'memory', 'barrier', 'lookahead', 'rule', 'queue', 'queueWeighted', 'bet', 'cruise', 'timetable', 'tictactoe', 'bandit', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
   await use({ scenario: 'neni-v-nabidce.json' }); snap();
 
   // benchmark bez hry: Pravidla a Náhodně, všechny scénáře, limit, trojský kůň
@@ -64,6 +64,8 @@ async () => {
   log.push((await run('bench', { scenario: 'bet', lanes: 2, inject: true })).why);           // volič na 2: stránka musí vzít 3 brány
   log.push((await run('bench', { scenario: 'cruise', inject: true })).why);
   log.push((await run('bench', { scenario: 'timetable', inject: true })).why);
+  log.push((await run('bench', { scenario: 'tictactoe', lanes: 5, inject: true })).why);     // volič na 5: stránka musí vzít 3 pruhy
+  log.push((await run('bench', { scenario: 'bandit', lanes: 2, inject: true })).why);        // volič na 2: stránka musí vzít 4 brány
   for (const scenario of [...emails.slice(0, 2), ...publics]) log.push((await run('bench', { scenario, benchn: 10, deadline: 50 })).why);
   Math.random = () => 0;                                    // řidič Náhodně volí vždy první možnost: stejné texty při každé prohlídce
   log.push((await run('bench', { driver: 'random', inject: true })).why);
@@ -77,6 +79,8 @@ async () => {
   log.push((await run('bench', { driver: 'random', scenario: 'bet', lanes: 8, inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'cruise', inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'timetable', inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'tictactoe', lanes: 5, inject: true })).why);      // obsazená pole a chyby
+  log.push((await run('bench', { driver: 'random', scenario: 'bandit', lanes: 8, inject: true })).why);         // volič na 8: stránka vezme 5
   if (emails.length) log.push((await run('bench', { driver: 'random', scenario: emails[0], benchn: 10, inject: true })).why);
   for (const scenario of publics) log.push((await run('bench', { driver: 'random', scenario, benchn: 10 })).why);
 
@@ -99,6 +103,10 @@ async () => {
   log.push((await run('game', { driver: 'random', scenario: 'cruise', runlen: 12, inject: true })).why);      // Náhodně volí vždy stupeň 1: příliš pomalu
   log.push((await run('game', { scenario: 'timetable', runlen: 18, inject: true })).why);
   log.push((await run('game', { driver: 'random', scenario: 'timetable', runlen: 18, inject: true })).why);  // Náhodně volí vždy Olši
+  log.push((await run('game', { driver: 'random', scenario: 'tictactoe', runlen: 16, inject: true })).why);
+  log.push((await run('game', { scenario: 'tictactoe', runlen: 12 })).why);                    // řidič Pravidla: štítky správně a čáry
+  log.push((await run('game', { scenario: 'bandit', lanes: 5, runlen: 12, inject: true })).why);
+  log.push((await run('game', { driver: 'random', scenario: 'bandit', lanes: 4, runlen: 12, inject: true })).why);
   log.push((await run('game', { driver: 'random', scenario: 'queue', lanes: 8, runlen: 18 })).why);
   log.push((await run('game', { scenario: 'queueWeighted', lanes: 2, runlen: 18 })).why);
   if (emails.length) {
@@ -147,6 +155,8 @@ async () => {
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'bet', lanes: 4, mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'cruise', mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'timetable', mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'tictactoe', mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'bandit', lanes: 4, mirror: true, inject: true })).why);
     if (emails.length) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: emails[0], benchn: 8, inject: true })).why);
     for (const scenario of publics) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario, benchn: 6 })).why);
   }
