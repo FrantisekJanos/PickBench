@@ -523,7 +523,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; pravidlo, g
     def test_scenario_is_offered_selected_and_wired(self):
         page = page_source()
         self.assertEqual(page.count('<option value="bandit" data-i18n="opt.scenario.bandit"></option>'), 1)
-        self.assertEqual(len(re.findall(r"SC = \{ obstacles, [a-zA-Z, ]*\bbandit \}\[v\];", page)), 1)      # registr scénářů, bandit poslední
+        self.assertEqual(len(re.findall(r"SC = \{ obstacles, [a-zA-Z, ]*\bbandit\b[a-zA-Z, ]* \}\[v\];", page)), 1)      # registr scénářů, bandit v něm (za ním scénáře z větve hra-hint-diff-vzor)
         self.assertEqual(page.count("v === 'bandit'"), 1)
         self.assertEqual(page.count("// ---------- scénář: mýtné brány ----------"), 1)
         # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
@@ -541,7 +541,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; pravidlo, g
         lanes = re.search(r"\n  lanes: \(\) => [^\n]*\n", bandit_body()).group(0)
         code = (
             "const opts = [2, 3, 4, 5, 6, 7, 8].map(v => ({ value: String(v), disabled: false }));"
-            "const els = { lanes: { value: '2', options: opts, dataset: {}, disabled: false }, extra: {}, speed: {}, mirror: {}, inject: {}, mode: { value: 'turn' } };"
+            "const els = { lanes: { value: '2', options: opts, dataset: {}, disabled: false }, extra: {}, speed: {}, mirror: {}, inject: { dataset: {} }, mode: { value: 'turn' } };"
             "const $ = id => els[id]; let running = false, SC;" + sync +
             "const bandit = { lanesFree: true, minLanes: 4, maxLanes: 5," + lanes + "};"
             "const lookahead = { lanesFree: true, minLanes: 3 }, obstacles = { lanesFree: true };"

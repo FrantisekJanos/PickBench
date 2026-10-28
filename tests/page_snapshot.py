@@ -43,7 +43,7 @@ SAME = {
     "PickBench", "/v#/systemone",                                         # jméno aplikace a adresa rozhraní Ollamy v záhlaví
     "CS", "EN",                                                           # tlačítka přepínače jazyka (česky jsou v ADDED)
     "test:echo", "test:drahy",                                            # jména modelů zkušebního poskytovatele
-    "ECE", "macro-F#", "precision", "recall", "goodput",                  # zkratky a názvy metrik, které se nepřekládají
+    "ECE", "macro-F#", "precision", "recall", "goodput", "Brier",         # zkratky a názvy metrik, které se nepřekládají
     "min", "max", "max °C",                                               # zkratky v záhlaví tabulky výsledků, jednotka
     "# ms", "# MB", "# MHz",                                              # číslo s jednotkou
     "Start", "Stop", "Model", "Hardware", "Export CSV", "benchmark",      # slova stejná v obou jazycích

@@ -90,6 +90,35 @@ class Metrics(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class CalibrationAndLength(unittest.TestCase):          # Brierovo skóre, pokrytí nad prahem a třídy délky: metrics.py a stránka počítají stejně
+    def cases(self):
+        rng = random.Random(1)
+        out = [{"cal": [], "n": 0, "t": 0.5}, {"cal": [[0.8, True]], "n": 3, "t": 0.8}]      # prázdno; jistota rovná prahu
+        for _ in range(20):
+            cal = [[rng.choice([0.5, 0.6, 0.8, 0.9, 1.0, round(rng.random(), 3)]), rng.random() < 0.6] for _ in range(rng.randint(1, 30))]
+            out.append({"cal": cal, "n": len(cal) + rng.randint(0, 5), "t": rng.choice([0.5, 0.8, 0.9, 1.0])})
+        return out
+
+    def test_brier_and_coverage(self):
+        cases = self.cases()
+        got = run_js("arg.map(c => ({ b: brier(c.cal), c: coverageAt(c.cal, c.n, c.t) }))", cases)
+        for case, js in zip(cases, got):
+            pairs = [tuple(p) for p in case["cal"]]
+            same(self, {"b": metrics.brier(pairs), "c": metrics.coverage(pairs, case["n"], case["t"])}, js, str(case)[:60])
+
+    def test_length_classes(self):
+        rng = random.Random(2)
+        cases = [[], [3], [3, 8], [4, 4, 4, 4], [5, 1, 9, 3, 7, 2]] + [[rng.randint(1, 40) for _ in range(rng.randint(1, 50))] for _ in range(20)]
+        got = run_js("[LENGTH_CLASSES, arg.map(lengthClasses)]", cases)
+        self.assertEqual(got[0], list(metrics.LENGTH_CLASSES))
+        for lengths, js in zip(cases, got[1]):
+            same(self, metrics.length_classes(lengths), js, str(lengths)[:60])
+
+    def test_block_stays_pure(self):                      # sdílený blok nesmí sahat na stránku (vzor ostatních tříd tohoto souboru)
+        self.assertNotIn("$(", shared_js().split("function brier")[1])
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class PublicValidator(unittest.TestCase):
     def test_python_and_js_agree_on_every_case(self):
         import bench
@@ -1900,6 +1929,403 @@ class Bandit(unittest.TestCase):
                                "banditCase: unsupported task for 6 gates and class tie"])
         got = run_js("(() => { try { banditCase(() => 0.999999, 4, 'explore'); return null; } catch (e) { return e.message; } })()", None)
         self.assertRegex(got, r"^banditCase: no explore task \([HTM]{5}\) for 4 gates after 20000 tries$")
+
+
+# Generátor Rušivé nápovědy stránky se stejnou náhodou jako ROWS_JS: seed, lanes, n trojic → 3n řad hintTrio (set = číslo trojice).
+HINT_ROWS_JS = ROWS_JS.replace("[...Array(arg.n)].map(() => signRow(arg.lanes, rand))", "[...Array(arg.n)].map((_, i) => hintTrio(rand, arg.lanes, i)).flat()")
+assert HINT_ROWS_JS != ROWS_JS
+HINT_PAGE = {}
+
+
+def hint_page(n, lanes, seed=1):
+    """Řady generátoru stránky, jednou za běh modulu."""
+    if (n, lanes, seed) not in HINT_PAGE:
+        HINT_PAGE[n, lanes, seed] = run_js(HINT_ROWS_JS, {"seed": seed, "lanes": lanes, "n": n})
+    return HINT_PAGE[n, lanes, seed]
+
+
+def py_hint(row):
+    """Řada stránky jako úloha hint_cases: (čísla, správná brána, třída, podmínka, nápověda, číslo řady)."""
+    return (tuple(row["values"]), row["answer"], row["gap"], row["cond"], row["hint"], row["set"])
+
+
+def no_nan(x):
+    """Výsledek rozboru z Pythonu tak, jak ho vrátí JSON ze stránky: NaN = null, n-tice = seznam."""
+    if isinstance(x, float) and x != x:
+        return None
+    if isinstance(x, dict):
+        return {k: no_nan(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [no_nan(v) for v in x]
+    return x
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Hint(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ gaps: NUMBER_GAPS, conds: HINT_CONDS, field: HINT_FIELD, questions: [2, 3, 4, 5, 6, 7, 8].map(hintQuestion) })", None)
+        self.assertEqual((js["gaps"], js["conds"], js["field"]), (list(bench.GAPS), list(bench.HINT_CONDS), bench.HINT_FIELD))
+        for k, q in zip(range(2, 9), js["questions"]):
+            self.assertEqual(json.dumps(q), json.dumps(bench.hint_question(k)), k)          # bajtově, i pořadí klíčů
+        cases = bench.hint_cases(40, 4, seed=3)
+        states = run_js("arg.map(([values, hint]) => hintState(values, hint))", [[list(c[0]), c[4]] for c in cases])
+        for c, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.hint_state(c[0], c[4])))     # nápověda poslední klíč, none bez pole
+
+    def test_rows_come_in_trios_like_bench(self):        # záruky jako tests/test_hint.py (Generator) a meze tříd jako number_case
+        import bench
+        for lanes in (2, 3, 4, 8):
+            rows = hint_page(900, lanes, seed=lanes)
+            with self.subTest(lanes=lanes):
+                self.assertEqual(len(rows), 2700)
+                self.assertEqual(Counter(r["cond"] for r in rows), {"none": 900, "congruent": 900, "incongruent": 900})
+                trios = {}
+                for r in rows:
+                    trios.setdefault(r["set"], []).append(r)
+                    v, top, second = r["values"], max(r["values"]), sorted(r["values"])[-2]
+                    self.assertEqual(len(v), lanes)
+                    self.assertEqual((v.count(top), v.index(top), r["truth"]), (1, r["answer"], r["answer"]))
+                    self.assertTrue(20 <= second <= 5000, v)
+                    lo, hi = {"tight": (1, max(1, second * 5 // 100)), "medium": (second * 5 // 100 + 1, second * 30 // 100),
+                              "clear": (second * 30 // 100 + 1, second * 3)}[r["gap"]]
+                    self.assertTrue(lo <= top - second <= hi, r)
+                    self.assertTrue(all(1 <= x <= second for x in sorted(v)[:-2]), v)
+                    if r["cond"] == "none":
+                        self.assertIsNone(r["hint"])
+                    elif r["cond"] == "congruent":
+                        self.assertEqual(r["hint"], r["answer"])
+                    else:
+                        self.assertTrue(0 <= r["hint"] < lanes and r["hint"] != r["answer"], r)
+                self.assertEqual(sorted(trios), list(range(900)))
+                for trio in trios.values():
+                    self.assertEqual(sorted(r["cond"] for r in trio), sorted(bench.HINT_CONDS))
+                    self.assertEqual(len({(tuple(r["values"]), r["answer"], r["gap"]) for r in trio}), 1)     # stejná čísla ve trojici
+                self.assertEqual(Counter(trios[s][0]["cond"] for s in trios).keys(), set(bench.HINT_CONDS))     # pořadí ve trojici se losuje
+
+    def test_answers_gaps_wrong_hints_and_strategies_like_bench(self):     # meze tests/test_hint.py (K = 3, 900 řad)
+        import bench
+        rows = hint_page(900, 3, seed=3)
+        none = [r for r in rows if r["cond"] == "none"]
+        answers, gaps = Counter(r["answer"] for r in none), Counter(r["gap"] for r in none)
+        for gate in range(3):
+            self.assertAlmostEqual(answers[gate] / 900, 1 / 3, delta=0.07)
+        for gap in bench.GAPS:
+            self.assertTrue(0.25 <= gaps[gap] / 900 <= 0.42, gaps)
+        inc = [r for r in rows if r["cond"] == "incongruent"]
+        self.assertTrue(0.4 <= sum(r["values"][r["hint"]] == sorted(r["values"])[-2] for r in inc) / len(inc) <= 0.6)
+        share = lambda pick, cond=None: (lambda sub: sum(pick(r) == r["answer"] for r in sub) / len(sub))(
+            [r for r in rows if cond is None or r["cond"] == cond])
+        follow = lambda r: 0 if r["hint"] is None else r["hint"]
+        anti = lambda r: 1 if r["hint"] == 0 else 0
+        self.assertEqual((share(follow, "congruent"), share(follow, "incongruent")), (1, 0))
+        self.assertTrue(0.4 <= share(anti, "incongruent") <= 0.6)
+        self.assertLess(share(anti), 0.34)
+        self.assertLess(share(lambda r: 0), 0.4)
+
+    def test_same_seed_same_rows(self):
+        self.assertEqual(hint_page(30, 3, seed=5), run_js(HINT_ROWS_JS, {"seed": 5, "lanes": 3, "n": 30}))
+        self.assertNotEqual(hint_page(30, 3, seed=5), run_js(HINT_ROWS_JS, {"seed": 6, "lanes": 3, "n": 30}))
+
+    def test_summary_matches_bench(self):                 # stejné úlohy, stejné volby: stejný rozbor (i neplatné volby, chybějící none, nic)
+        import bench
+        from test_hint import CASES                       # ručně ověřené úlohy z tests/test_hint.py
+        rng, keys = random.Random(7), bench.gate_keys(3)
+        rows = hint_page(900, 3, seed=3)
+        hand = [{"values": list(c[0]), "answer": c[1], "gap": c[2], "cond": c[3], "hint": c[4], "set": c[5]} for c in CASES]
+        bad = [None, "gate_9", 7, "GATE_1", ["gate_1"]]
+        choices = [rng.choice(keys + bad) if rng.random() < 0.3 else keys[r["hint"]] if r["hint"] is not None and rng.random() < 0.5
+                   else keys[r["answer"]] for r in rows]
+        part = [i for i, r in enumerate(rows) if not (r["cond"] == "none" and r["set"] % 3 == 0)]      # trojice bez řady none
+        runs = [(rows, choices), ([rows[i] for i in part], [choices[i] for i in part]), ([], []),
+                (hand, ["gate_2", "gate_2", "gate_3", "gate_2", "gate_1", "gate_1"]), (hand, [None] * 6)]
+        got = run_js("arg.runs.map(([cases, choices]) => hintSummary(cases, choices, arg.keys))", {"runs": runs, "keys": keys})
+        for (cases, ch), js in zip(runs, got):
+            want = bench.hint_summary([py_hint(c) for c in cases], ch, keys)
+            same(self, js, no_nan(want), "hint_summary")                             # celá čísla v JSON stránky jsou 1, v Pythonu 1.0
+
+    def test_points_match_bench(self):                    # pp: znaménko vždy, půlka k sudému jako round v Pythonu, NaN pomlčka
+        import bench
+        values = [0.125, -0.125, 0.135, -0.135, 0.0, -0.0, 0.5, 1 / 3, -1 / 3, 0.005, -0.005, 0.015, 0.025, 1.0, -1.0]
+        values += [k / n - j / n for n in (1, 2, 3, 7, 8, 16, 40, 100, 200) for k in range(n + 1) for j in range(0, n + 1, 3)]
+        values += [random.Random(i).uniform(-1, 1) for i in range(300)]
+        self.assertEqual(run_js("arg.map(pointsText)", values), [bench.pp(v) for v in values])
+        self.assertEqual(run_js("[pointsText(NaN), pointsText(null)]", None), ["—", "—"])
+
+    def test_warm_task_is_valid_and_longest(self):        # zahřívací úloha: jediné maximum v poslední bráně, nejdelší stav ze všech úloh bench.py
+        import bench
+        for k, w in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(hintWarm)", None)):
+            v = w["values"]
+            self.assertEqual((v.count(max(v)), v.index(max(v)), w["truth"], w["answer"]), (1, k - 1, k - 1, k - 1))
+            self.assertTrue(w["hint"] is not None and w["hint"] != w["answer"])
+            longest = max(len(json.dumps(bench.hint_state(c[0], c[4]))) for c in bench.hint_cases(300, k))
+            self.assertGreaterEqual(len(json.dumps(bench.hint_state(tuple(v), w["hint"]))), longest, k)
+
+
+# Generátor Co se změnilo stránky se stejnou náhodou jako ROWS_JS: seed, lanes, n → úlohy diffRow.
+DIFF_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "diffRow(arg.lanes, rand)")
+assert DIFF_ROWS_JS != ROWS_JS
+DIFF_PAGE = {}
+
+
+def diff_page(n, lanes, seed=1):
+    """Úlohy generátoru stránky, jednou za běh modulu."""
+    if (n, lanes, seed) not in DIFF_PAGE:
+        DIFF_PAGE[n, lanes, seed] = run_js(DIFF_ROWS_JS, {"seed": seed, "lanes": lanes, "n": n})
+    return DIFF_PAGE[n, lanes, seed]
+
+
+def py_diff(row):
+    """Úloha stránky jako úloha diff_cases: (before, after, answer, cls, mode)."""
+    return (tuple(row["before"]), tuple(row["after"]), row["answer"], row["cls"], row["mode"])
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Diff(unittest.TestCase):
+    def test_constants_and_relatives_match_bench(self):
+        import bench
+        js = run_js("({ words: DIFF_WORDS, numbers: DIFF_NUMBERS, classes: DIFF_CLASSES, modes: DIFF_MODES, share: DIFF_REPEAT_SHARE,"
+                    " tries: DIFF_TRIES, near: DIFF_NEIGHBOURS, far: DIFF_FAR, pools: [2, 3, 4, 5, 6, 7, 8].map(diffPoolPairs) })", None)
+        self.assertEqual((js["words"], js["numbers"]), (list(bench.DIFF_WORDS), list(bench.DIFF_NUMBERS)))
+        self.assertEqual((js["classes"], js["modes"]), (list(bench.DIFF_CLASSES), list(bench.DIFF_MODES)))
+        self.assertEqual((js["share"], js["tries"]), (bench.DIFF_REPEAT_SHARE, bench.DIFF_TRIES))
+        self.assertEqual(json.dumps(js["near"]), json.dumps({w: list(v) for w, v in bench.DIFF_NEIGHBOURS.items()}))      # i pořadí: losuje se z nich
+        self.assertEqual(json.dumps(js["far"]), json.dumps({w: list(v) for w, v in bench.DIFF_FAR.items()}))
+        self.assertEqual(js["pools"], [bench.diff_pool_pairs(k) for k in range(2, 9)])
+
+    def test_pairs_keep_the_class_relation(self):        # jako tests/test_diff.py (Pairs): 2000× na třídu, vztah platí z obou stran
+        import bench
+        pairs = run_js(ROWS_JS.replace("[...Array(arg.n)].map(() => signRow(arg.lanes, rand))",
+                                       "DIFF_CLASSES.map(cls => [...Array(arg.n)].map(() => diffPair(rand, cls)))"), {"seed": 2, "lanes": 0, "n": 2000})
+        for cls, got in zip(bench.DIFF_CLASSES, pairs):
+            with self.subTest(cls=cls):
+                self.assertTrue(all(bench.diff_related(cls, a, b) for a, b in got))
+                self.assertTrue(0.4 <= sum(a < b for a, b in got) / len(got) <= 0.6)            # pořadí ve dvojici 1 : 1
+        values = [[2408, 2409], [2409, 2408], [2408, 2418], [1234, 5678], ["wear", "pear"], ["stem", "lane"], ["road", "load"], ["tape", "cape"]]
+        got = run_js("arg.map(([a, b]) => [diffDistance(a, b), ...DIFF_CLASSES.map(c => diffRelated(c, a, b))])", values)
+        for (a, b), row in zip(values, got):
+            want = [bench.diff_distance(a, b)] + [False if c == "num1" and isinstance(a, str) else bench.diff_related(c, a, b) for c in bench.DIFF_CLASSES]
+            self.assertEqual(row, want, (a, b))                                               # num1 u slov v Pythonu nejde (rozdíl řetězců)
+
+    def test_state_and_question_match_bench(self):        # ve hře jen podoba lists
+        import bench
+        cases = bench.diff_cases(60, 5, seed=4)
+        states = run_js("arg.map(([b, a]) => diffState(b, a))", [[list(c[0]), list(c[1])] for c in cases])
+        for c, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.diff_state(c[0], c[1], "lists")))
+        for k, q in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(diffQuestion)", None)):
+            self.assertEqual(json.dumps(q), json.dumps(bench.diff_question(k, "lists")), k)
+
+    def test_alternative_wording_matches_bench(self):      # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  changed_list: '([^'\\]*)',$", alt, re.M), [bench.ALT["changed_list"]])
+        self.assertNotIn("\n  changed: ", "\n" + alt)        # podoba dicts je jen v bench.py
+
+    def test_rows_keep_the_guarantees_like_bench(self):   # záruky a rozložení jako tests/test_diff.py (Generator)
+        import bench
+        for lanes, n in ((2, 2000), (4, 4000), (8, 2000)):
+            rows = diff_page(n, lanes)
+            with self.subTest(lanes=lanes):
+                for r in rows:
+                    before, after, answer, cls = tuple(r["before"]), tuple(r["after"]), r["answer"], r["cls"]
+                    self.assertEqual((len(before), len(after), r["truth"]), (lanes, lanes, answer))
+                    self.assertEqual([i for i in range(lanes) if before[i] != after[i]], [answer])      # jediná správná odpověď
+                    self.assertTrue(bench.diff_related(cls, before[answer], after[answer]), r)
+                    if cls in ("num1", "numnew"):
+                        self.assertTrue(all(type(v) is int and 1000 <= v <= 9999 for v in before + after), r)
+                    else:
+                        self.assertTrue(all(v in bench.DIFF_WORDS for v in before + after), r)
+                    if r["mode"] == "plain":
+                        self.assertEqual((len(set(before)), len(set(after))), (lanes, lanes))
+                classes, modes = Counter(r["cls"] for r in rows), Counter(r["mode"] for r in rows)
+                for cls in bench.DIFF_CLASSES:
+                    self.assertTrue(0.2 <= classes[cls] / n <= 0.3, classes)
+                self.assertLessEqual(abs(modes["repeat"] / n - bench.DIFF_REPEAT_SHARE), 0.05, modes)
+        answers = Counter(r["answer"] for r in diff_page(4000, 4))
+        self.assertTrue(all(abs(answers[i] / 4000 - 0.25) <= 0.05 for i in range(4)), answers)
+
+    def test_twins_and_shortcuts_like_bench(self):        # dvojčata jako diff_twins; zkratky z jednoho snímku u náhody (meze tests/test_diff.py)
+        import bench
+        from test_diff import NUMBERS_CASE, WORDS_CASE
+        rows = diff_page(4000, 4)
+        hand = [{"before": list(c[0]), "after": list(c[1]), "answer": c[2], "cls": c[3], "mode": c[4]} for c in (NUMBERS_CASE, WORDS_CASE)]
+        twins = run_js("arg.map(diffTwins)", rows + hand)
+        self.assertEqual(twins, [sorted(bench.diff_twins(py_diff(r))) for r in rows + hand])
+        repeat = [t for t, r in zip(twins, rows) if r["mode"] == "repeat"]
+        self.assertTrue(0.6 <= sum(map(bool, repeat)) / len(repeat) <= 0.8)
+        self.assertFalse(any(t for t, r in zip(twins, rows) if r["mode"] == "plain"))
+
+        def repeated(row):
+            count = Counter(row)
+            return {i for i, v in enumerate(row) if count[v] > 1}
+        shortcuts = {"first": lambda b, a: {0}, "last": lambda b, a: {len(a) - 1}, "repeated_after": lambda b, a: repeated(a),
+                     "repeated_before": lambda b, a: repeated(b), "unique_after": lambda b, a: set(range(len(a))) - repeated(a),
+                     "max_after": lambda b, a: {a.index(max(a))} if type(a[0]) is int else set(),
+                     "first_text_after": lambda b, a: {i for i, v in enumerate(a) if str(v) == min(map(str, a))}}
+
+        def hit(r, pick):                                  # očekávaná trefa: z kandidátů náhodně, prázdná množina = hádání
+            found = pick(r["before"], r["after"])
+            return 1 / len(r["before"]) if not found else (1 / len(found) if r["answer"] in found else 0)
+        for cls in bench.DIFF_CLASSES:
+            sub = [r for r in rows if r["cls"] == cls]
+            for name, pick in shortcuts.items():
+                with self.subTest(cls=cls, shortcut=name):
+                    self.assertLessEqual(sum(hit(r, pick) for r in sub) / len(sub), 0.25 + 0.08)
+        new_value = lambda b, a: {i for i in range(len(a)) if a[i] not in b}     # srovnání množin: plain ho pustí, repeat láme
+        for mode, low, high in (("plain", 1, 1), ("repeat", 0, 0.8)):
+            sub = [r for r in rows if r["mode"] == mode]
+            self.assertTrue(low <= sum(hit(r, new_value) for r in sub) / len(sub) <= high, mode)
+
+    def test_same_seed_same_rows_and_bounds(self):
+        self.assertEqual(diff_page(30, 6, seed=3), run_js(DIFF_ROWS_JS, {"seed": 3, "lanes": 6, "n": 30}))
+        self.assertNotEqual(diff_page(30, 6, seed=3), run_js(DIFF_ROWS_JS, {"seed": 4, "lanes": 6, "n": 30}))
+        calls = ["diffCase(Math.random, 4, 'num1', 'plain', 0)", "diffCase(Math.random, 1, 'num1', 'plain')", "diffCase(Math.random, 9, 'num1', 'plain')",
+                 "diffCase(Math.random, 4, 'odd', 'plain')", "diffCase(Math.random, 4, 'num1', 'odd')", "diffPair(Math.random, 'odd')"]
+        got = run_js("arg.map(c => { try { eval(c); return null; } catch (e) { return e.message; } })", calls)
+        self.assertEqual(got, ["diffCase: no num1 plain task for 4 lanes after 0 tries", "diffCase: unsupported 1 lanes, class num1, mode plain",
+                               "diffCase: unsupported 9 lanes, class num1, mode plain", "diffCase: unsupported 4 lanes, class odd, mode plain",
+                               "diffCase: unsupported 4 lanes, class num1, mode odd", "diffPair: unknown class odd"])
+
+    def test_summary_matches_bench(self):                 # stejné úlohy, stejné volby: stejný rozbor (i neplatné volby a úlohy bench.py)
+        import bench
+        from test_diff import NUMBERS_CASE, WORDS_CASE
+        rng, keys = random.Random(9), bench.lane_keys(4)
+        rows = diff_page(4000, 4) + [{"before": list(c[0]), "after": list(c[1]), "answer": c[2], "cls": c[3], "mode": c[4]}
+                                     for c in bench.diff_cases(200, 4, seed=8) + [NUMBERS_CASE, WORDS_CASE]]
+        bad = [None, "lane_9", 3, ["lane_1"], "LANE_1"]
+        choices = [rng.choice(keys + bad) if rng.random() < 0.3 else keys[r["answer"]] if rng.random() < 0.4 else rng.choice(keys) for r in rows]
+        runs = [(rows, choices), (rows[:1], choices[:1]), ([], []), (rows[-2:], ["lane_2", "lane_2"])]     # dvojče před sousedem
+        got = run_js("arg.runs.map(([cases, choices]) => diffSummary(cases, choices, arg.keys))", {"runs": runs, "keys": keys})
+        for (cases, ch), js in zip(runs, got):
+            self.assertEqual(json.dumps(js, sort_keys=True), json.dumps(bench.diff_summary([py_diff(c) for c in cases], ch, keys), sort_keys=True))
+        self.assertEqual(got[3]["errors"], {"twin": 1, "neighbor": 1, "other": 0, "invalid": 0})
+
+    def test_warm_task_is_valid_and_longest(self):        # zahřívací úloha: plain, word1 v posledním pruhu, nejdelší stav ze všech úloh bench.py
+        import bench
+        for k, w in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(diffWarm)", None)):
+            before, after = tuple(w["before"]), tuple(w["after"])
+            self.assertEqual([i for i in range(k) if before[i] != after[i]], [k - 1])
+            self.assertEqual((w["answer"], w["truth"], w["cls"], w["mode"]), (k - 1, k - 1, "word1", "plain"))
+            self.assertTrue(bench.diff_related("word1", before[-1], after[-1]) and all(v in bench.DIFF_WORDS for v in before + after))
+            self.assertEqual((len(set(before)), len(set(after))), (k, k))
+            longest = max(len(json.dumps(bench.diff_state(c[0], c[1], "lists"))) for c in bench.diff_cases(300, k))
+            self.assertGreaterEqual(len(json.dumps(bench.diff_state(before, after, "lists"))), longest, k)
+
+
+# Vzor soupeře: generátor stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy patternRow.
+PATTERN_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "patternRow(rand)")
+assert PATTERN_ROWS_JS != ROWS_JS
+PATTERN_PAGE = {}
+
+
+def pattern_page(n=3000, seed=1):
+    """Úlohy generátoru stránky, jednou za běh modulu."""
+    if (n, seed) not in PATTERN_PAGE:
+        PATTERN_PAGE[n, seed] = run_js(PATTERN_ROWS_JS, {"seed": seed, "n": n})
+    return PATTERN_PAGE[n, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Pattern(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ moves: PATTERN_MOVES, beats: PATTERN_BEATS, beaten: PATTERN_BEATEN, classes: PATTERN_CLASSES, run: PATTERN_RUN,"
+                    " warmup: PATTERN_WARMUP, check: PATTERN_CHECK, weights: PATTERN_WEIGHTS, question: patternQuestion() })", None)
+        self.assertEqual((js["moves"], js["classes"]), (list(bench.PATTERN_MOVES), list(bench.PATTERN_CLASSES)))
+        self.assertEqual((js["beats"], js["beaten"]), (bench.PATTERN_BEATS, bench.PATTERN_BEATEN))
+        self.assertEqual((js["run"], js["warmup"], js["check"]), (list(bench.PATTERN_RUN), list(bench.PATTERN_WARMUP), bench.PATTERN_CHECK))
+        self.assertEqual(json.dumps(js["weights"]), json.dumps(bench.PATTERN_WEIGHTS))            # i pořadí tvarů (tuple → seznam)
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.pattern_question("predict")))
+        cases = bench.pattern_cases(40, seed=3)
+        for case, state in zip(cases, run_js("arg.map(patternState)", [list(c[0]) for c in cases])):
+            self.assertEqual(json.dumps(state), json.dumps(bench.pattern_state(case)))           # bajtově
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  opponent_throw: '([^'\\]*)',$", alt, re.M), [bench.ALT["opponent_throw"]])
+        self.assertNotIn("\n  throw: ", "\n" + alt)                # podoba --counter je jen v bench.py
+
+    def test_solve_matches_bench(self):
+        import bench
+        rng = random.Random(4)
+        histories = [list(t) for t in itertools.product(bench.PATTERN_MOVES, repeat=8)]
+        histories += [[rng.choice(bench.PATTERN_MOVES) for _ in range(rng.randint(5, 13))] for _ in range(500)]
+        histories += [list(c[0]) for c in bench.pattern_cases(300, seed=6)]
+        got = run_js("arg.map(h => { try { return patternSolve(h); } catch (e) { return e.message.split(':')[0]; } })", histories)
+        for h, js in zip(histories, got):
+            try:
+                py = list(bench.pattern_solve(tuple(h)))
+            except RuntimeError:
+                py = "patternSolve"
+            self.assertEqual(js, py, h)
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        from test_pattern import periods_of
+        for r in pattern_page():
+            h, p = tuple(r["moves"]), int(r["cls"][1])
+            with self.subTest(row=r):
+                self.assertEqual(list(r), ["moves", "next", "cls", "shape", "run", "warm", "truth"])
+                self.assertEqual(len(h), r["run"] + r["warm"])
+                self.assertTrue(8 <= r["run"] <= 10 and 1 <= r["warm"] <= 3)
+                self.assertIn(r["shape"], bench.PATTERN_WEIGHTS[r["cls"]])
+                self.assertEqual(bench.pattern_solve(h), (p, r["next"]))
+                self.assertEqual({h[-q] for q in periods_of(h)}, {r["next"]})
+                self.assertNotEqual(h[-r["run"] - 1], h[-r["run"] - 1 + p])                       # rozehrávka cyklus neprodlužuje
+                self.assertEqual(r["truth"], list(bench.PATTERN_MOVES).index(r["next"]))
+
+    def test_classes_answers_and_shortcuts_are_like_bench(self):    # stejné meze jako tests/test_pattern.py (Generator)
+        import bench
+        from test_pattern import shortcut_hits
+        c = pattern_page()
+        classes = Counter(r["cls"] for r in c)
+        for cls in bench.PATTERN_CLASSES:
+            self.assertTrue(0.22 <= classes[cls] / len(c) <= 0.28, classes)
+            answers = Counter(r["next"] for r in c if r["cls"] == cls)
+            for move in bench.PATTERN_MOVES:
+                self.assertTrue(0.28 <= answers[move] / classes[cls] <= 0.39, (cls, answers))
+        for cls, top in (("p2", 0.56), ("p3", 0.48), ("p4", 0.48)):
+            sub = [r for r in c if r["cls"] == cls]
+            hits = {}
+            for r in sub:
+                for name, (family, v) in shortcut_hits(tuple(r["moves"]), r["next"], int(cls[1])).items():
+                    if not (cls == "p2" and family == "transition"):              # přechod je v p2 přesné řešení
+                        hits[name] = hits.get(name, 0) + v / len(sub)
+            self.assertLessEqual(max(hits.values()), top, cls)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(PATTERN_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(PATTERN_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(PATTERN_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_unknown_class_raises(self):
+        got = run_js("(() => { try { patternCase(Math.random, 'p5'); return null; } catch (e) { return e.message; } })()", None)
+        self.assertEqual(got, "patternCase: unknown class p5")
+
+    def test_errors_and_summary_match_bench(self):                  # i neplatné volby
+        import bench
+        cases, rng = bench.pattern_cases(400, seed=4), random.Random(6)
+        choices = [rng.choice(list(bench.PATTERN_MOVES) * 2 + [None, "lizard", "Rock", 3]) for _ in cases]
+        js_cases = [{"moves": list(h), "next": nxt, "cls": cls} for h, nxt, cls, *_ in cases]
+        got = run_js("({ kinds: arg.cases.map((c, i) => patternErrorKind(c, arg.choices[i])), summary: patternSummary(arg.cases, arg.choices) })",
+                     {"cases": js_cases, "choices": choices})
+        self.assertEqual(got["kinds"], [bench.pattern_error_kind(c, ch, "predict") for c, ch in zip(cases, choices)])
+        self.assertEqual(json.dumps(got["summary"]), json.dumps(bench.pattern_summary(cases, choices, "predict")))     # i pořadí klíčů
+        empty = run_js("patternSummary([], [])", None)
+        self.assertEqual(sum(empty["errors"].values()), 0)
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("patternWarm()", None)
+        self.assertEqual(list(warm), ["moves", "next", "cls", "shape", "run", "warm", "truth"])
+        self.assertEqual(bench.pattern_solve(tuple(warm["moves"])), (1, warm["next"]))
+        self.assertEqual(len(warm["moves"]), bench.PATTERN_RUN[1] + bench.PATTERN_WARMUP[1])
+        longest = max(len(json.dumps(bench.pattern_state(c))) for c in bench.pattern_cases(3000, seed=2))
+        self.assertGreaterEqual(len(json.dumps(run_js("patternState(arg)", warm["moves"]))), longest)      # horní odhad ve stepEstimate
 
 
 if __name__ == "__main__":

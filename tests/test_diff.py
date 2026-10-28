@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,8 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
+from test_queue import method                                                   # víceřádková metoda objektu scénáře
 
 LANG_ENV = "PICKBENCH_LANG"
 NUMBERS = ((2408, 2144, 4943, 2486), (2409, 2144, 4943, 2486))          # num1 v pruhu 1, plain
@@ -404,6 +408,90 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --diff tev1", text)
             self.assertIn("\n--diff:     ", text)
             self.assertIn("\n--dicts, --lists:  ", text)
+
+
+def diff_body():
+    return page_source().split("\nconst diff = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; generátor, stav a rozbor hlídá tests/test_parity.py (Diff)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_matches_bench(self):                    # zrcadla otázek obou nových scénářů jako bench.variant; ostatní otázky beze změny
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        questions = ([bench.diff_question(k, "lists") for k in range(2, 9)] + [bench.hint_question(k) for k in (2, 3, 8)]
+                     + [bench.queue_question(4, True), bench.lookahead_question(5, "blocked"), bench.memory_question(5), bench.rule_question("labeled")])
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(questions) + ";" + (
+            "process.stdout.write(JSON.stringify(Q.map(q => [0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(q)), v)))));")
+        for q, by_variant in zip(questions, run_page_js(code)):
+            for v, js in enumerate(by_variant):
+                self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="diff" data-i18n="opt.scenario.diff"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: co se změnilo ----------"), 1)
+        self.assertEqual(page.count("|| v === 'diff'"), 1)
+        body = diff_body() + "\n"
+        for line in ("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, diffRow(LANES, rnd))); },",
+                     "  randomTask() { return this.task(diffRow(LANES, rnd)); },",
+                     "  warmTask() { return this.task(diffWarm(LANES), null, null); },",      # zahřívací úloha je pevná a bez pokynu
+                     "  questions(v = 0) { return variantOf(diffQuestion(LANES), v); },"):
+            self.assertIn("\n" + line + "\n", body)
+        for call in ("id: 'diff', lanesFree: true,", "rollInject([d.truth])", "diffState(d.before, d.after)",
+                     "injectText(INJECT_NOTE, laneKeys(LANES)[inject])", "a.changed_list?.choice", "diffSummary(", "t('diff.line', ",
+                     "laneOf: (r, move) => move,"):
+            self.assertIn(call, body)
+        self.assertNotIn("noInject", body)                                                        # trojský kůň tu jde, jako bench.py --diff --inject
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):       # počítají se všechny odpovědi; neplatná je null
+        lane_keys = re.search(r"\nconst laneKeys = [^\n]*\n", page_source()).group(0)
+        code = lane_keys + "let LANES = 2; const base = { tally() {} }; const o = { __proto__: base," + method(diff_body(), "tally") + "};" + (
+            "const g = { cases: [], choices: [] }, task = { before: ['road', 'foam'], after: ['road', 'roam'], answer: 1, truth: 1, cls: 'word1',"
+            " mode: 'plain', inject: null, state: {} }; [1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"before": ["road", "foam"], "after": ["road", "roam"], "answer": 1, "cls": "word1", "mode": "plain"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["lane_2", "lane_1", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_shows_both_snapshots(self):         # oba snímky, volba, druh změny a podoba řady
+        from test_parity import run_js
+        page = page_source()
+        names = "".join(re.search(r"\nconst %s = [^\n]*\n" % k, page).group(0) for k in ("DIFF_CLASS_NAME", "DIFF_MODE_NAME"))
+        code = "(() => { const laneName = i => t('lane.name', { n: i + 1 });" + names + "const proto = {" + method(diff_body(), "describeLast") + "};" + (
+            "return proto.describeLast({ before: ['tape', 'tape', 'park', 'tear'], after: ['cape', 'tape', 'park', 'tear'], truth: 0, cls: 'word1',"
+            " mode: 'repeat' }, { move: 1 }); })()")
+        self.assertEqual(run_js(code, None).split("\n"), ["před:    tape  tape  park  tear", "po:      cape  tape  park  tear",
+                                                          "zvoleno: pruh 2  (správně: pruh 1)", "změna:   slovo o písmeno, s opakováním"])
+        self.assertEqual(run_js(code, None, "en").split("\n")[3], "change:  word off by a letter, with repeats")
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_kind_of_error(self):            # štítek: stará → nová hodnota, dvojče před sousedem jako diff_summary, neplatná, nestihl
+        from test_parity import run_js
+        code = "(() => {" + re.search(r"\nconst RESULT = [^\n]*\n", page_source()).group(0) + page_function("diffLabel") + (
+            "const W = [['tape', 'tape', 'park', 'tear'], ['cape', 'tape', 'park', 'tear']], N = [[2408, 2144, 4943, 2486], [2409, 2144, 4943, 2486]];"
+            "const r = ([before, after], result, chosen) => ({ before, after, answer: 0, truth: 0, result, chosen });"
+            "return [r(N, 'ok', 0), r(W, 'bad', 1), r(N, 'bad', 1), r(N, 'bad', 3), r(N, 'bad', -1), r(W, 'late', undefined)].map(diffLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ pruh 1: 2408 → 2409", "✗ pruh 2 se nezměnil, jen má stejnou hodnotu; změnil se pruh 1: tape → cape",
+                                                   "✗ sousední pruh 2; změnil se pruh 1: 2408 → 2409", "✗ pruh 4; změnil se pruh 1: 2408 → 2409",
+                                                   "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ lane 2 did not change, it only has the same value; lane 1 changed: tape → cape")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    def test_drawing_writes_only_through_t_and_shows_pick_and_legend(self):
+        for literal in ("fillText('", 'fillText("', "fillText(`"):
+            self.assertNotIn(literal, page_function("drawDiffShot"))                             # štítek snímku přes t(), hodnoty přes String(…)
+            self.assertNotIn(literal, diff_body())
+        self.assertIn("t(label)", page_function("drawDiffShot"))
+        body = diff_body()
+        for part in ("drawDiffShot(r.before, y - shot, r, 'diff.before')", "drawDiffShot(r.after, y, r, 'diff.after')", "diffLabel(r)", "drawRowLabel(",
+                     "strokeRect(", "panels: ['confPanel', 'legend']", "[null, 'legend.diff.shots']", "[null, 'legend.diff.pick']",
+                     "[null, 'legend.diff.repeat']", "['#3fb950', 'legend.diff.out']"):
+            self.assertIn(part, body)
+        self.assertEqual(page_source().count("const DIFF_SHOT = 1.5;"), 1)
 
 
 if __name__ == "__main__":

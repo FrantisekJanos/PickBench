@@ -3,7 +3,9 @@ import contextlib
 import io
 import json
 import os
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -18,6 +20,8 @@ import bench
 import i18n
 from test_bench import fake_post, largest_gate
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
+from test_queue import method                                                   # víceřádková metoda objektu scénáře
 
 LANG_ENV = "PICKBENCH_LANG"
 KEYS3 = ["gate_1", "gate_2", "gate_3"]
@@ -304,6 +308,125 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...", text)
             self.assertIn("python bench.py 100 --hint tev1", text)
             self.assertIn("\n--hint:     ", text)
+
+
+def hint_body():
+    return page_source().split("\nconst hint = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; čísla, trojice, stav a rozbor hlídá tests/test_parity.py (Hint)
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="hint" data-i18n="opt.scenario.hint"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: rušivá nápověda ----------"), 1)
+        self.assertEqual(page.count("|| v === 'hint'"), 1)                                     # bez „) {“: další část podmínku prodlouží
+        body = hint_body() + "\n"
+        # trojice: nextRow bere řady z trojice a novou losuje až po třetí; zahřívací úloha je pevná a nebere z rnd
+        for line in ("  nextRow(g) { if (!g.trio.length) g.trio = hintTrio(rnd, LANES, g.sets++); return g.trio.shift(); },",
+                     "  spawnRow(g, y) { g.rows.push(this.newRow(g, y, this.nextRow(g))); },",
+                     "  randomTask(g) { return this.task(this.nextRow(g)); },",
+                     "  warmTask() { return this.task(hintWarm(LANES)); },",
+                     "  questions(v = 0) { return variantOf(hintQuestion(LANES), v); },"):
+            self.assertIn("\n" + line + "\n", body)
+        for call in ("id: 'hint', lanesFree: true, noInject: true,", "state: hintState(d.values, d.hint)", "inject: null,",
+                     "a.largest?.choice", "hintSummary(", "t('hint.line', ", "t('hint.byGap', ", "HINT_GAP_NAME[", "pointsText(",
+                     "laneOf: (r, move) => move,"):
+            self.assertIn(call, body)                                                              # definice ze sdíleného bloku, ne opsané
+        for word in ("rollInject", "injectText"):
+            self.assertNotIn(word, body)                                                          # úloha nápovědy pokyn trojského koně nikdy nedostane
+
+    def test_trojan_horse_is_off_for_the_hint(self):        # jako bench.py --hint --inject: jádro zaškrtávátko vypne, odškrtne a injectOn vynuluje
+        page = page_source()
+        line = "  if (SC.noInject) { $('inject').disabled = true; $('inject').checked = false; injectOn = false; }"
+        self.assertEqual(page.count(line), 1)
+        self.assertEqual(page.count("noInject: true"), 1)
+        sync = re.search(r"\nfunction syncControls\(\) \{.*?\n\}\n", page, re.S).group(0)
+        self.assertIn(line, sync)
+        self.assertLess(sync.index("$('inject').disabled = running"), sync.index(line))         # až za společným řádkem, jinak by ho přepsal
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_trojan_horse_choice_comes_back_after_the_hint(self):     # odškrtnutí platí jen pro nápovědu: jiný scénář dostane volbu uživatele zpět (jako počet pruhů u pevných pruhů)
+        code = ("let running = false, injectOn = true, SC;"
+                "const box = () => ({ checked: false, disabled: false, value: '3', dataset: {}, options: [] }), els = {}, $ = id => els[id] ??= box();"
+                "const obstacles = { lanesFree: true }, hint = { lanesFree: true, noInject: true }, open = { benchOnly: true };"
+                + page_function("syncControls") +
+                "const see = () => [$('inject').checked, $('inject').disabled, injectOn], out = {};"
+                "$('inject').checked = true; SC = hint; syncControls(); out.hint = see(); syncControls(); out.again = see();"
+                "SC = obstacles; syncControls(); out.back = see();"
+                "$('inject').checked = false; injectOn = false; SC = hint; syncControls(); SC = obstacles; syncControls(); out.offBack = see();"
+                "$('inject').checked = true; injectOn = true; SC = hint; syncControls(); SC = open; syncControls(); out.toPublic = see();"
+                "process.stdout.write(JSON.stringify(out));")
+        got = run_page_js(code)
+        self.assertEqual(got["hint"], [False, True, False])                   # nápověda: odškrtnuto, vypnuto, injectOn = false
+        self.assertEqual(got["again"], [False, True, False])                  # druhé volání (třeba setRunning) volbu nepřepíše
+        self.assertEqual(got["back"], [True, False, True])                    # zpět u překážek: zaškrtnuto jako před nápovědou
+        self.assertEqual(got["offBack"], [False, False, False])               # nezaškrtnuté zůstane nezaškrtnuté
+        self.assertEqual(got["toPublic"], [False, True, False])               # veřejná sada odškrtne dál po svém (jako dřív)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_rows_come_in_trios_on_the_road(self):           # tři řady po sobě se stejnými čísly a všemi třemi podmínkami
+        from test_parity import run_js
+        line = re.search(r"\n  (nextRow\(g\) \{[^\n]*\}),\n", hint_body()).group(1)
+        code = ("(() => { let LANES = 4, a = 3; const rnd = () => (a = (a * 16807) % 2147483647) / 2147483647;"
+                " const o = { " + line + " }, g = { trio: [], sets: 0 }; return [...Array(9)].map(() => o.nextRow(g)); })()")
+        rows = run_js(code, None)
+        self.assertEqual([r["set"] for r in rows], [0, 0, 0, 1, 1, 1, 2, 2, 2])
+        for k in range(3):
+            trio = rows[3 * k:3 * k + 3]
+            self.assertEqual(sorted(r["cond"] for r in trio), sorted(bench.HINT_CONDS))
+            self.assertEqual({len(r["values"]) for r in trio}, {4})
+            self.assertEqual(len({tuple(r["values"]) for r in trio}), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):       # počítají se všechny odpovědi; neplatná je null
+        gate_keys = re.search(r"\nconst gateKeys = [^\n]*\n", page_source()).group(0)
+        code = gate_keys + "let LANES = 3; const base = { tally() {} }; const o = { __proto__: base," + method(hint_body(), "tally") + "};" + (
+            "const g = { cases: [], choices: [] }, task = { values: [10, 30, 20], answer: 1, truth: 1, gap: 'clear', cond: 'incongruent', hint: 2, set: 4,"
+            " inject: null, state: {} }; [1, 2, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"values": [10, 30, 20], "answer": 1, "gap": "clear", "cond": "incongruent", "hint": 2, "set": 4}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["gate_2", "gate_3", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_names_the_sign(self):              # čísla, kde visela cedule a jaká podmínka to byla, volba, třída rozdílu
+        from test_parity import run_js
+        names = re.search(r"\nconst HINT_COND_NAME = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + names + "const proto = {" + method(hint_body(), "describeLast") + "};" + (
+            "const task = (cond, hint) => ({ values: [10, 30, 20], truth: 1, gap: 'clear', cond, hint });"
+            "return [proto.describeLast(task('incongruent', 2), { move: 2 }), proto.describeLast(task('none', null), { move: -1 })]; })()")
+        inc, none = run_js(code, None)
+        self.assertEqual(inc.split("\n"), ["čísla:    10   30   20", "nápověda: cedule u brány 3 (konfliktní)",
+                                           "zvoleno:  brána 3 (20)  (správně: brána 2 (30))", "rozdíl:   jasné (nad 30 %)"])
+        self.assertEqual(none.split("\n")[1:3], ["nápověda: bez nápovědy", "zvoleno:  neplatná odpověď  (správně: brána 2 (30))"])
+        self.assertEqual(run_js(code, None, "en")[0].split("\n")[1], "hint:       sign at gate 3 (incongruent)")
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_say_whether_the_model_followed_the_hint(self):     # štítek: výsledek a jak to bylo s nápovědou, neplatná, nestihl
+        from test_parity import run_js
+        code = "(() => {" + re.search(r"\nconst RESULT = [^\n]*\n", page_source()).group(0) + page_function("hintLabel") + (
+            "const r = (cond, hint, result, chosen) => ({ values: [10, 30, 20], truth: 1, cond, hint, result, chosen });"
+            "return [r('none', null, 'ok', 1), r('congruent', 1, 'ok', 1), r('incongruent', 2, 'ok', 1), r('incongruent', 2, 'bad', 2),"
+            " r('incongruent', 2, 'bad', 0), r('congruent', 1, 'bad', 0), r('none', null, 'bad', 0), r('none', null, 'bad', -1),"
+            " r('congruent', 1, 'late', undefined)].map(hintLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], [
+            "✓ brána 2 (30): největší číslo, bez nápovědy", "✓ brána 2 (30): největší číslo, nápověda ukazovala sem",
+            "✓ brána 2 (30): největší číslo; nápovědu na bránu 3 nenásledoval", "✗ následoval nápovědu: brána 3 (20), největší je brána 2 (30)",
+            "✗ brána 1 (10), nápovědu nenásledoval; největší je brána 2 (30)", "✗ brána 1 (10), nápovědu nenásledoval; největší je brána 2 (30)",
+            "✗ brána 1 (10), největší je brána 2 (30); bez nápovědy", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[3]["text"], "✗ followed the hint: gate 3 (20), the largest is gate 2 (30)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950"] * 3 + ["#f85149"] * 4 + ["#8b9aa8"] * 2)
+
+    def test_drawing_writes_only_through_t_and_shows_sign_pick_and_legend(self):
+        for literal in ("fillText('", 'fillText("', "fillText(`"):
+            self.assertNotIn(literal, page_function("drawHintSign"))                              # cedule jen přes t(), čísla přes String(…)
+            self.assertNotIn(literal, hint_body())
+        self.assertIn("t('hint.sign')", page_function("drawHintSign"))
+        body = hint_body()
+        for part in ("drawHintSign((r.hint + 0.5) * LW, y, 2 * hw)", "hintLabel(r)", "drawRowLabel(", "strokeRect(", "panels: ['confPanel', 'legend']",
+                     "[null, 'legend.hint.gates']", "[HINT_COLOR, 'legend.hint.sign']", "[null, 'legend.hint.trio']", "[null, 'legend.hint.out']"):
+            self.assertIn(part, body)
+        self.assertEqual(page_source().count("const HINT_COLOR = '#a371f7';"), 1)
 
 
 if __name__ == "__main__":

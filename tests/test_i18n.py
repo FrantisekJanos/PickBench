@@ -345,7 +345,7 @@ SHARED = ("// ==== sdíleno s Pythonem: začátek ====", "// ==== sdíleno s Pyt
 FIELD_JS = re.compile(r"\{(\w+)(?:\|[^{}|]*\|[^{}|]*)?\}")
 # Klíče, kde je český a anglický text stejný záměrně (vlastní jména, zkratky, slova stejná v obou jazycích).
 SAME = {"mode.bench", "ui.start", "ui.stop", "ui.model", "ui.hardware", "ui.csv", "opt.driver.model",
-        "col.n", "col.p95", "col.min", "col.max", "col.ece", "col.temp", "col.f1", "col.goodput",
+        "col.n", "col.p95", "col.min", "col.max", "col.ece", "col.brier", "col.temp", "col.f1", "col.goodput",
         "metric.precision", "metric.recall", "metric.f1", "last.lane", "card.model", "scenario.emails.task", "last.ms", "run.benchProgress"}
 # Předpony klíčů, které se skládají za běhu: t('state.' + st.state).
 DYNAMIC = ("tip.", "col.", "result.", "gap.", "state.")
@@ -355,7 +355,10 @@ COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "
             "scenario.rule": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.queue": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.queueWeighted": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.bet": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.cruise": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.timetable": "cellsOf: known('scenario.' + v.scenario, …)",
-            "scenario.tictactoe": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.bandit": "cellsOf: known('scenario.' + v.scenario, …)"}
+            "scenario.tictactoe": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.bandit": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.hint": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.diff": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.pattern": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -364,7 +367,7 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
         "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
-        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád", "scénář: tah na výhru", "scénář: mýtné brány"]
+        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád", "scénář: tah na výhru", "scénář: mýtné brány", "scénář: rušivá nápověda", "scénář: co se změnilo", "scénář: vzor soupeře"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -569,7 +572,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 14)                                     # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád, tah na výhru, mýtné brány
+        self.assertEqual(len(blocks), 17)                                   # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád, tah na výhru, mýtné brány, rušivá nápověda, co se změnilo, vzor soupeře
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -597,7 +600,7 @@ class PageTexts(unittest.TestCase):
         for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
             self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
-        self.assertEqual(sorted(COMPOSED), ["scenario.bandit", "scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.lookahead", "scenario.memory", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.tictactoe", "scenario.timetable"])
+        self.assertEqual(sorted(COMPOSED), ["scenario.bandit", "scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.diff", "scenario.hint", "scenario.lookahead", "scenario.memory", "scenario.pattern", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.tictactoe", "scenario.timetable"])
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("výjim", self.texts[key]["cs"], key)
             self.assertIn("bans and exceptions", self.texts[key]["en"], key)
@@ -781,6 +784,58 @@ class PageTexts(unittest.TestCase):
             self.assertIn("mýt", self.texts[key]["cs"], key)
             self.assertIn("toll gates", self.texts[key]["en"], key)
 
+    def test_hint_texts_match_bench_and_name_the_scenario(self):              # podmínky, třídy rozdílu a řádky pod tabulkou jako bench.py, popisek voliče, popisky se scénáři
+        names = dict(re.findall(r"(\w+): '(hint\.cond\.\w+)'", piece(r"^const HINT_COND_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["none", "congruent", "incongruent"])                                # pořadí HINT_CONDS
+        gaps = dict(re.findall(r"(\w+): '(hint\.gap\.\w+)'", piece(r"^const HINT_GAP_NAME = \{.*?\};$")))
+        self.assertEqual(list(gaps), ["tight", "medium", "clear"])                                         # pořadí GAPS
+        for code in ("cs", "en"):
+            for cond, key in names.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.hint." + cond][code], (key, code))
+                self.assertIn(self.texts[key][code], self.texts["scenario.hint.extraTip"][code], (key, code))
+            for gap, key in gaps.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.gap." + gap][code], (key, code))
+            for key in ("line", "byGap"):
+                self.assertEqual(self.texts["hint." + key][code], i18n.TEXTS["bench.hint." + key][code], (key, code))
+            self.assertIn(self.texts["opt.scenario.hint"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.hint.extraTitle"][code], self.texts["scenario.hint.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("rušiv", self.texts[key]["cs"], key)
+            self.assertIn("distracting hint", self.texts[key]["en"], key)
+        self.assertTrue(self.texts["tip.inject"]["cs"].endswith("(jako bench.py --hint)."))                # trojský kůň u nápovědy není
+        self.assertTrue(self.texts["tip.inject"]["en"].endswith("(as in bench.py --hint)."))
+        self.assertEqual(node("[t('hint.pull', { pp: '+12' }), t('hint.pull', { pp: '-3' })]"), ["+12 pb", "-3 pb"])
+
+    def test_diff_texts_match_bench_and_name_the_scenario(self):              # třídy a řádek pod tabulkou jako bench.py, popisek voliče, popisky se scénáři
+        names = dict(re.findall(r"(\w+): '(diff\.class\.\w+)'", piece(r"^const DIFF_CLASS_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["num1", "numnew", "word1", "wordnew"])                              # pořadí DIFF_CLASSES
+        self.assertEqual(re.findall(r"(\w+): 'diff\.mode\.\w+'", piece(r"^const DIFF_MODE_NAME = \{.*?\};$")), ["plain", "repeat"])
+        for code in ("cs", "en"):
+            for cls, key in names.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.diff." + cls][code], (key, code))
+                self.assertIn(self.texts[key][code] + " (", self.texts["scenario.diff.extraTip"][code], (key, code))
+                self.assertIn(self.texts[key][code], self.texts["scenario.diff.about"][code], (key, code))
+            self.assertEqual(self.texts["diff.line"][code], i18n.TEXTS["bench.diff.line"][code], code)
+            self.assertIn(self.texts["opt.scenario.diff"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.diff.extraTitle"][code], self.texts["scenario.diff.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("Co se změnilo", self.texts[key]["cs"], key)
+            self.assertIn("what changed", self.texts[key]["en"], key)
+
+    def test_pattern_texts_match_bench_and_name_the_scenario(self):           # perioda a řádek chyb jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = re.findall(r"(\w+): 'pattern\.move\.\w+'", piece(r"^const PATTERN_MOVE_NAME = \{.*?\};$"))
+        self.assertEqual(names, ["rock", "paper", "scissors"])                                          # pořadí PATTERN_MOVES = pořadí bran
+        kinds = re.findall(r"(\w+): 'pattern\.kind\.\w+'", piece(r"^const PATTERN_KIND_NAME = \{.*?\};$"))
+        self.assertEqual(kinds, ["counter_given", "last", "frequent", "period", "transition"])
+        for code in ("cs", "en"):
+            self.assertEqual(self.texts["pattern.period"][code], i18n.TEXTS["bench.pattern.period"][code], code)
+            self.assertEqual(self.texts["pattern.errors"][code], i18n.TEXTS["bench.pattern.errorsPredict"][code], code)
+            self.assertIn(self.texts["opt.scenario.pattern"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.pattern.extraTitle"][code], self.texts["scenario.pattern.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("vzor", self.texts[key]["cs"], key)
+            self.assertIn("opponent's pattern", self.texts[key]["en"], key)
+
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
                  ["cal.head", {"ece": "X", "n": 1}], ["cal.head", {"ece": "X", "n": 30}], ["db.unsaved", {"n": 1}], ["db.unsaved", {"n": 2}]]
@@ -931,7 +986,62 @@ class PageTexts(unittest.TestCase):
                 for code in ("cs", "en"):                                     # a obě strany v nich vidí stejné proměnné ({n:.1f} by znal jen Python)
                     self.assertEqual(i18n.fields(self.texts[key][code]), set(FIELD_JS.findall(self.texts[key][code])), (key, code))
 
-    def test_command_line_says_the_same_words_as_the_page(self):              # bench.py tiskne tytéž věci jako stránka: stejné slovo, v záhlaví nejvýš zkrácené
+    def test_calibration_threshold_says_the_same_as_bench(self):           # práh jistoty ve stránce a bench.py --defer: tatáž slova
+        for code in ("cs", "en"):
+            page_text, tool = (lambda key: self.texts[key][code]), (lambda key: i18n.TEXTS[key][code])
+            self.assertIn(page_text("ui.calThreshold").lower(), tool("bench.defer"), code)          # práh jistoty / confidence threshold
+            self.assertIn(tool("bench.defer").split("; ")[0].split(", ")[-1].rsplit(" ", 1)[0], page_text("cal.cover"), code)   # předat člověku nebo pravidlům
+            self.assertIn("{brier}", page_text("cal.brier"), code)
+        self.assertEqual(self.texts["col.brier"]["cs"], "Brier")
+
+    def test_calibration_threshold_value_stays_on_the_line_of_its_label(self):      # štítek je sloupec (label: flex column): název a hodnota prahu v jednom řádku, posuvník pod nimi
+        page = PAGE.read_text(encoding="utf-8")
+        self.assertIn('<label><span><span data-i18n="ui.calThreshold"></span> <span id="calTv"></span></span>', page)
+
+    def test_panel_charts_take_the_panel_width(self):                     # plátno s width="900" bez CSS by z úzkého panelu přeteklo (graf hardwaru, průchod 2–8)
+        page = PAGE.read_text(encoding="utf-8")
+        for canvas, height in (("chart", 110), ("cal", 210), ("hwChart", 110), ("sweepChart", 170)):
+            self.assertIn(f"canvas#{canvas} {{ width:100%; height:{height}px; display:block; }}", page, canvas)
+            self.assertIn(f'<canvas id="{canvas}" width="900" height="{height}"', page, canvas)      # výška v CSS = výška plátna, text se nedeformuje
+
+    def test_calibration_head_leaves_room_for_the_brier_score(self):        # anglické záhlaví je dlouhé: v úzkém panelu vjelo do Brierova skóre vpravo nahoře
+        got = node_run("""
+const calls = [], ctx = { fillText: (s, x, y, w) => calls.push({ s: String(s), x, y, w, align: ctx.textAlign }), measureText: s => ({ width: 6 * String(s).length }),
+  fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, setLineDash() {}, textAlign: 'start' };
+const els = { cal: { clientWidth: 560, width: 0, height: 210, getContext: () => ctx }, calT: { value: '0.9' }, calTv: {}, calCover: {} }, $ = id => els[id];
+const S = { cal: [...Array(20)].map((_, i) => [0.92, i < 8]), n: 20 };
+%s
+%s
+%s
+%s
+const out = {};
+for (const lang of ['cs', 'en']) { LANG = lang; calls.length = 0; drawCal();
+  const head = calls.find(c => c.y === 12 && c.align === 'start'), right = calls.find(c => c.y === 12 && c.align === 'end');
+  out[lang] = { headEnd: head.x + Math.min(head.w ?? Infinity, ctx.measureText(head.s).width), brierStart: right.x - ctx.measureText(right.s).width, width: 560 }; }
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^function brier\(.*?\}$"), piece(r"^function coverageAt\(.*?^\}$"), piece(r"^function calib\(.*?^\}$"), piece(r"^function drawCal\(.*?^\}$")))
+        for lang in ("cs", "en"):
+            self.assertLess(got[lang]["headEnd"] + 8, got[lang]["brierStart"], lang)
+
+    def test_sweep_texts_match_bench(self):                                # trend pod grafem průchodu jako řádek bench.py --sweep-lanes
+        for code in ("cs", "en"):
+            page_text, tool = (lambda key: self.texts[key][code]), (lambda key: i18n.TEXTS[key][code])
+            self.assertEqual(page_text("sweep.trend"), tool("bench.sweep.trend").replace("{acc_first}", "{accFirst}").replace("{acc_last}", "{accLast}")
+                             .replace("{p50_first}", "{p50First}").replace("{p50_last}", "{p50Last}"), code)
+            self.assertIn("2–8", page_text("ui.sweep"), code)
+
+    def test_sweep_chart_follows_driver_and_model(self):                  # graf průchodu je za zvoleného řidiče a model: změna výběru ho překreslí
+        self.assertRegex(page(), r"for \(const id of \['model', 'driver'\]\) \$\(id\)\.addEventListener\('change', \(\) => \{[^}]*drawSweep\(\);")
+
+    def test_length_line_matches_bench(self):                              # řádek pod tabulkou e-mailů a veřejné sady jako bench.py --by-length
+        for code in ("cs", "en"):
+            names = {"short": "shortOk", "medium": "mediumOk", "long": "longOk"}
+            want = i18n.TEXTS["bench.byLength"][code]
+            for cls, var in names.items():
+                want = want.replace(f"{{{cls}_ok}}", f"{{{var}}}").replace(f"{{{cls}_n}}", f"{{{cls}N}}")
+            self.assertEqual(self.texts["length.line"][code], want, code)
+
+    def test_command_line_says_the_same_words_as_the_page(self):             # bench.py tiskne tytéž věci jako stránka: stejné slovo, v záhlaví nejvýš zkrácené
         columns = {"avg": "col.avg", "p50": "col.p50", "p95": "col.p95", "min": "col.min", "max": "col.max", "rate": "col.rate", "acc": "col.acc",
                    "conf": "tile.conf.label", "ece": "col.ece", "stab": "col.stab", "goodput": "col.goodput", "tokens": "last.tokens"}
         for code in ("cs", "en"):
@@ -966,6 +1076,7 @@ class PageTexts(unittest.TestCase):
             self.assertIn(left + tool("hw.didNotFit") + right, tool("hw.note.truncation"), code)            # věta cituje buňku tabulky
             self.assertIn(" " + tool("hw.col.inputTokens"), tool("hw.note.truncation"), code)               # a jmenuje sloupec
             summary = tool("hw.soak.summary")
+            self.assertIn(", " + page_text("tile.hwJouleNet.label") + " {net}", tool("hw.soak.idle"), code)      # J na rozhodnutí bez klidu
             self.assertIn(", " + page_text("tile.hwJoule.label").split(" (")[0] + " {j}", summary, code)    # J na rozhodnutí
             self.assertIn(", " + " ".join(page_text("tile.hwMaxTemp.label").split()[:2]) + " {temp} °C", summary, code)      # nejvyšší teplota
             self.assertTrue(page_text("tile.goodput.labelGame").endswith(" " + tool("hw.col.onTime")), code)                 # včas
@@ -1212,7 +1323,7 @@ class Results(unittest.TestCase):
         cs = node("cellsOf(arg)", data)
         self.assertEqual(cs, {"driver": "tev1 +2. otázka +zrcadla", "scenario": "překážky", "lanes": 3, "mode": "žebřík (přerušen), max — polí/s",
                               "n": 12, "avg": "41.3", "p50": "40.0", "p95": "55.5", "min": "30.0", "max": "60.0", "rate": "9.9", "acc": "75 %",
-                              "ece": "3.1 %", "stab": "—", "errors": 2, "late": "—", "dist": "60", "joule": "3.46", "temp": "61", "fooled": "—",
+                              "ece": "3.1 %", "brier": "—", "stab": "—", "errors": 2, "late": "—", "dist": "60", "joule": "3.46", "temp": "61", "fooled": "—",
                               "runlen": "—", "seed": "—", "f1": "—", "goodput": "—", "usd": "—", "net": "—", "batch": "3/2",
                               "note": "start při 71 °C (cíl pod 60 °C); zastaven před délkou průjezdu; volná věta"})
         en = node("cellsOf(arg)", data, lang="en")
@@ -1302,6 +1413,24 @@ class Results(unittest.TestCase):
         pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
         self.assertEqual(node(pick, rows), [["mýtné brány", 5]])
         self.assertEqual(node(pick, rows, lang="en"), [["toll gates", 5]])
+
+    def test_hint_row_reads_in_both_languages(self):                          # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.hint
+        rows = [{"vals": {**VALS, "scenario": "hint", "lanes": 3}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["rušivá nápověda", 3]])
+        self.assertEqual(node(pick, rows, lang="en"), [["distracting hint", 3]])
+
+    def test_diff_row_reads_in_both_languages(self):                          # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.diff
+        rows = [{"vals": {**VALS, "scenario": "diff", "lanes": 8}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["co se změnilo", 8]])
+        self.assertEqual(node(pick, rows, lang="en"), [["what changed", 8]])
+
+    def test_pattern_row_reads_in_both_languages(self):                       # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.pattern
+        rows = [{"vals": {**VALS, "scenario": "pattern", "lanes": 3}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["vzor soupeře", 3]])
+        self.assertEqual(node(pick, rows, lang="en"), [["opponent's pattern", 3]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
@@ -1720,7 +1849,7 @@ let hosted = null, running = false, runHosted = null, hwOff = false, hwThrottled
 const els = {}, $ = id => els[id] ??= { textContent: '', replaceChildren(...kids) { this.kids = kids; this.tiles = null; } };
 const el = (tag, cls, text) => ({ text });
 const hostedNow = () => hosted;
-const runEnergy = () => ({ perDecision: 1.234, joules: 43.2, avgPower: 20, maxTemp: 61 });
+const runEnergy = () => ({ perDecision: 1.234, joules: 43.2, avgPower: 20, maxTemp: 61, perNet: 0.8 }), drawHwChart = () => {}, syncIdle = () => {};
 const renderTiles = (box, tiles) => { box.tiles = tiles; box.kids = null; };
 %s
 const read = () => ['cs', 'en', 'cs'].map(code => {       // přepnutí jazyka: renderLang → drawStats → renderHw
@@ -1735,9 +1864,9 @@ hwOff = false; hosted = { who: 'x' }; out.hosted = read();
 process.stdout.write(JSON.stringify(out));
 """ % piece(r"^function renderHw\(.*?^\}$"))
         texts = node("TEXTS")
-        names = ("hwTemp", "hwPower", "hwClock", "hwPstate", "hwMem", "hwJoule", "hwAvgPower", "hwMaxTemp")
+        names = ("hwTemp", "hwPower", "hwClock", "hwPstate", "hwMem", "hwJoule", "hwJouleNet", "hwAvgPower", "hwMaxTemp")
         cs, en, back = got["tiles"]
-        self.assertEqual(cs["labels"], ["teplota GPU", "příkon GPU", "takt GPU", "stav (pstate)", "paměť GPU", "J na rozhodnutí (běh celkem 0.012 Wh)",
+        self.assertEqual(cs["labels"], ["teplota GPU", "příkon GPU", "takt GPU", "stav (pstate)", "paměť GPU", "J na rozhodnutí (běh celkem 0.012 Wh)", "J na rozhodnutí bez klidu",
                                         "průměrný příkon za běh", "nejvyšší teplota za běh"])
         self.assertEqual(cs["warn"], "GPU je přiškrcená (USB-C napájení?) — měření neodpovídá plnému výkonu")
         self.assertEqual(back, cs)
@@ -1750,6 +1879,105 @@ process.stdout.write(JSON.stringify(out));
         self.assertEqual(texts["hosted.hw"]["cs"], "Model běží u poskytovatele: GPU tohoto počítače se při něm neměří a energie na rozhodnutí není. "
                                                    "Místo ní je v panelu Rychlost rozhodování cena ($ za 1000 rozhodnutí).")
         self.assertEqual([x["warn"] for x in got["none"] + got["hosted"]], [""] * 6)
+    def test_idle_measurement_cancels_and_needs_enough_samples(self):
+        got = node_run("""
+let running = false, planRunning = false, hwOff = false, hwIdle = null, hwIdleUntil = 0, hwIdleSamples = [];
+const HW_MIN_SAMPLES = 5, HW_IDLE_S = 10;
+const els = {}, $ = id => els[id] ??= { textContent: '', disabled: false };
+const renderHw = () => {};
+%s
+%s
+%s
+const out = {}, g = w => ({ available: true, power_w: w });
+const measure = (samples, cancel) => {                    // jedno měření: kliknutí, vzorky po sekundě, případně zásah zvenku
+  hwIdle = null; measureIdle();
+  const started = hwIdleUntil;
+  samples.forEach((w, i) => { if (cancel && i === cancel.at) cancel.set(); idleSample(g(w), i === samples.length - 1 ? started : 0); });
+  return { started: !!started, end: started, hwIdleUntil, idle: hwIdle, text: $('hwIdleText').textContent, disabled: $('hwIdle').disabled };
+};
+out.mean = measure([10, 20, 30, 40, 50, 60], null);                  // poslední vzorek přijde v čase konce měření
+out.few = measure([10, 20, 30], null);
+running = true; hwIdleUntil = 0; measureIdle(); out.blockedRunning = hwIdleUntil; running = false;
+planRunning = true; measureIdle(); out.blockedPlan = hwIdleUntil; syncIdle(); out.btnPlan = $('hwIdle').disabled; planRunning = false;
+out.cancelRun = measure([10, 20, 30], { at: 1, set: () => { running = true; } }); running = false;
+out.cancelPlan = measure([10, 20, 30], { at: 1, set: () => { planRunning = true; } }); planRunning = false;
+syncIdle(); out.btnFree = $('hwIdle').disabled;
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^function measureIdle\(.*?^\}$"), piece(r"^function syncIdle\(.*?^\}$"), piece(r"^function idleSample\(.*?^\}$")))
+        self.assertEqual(got["mean"]["idle"], {"watts": 35, "samples": 6, "at": got["mean"]["end"]})      # od 5 vzorků je to průměr; at = konec měření (runEnergy ho bere jen pro pozdější běh)
+        self.assertEqual(got["mean"]["text"], "Klidový příkon 35.0 W (6 vzorků).")
+        self.assertTrue(got["few"]["started"])
+        self.assertIsNone(got["few"]["idle"])                                 # méně než 5 vzorků: žádná hodnota
+        self.assertEqual(got["few"]["hwIdleUntil"], 0)
+        self.assertEqual(got["mean"]["hwIdleUntil"], 0)
+        self.assertEqual(got["blockedRunning"], 0)                            # za běhu měření nezačne
+        self.assertEqual(got["blockedPlan"], 0)                               # ani mezi kroky fronty
+        self.assertTrue(got["btnPlan"])
+        for key in ("cancelRun", "cancelPlan"):
+            self.assertEqual(got[key]["hwIdleUntil"], 0)                      # běh i fronta měření zruší
+            self.assertIsNone(got[key]["idle"])
+            self.assertEqual(got[key]["text"], "")
+        self.assertFalse(got["btnFree"])
+
+    def test_idle_counts_only_for_a_run_that_started_after_it(self):          # dlaždice slibuje klid změřený před během: pozdější měření (teplá GPU) se poslednímu běhu neodečte
+        got = node_run("""
+let hwIdle = null, runSettings = { driver: 'model', model: 'm' }, S = { hw: [], n: 10, t0: 5000, t1: 15000 };
+const energyOf = () => ({ joules: 100, perDecision: 10, avgPower: 10, maxTemp: 60 }), hostedOf = () => null;
+%s
+const out = {};
+for (const at of [4000, 5000, 20000]) { hwIdle = { watts: 5, samples: 6, at }; out[at] = runEnergy().perNet; }
+hwIdle = null; out.none = runEnergy().perNet;
+process.stdout.write(JSON.stringify(out));
+""" % piece(r"^function runEnergy\(.*?^\}$"))
+        self.assertEqual((got["4000"], got["5000"]), (5, 5))                  # (100 J − 5 W × 10 s) ÷ 10 rozhodnutí
+        self.assertIsNone(got["20000"])                                       # změřeno po běhu: NaN (JSON null), dlaždice ukáže „—“
+        self.assertIsNone(got["none"])
+
+    def test_hardware_chart_survives_a_long_run_and_skips_a_finished_one(self):      # 1 Hz překreslení: max bez rozkladu pole do argumentů, skončený běh se znovu nekreslí
+        got = node_run("""
+let S;
+const ctx = { fillText() {}, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {} };
+let draws = 0;
+const canvas = { clientWidth: 900, height: 110, set width(v) { draws++; }, get width() { return 900; }, getContext: () => ctx }, $ = () => canvas;
+%s
+%s
+const big = 300000, out = {};
+S = { t0: 0, t1: 300000, hw: [[0, 10, 50], [1, 12, 51]], lat: Array.from({ length: big }, (_, i) => i %% 1000), when: Array.from({ length: big }, (_, i) => i / 1000) };
+try { drawHwChart(); out.big = draws; } catch (e) { out.big = e.name; }
+drawHwChart(); out.same = draws;
+LANG = 'en'; drawHwChart(); out.lang = draws; LANG = 'cs';
+canvas.clientWidth = 600; drawHwChart(); out.resized = draws;
+S = { t0: 0, t1: null, hw: [], lat: [5], when: [0.5] }; drawHwChart(1000); drawHwChart(2000); out.running = draws;
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^let hwDrawn = [^\n]*$"),piece(r"^function drawHwChart\(.*?^\}$")))
+        self.assertEqual(got["big"], 1)                                       # 300 000 rozhodnutí: Math.max(...pole) by hodil RangeError a zastavil dotazy na /gpu
+        self.assertEqual(got["same"], 1)                                      # nic se nezměnilo: nekreslí se
+        self.assertEqual(got["lang"], 2)                                      # jiný jazyk legendy
+        self.assertEqual(got["resized"], 3)                                   # jiná šířka plátna
+        self.assertEqual(got["running"], 5)                                   # běžící běh se kreslí při každém vzorku
+
+    def test_sweep_estimates_each_step_with_its_lanes_and_waits_for_failed_steps(self):     # odhad ceny ze zadání s počtem pruhů kroku; neúspěšný krok by runPlan spustil znovu
+        got = node_run("""
+let LANES = 3, KEYS = ['lane_1', 'lane_2', 'lane_3'], planRunning = false, running = false, started = 0, said = [];
+const SC = { id: 'numbers' }, SWEEP_SC = ['obstacles', 'numbers'], PLAN_MAX = 50, PLAN = { steps: [] };
+const sqSay = m => said.push(typeof m === 'function' ? m() : m), planChanged = () => {}, runPlan = () => { started++; };
+const readSettings = () => ({ driver: 'model', model: 'test:echo', lanes: 3, deadline: 0, benchn: 20, runlen: 0 }), deadlineOf = d => d, needConsent = () => false;
+const stepEstimate = (kind, s) => ({ lanes: LANES, keys: KEYS.length, asked: s.lanes });
+%s
+%s
+%s
+%s
+const out = { blocked: {} };
+for (const state of ['wait', 'abort', 'error']) { PLAN.steps = [{ state }]; said = []; sweepAdd(); out.blocked[state] = [PLAN.steps.length, said[0]]; }
+PLAN.steps = [{ state: 'done' }]; said = []; sweepAdd();
+out.est = PLAN.steps.slice(1).map(st => st.est); out.lanes = [LANES, KEYS]; out.started = started;
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^const laneKeys = [^\n]*$"), piece(r"^const planPending = [^\n]*$"),piece(r"^function withLanes\(.*?^\}$"), piece(r"^function sweepAdd\(.*?^\}$")))
+        busy = node("TEXTS")["plan.sweep.busy"]["cs"]
+        self.assertEqual(got["blocked"], {state: [1, busy] for state in ("wait", "abort", "error")})
+        self.assertEqual(got["est"], [{"lanes": k, "keys": k, "asked": k} for k in range(2, 9)])
+        self.assertEqual(got["lanes"], [3, ["lane_1", "lane_2", "lane_3"]])  # pruhy stránky zůstanou, jak byly
+        self.assertEqual(got["started"], 1)
 
 
 # ---------- znění angličtiny ----------
@@ -1908,10 +2136,10 @@ class Wording(unittest.TestCase):
         self.assertTrue(en("step.toggleLabel").startswith(en("step.skip") + " "))
         self.assertEqual(en("tile.hwPstate.label"), "performance state (pstate)")    # samotné state je stav kroku fronty
 
-    def test_result_column_headings_start_in_lower_case(self):                # N, ECE a J/decision jsou zkratky a jednotka: velké písmeno bez malého za ním
+    def test_result_column_headings_start_in_lower_case(self):                # N, ECE a J/decision jsou zkratky a jednotka, Brier jméno: velké písmeno bez malého za ním
         heads = {key: entry["en"] for key, entry in self.page.items() if re.fullmatch(r"col\.\w+", key)}
         self.assertGreaterEqual(len(heads), 29)
-        self.assertEqual({key: text for key, text in heads.items() if re.match(r"[A-Z][a-z]", text)}, {})
+        self.assertEqual({key: text for key, text in heads.items() if re.match(r"[A-Z][a-z]", text) and key != "col.brier"}, {})
 
     def test_input_tokens_are_named_in_words(self):                           # česky nese záhlaví hwbench.py jméno pole odpovědi (input_tokens), anglicky slova jako sousední target tokens
         self.assertEqual(i18n.TEXTS["hw.col.inputTokens"], {"cs": "input_tokens", "en": "input tokens"})
@@ -2024,6 +2252,9 @@ class PageStatic(unittest.TestCase):
                      "scénář: jízdní řád",
                      "scénář: tah na výhru",
                      "scénář: mýtné brány",
+                     "scénář: rušivá nápověda",
+                     "scénář: co se změnilo",
+                     "scénář: vzor soupeře",
                      "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:

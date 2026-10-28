@@ -5,7 +5,9 @@ import itertools
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -20,6 +22,8 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
+from test_queue import method                                                   # víceřádková metoda objektu scénáře
 
 LANG_ENV = "PICKBENCH_LANG"
 MOVES = ("rock", "paper", "scissors")
@@ -510,6 +514,87 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--counter, --predict:  ", text)
         self.assertIn(f"Bez volby platí {FORM}.", bench.__doc__)
         self.assertIn(f"Without the option: {FORM}.", bench.USAGE_EN)
+
+
+def pattern_body():
+    return page_source().split("\nconst pattern = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; řešitel, generátor a rozbor hlídá tests/test_parity.py (Pattern)
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="pattern" data-i18n="opt.scenario.pattern"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertIn(" pattern }[v];", REGISTRY)
+        self.assertEqual(page.count("// ---------- scénář: vzor soupeře ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(patternWarm(), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, patternRow(rnd), 3)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(patternRow(rnd)); },"), 1)
+        body = pattern_body()
+        for call in ("rollInject([d.truth], 3)", "patternState(d.moves)", "injectText(INJECT_NOTE, PATTERN_MOVES[inject])", "variantOf(patternQuestion(), v)",
+                     "a.opponent_throw?.choice", "patternSummary(", "fixedLanes: 3, lanes: () => 3,", "panels: ['confPanel', 'trail', 'legend']"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_summary_runs_once_per_new_answer(self):               # quality i renderExtra čtou tentýž rozbor jako u nápovědy a Co se změnilo
+        body = pattern_body()
+        for name in ("quality", "renderExtra"):
+            self.assertIn("this.summary(g)", method(body, name))
+            self.assertNotIn("patternSummary(", method(body, name))
+        code = ("let calls = 0; const patternSummary = (c, ch) => { calls++; return { errors: { counter_given: c.length } }; };"
+                "const o = {" + method(body, "summary") + "};"
+                "const g = { cases: [1, 2], choices: ['rock', 'paper'] }, a = o.summary(g), b = o.summary(g);"
+                "g.cases.push(3); g.choices.push(null); const c = o.summary(g);"
+                "process.stdout.write(JSON.stringify({ calls, same: a === b, n: c.n, k: c.errors.counter_given }));")
+        self.assertEqual(run_page_js(code), {"calls": 2, "same": True, "n": 3, "k": 3})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", pattern_body(), re.S).group(0)[1:-1]
+        code = ("const PATTERN_MOVES = ['rock', 'paper', 'scissors']; const base = { tally() {} }; const o = { __proto__: base," + tally + "};"
+                "const g = { cases: [], choices: [] }, task = { moves: ['rock'], next: 'paper', cls: 'p1', truth: 1, state: {} };"
+                "[1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"moves": ["rock"], "next": "paper", "cls": "p1"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["paper", "rock", None]})
+
+    def test_drawing_writes_only_through_t(self):
+        self.assertNotIn("fillText(", page_function("drawPatternMove"))                         # tahy jen kresbou
+        body = pattern_body()
+        for part in ("drawTrail(g) {", "memoryTrailRow(g)", "t('pattern.trailTitle')", "t('pattern.now')", "t('pattern.cycle'",
+                     "t(PATTERN_MOVE_NAME[", "drawPatternMove(ctx, ", "drawPatternMove(tc, ", "patternLabel(r)"):
+            self.assertIn(part, body)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek: trefa, chyba s druhem, chyba bez druhu, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "PATTERN_MOVE_NAME", "PATTERN_KIND_NAME"))
+        code = "(() => {" + consts + page_function("patternLabel") + (
+            "const moves = ['rock', 'rock', 'paper', 'scissors', 'rock', 'paper', 'scissors', 'rock', 'paper'];"      # příklad ze specu: další scissors
+            "const r = (result, chosen) => ({ moves, next: 'scissors', cls: 'p3', truth: 2, result, chosen });"
+            "return [r('ok', 2), r('bad', 0), r('bad', 1), r('bad', -1), r('late', undefined)].map(patternLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ soupeř zahrál nůžky", "✗ zvolil kámen, soupeř zahrál nůžky (protitah místo předpovědi)",
+                                                   "✗ zvolil papír, soupeř zahrál nůžky (opakuje poslední tah)", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ picked rock, the opponent played scissors (counter instead of prediction)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_strip_hides_the_cycle_until_the_row_is_passed(self):   # divák vidí totéž co model; po průjezdu cyklus a skutečný tah
+        from test_parity import run_js
+        drawtrail = re.search(r"\n  drawTrail\(g\) \{.*?\n  \},", pattern_body(), re.S).group(0)[1:-1]
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("PATTERN_MOVE_NAME", "PATTERN_RUN", "PATTERN_WARMUP"))
+        code = "(() => { const texts = [], W = 300;" + consts + (
+            "const tc = new Proxy({ fillText(s) { texts.push(s); } }, { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const c = { width: 300, height: 70, hidden: false, getContext: () => tc }, $ = () => c; let shown;"
+            "const memoryTrailRow = () => shown, drawPatternMove = () => {}; const o = {" + drawtrail + "};"
+            "shown = { moves: ['rock', 'rock', 'paper', 'scissors', 'rock', 'paper', 'scissors', 'rock', 'paper'], next: 'scissors', cls: 'p3', run: 8, result: null };"
+            "o.drawTrail({}); const a = texts.splice(0); shown = { ...shown, result: 'ok' }; o.drawTrail({}); return [a, texts]; })()")
+        before, after = run_js(code, None)
+        self.assertEqual(before, ["soupeř hrál (nejstarší vlevo)", "?", "teď"])
+        self.assertEqual(after, ["soupeř hrál (nejstarší vlevo)", "cyklus: nůžky, kámen, papír (perioda 3)"])
 
 
 if __name__ == "__main__":
