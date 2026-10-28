@@ -311,7 +311,7 @@ const TEXTS = {
   'opt.scenario.bet': { cs: 'Sázka na pruh', en: 'Bet on a lane' },
   'opt.scenario.cruise': { cs: 'Tempomat', en: 'Cruise control' },
   'opt.scenario.timetable': { cs: 'Jízdní řád', en: 'Timetable' },
-  'opt.scenario.emails':{ cs: 'E-maily: {name}', en: 'E-mails: {name}' },
+  'opt.scenario.emails': { cs: 'E-maily: {name}', en: 'E-mails: {name}' },
   'opt.scenario.public': { cs: 'Veřejná sada: {name}', en: 'Public dataset: {name}' },
   'opt.scenario.noEmails': { cs: 'E-maily (žádná sada ve složce datasets/)', en: 'E-mails (no dataset in the datasets/ folder)' },
   'opt.scenario.listFailed': { cs: 'E-maily (seznam sad se nepodařilo načíst)', en: 'E-mails (the page could not load the list of datasets)' },
@@ -793,6 +793,19 @@ const TEXTS = {
   'timetable.service.economy': { cs: 'úsporná', en: 'economy' },
   'timetable.service.cooled': { cs: 'chlazená', en: 'cooled' },
   'timetable.none': { cs: 'žádné', en: 'none' },
+  'timetable.parcel': { cs: '📦 PSČ {zip} · {service}', en: '📦 ZIP {zip} · {service}' },
+  'timetable.exception': { cs: 'výjimka: {service} → {depot}', en: 'exception: {service} → {depot}' },
+  'timetable.noException': { cs: 'výjimky: žádné', en: 'exceptions: none' },
+  'timetable.label.route': { cs: '✓ {depot}: PSČ v řádku {from}–{to}', en: '✓ {depot}: ZIP in the row {from}–{to}' },
+  'timetable.label.exception': { cs: '✓ {depot}: platí výjimka {service} → {depot}', en: '✓ {depot}: the exception {service} → {depot} applies' },
+  'timetable.label.missed': { cs: '✗ výjimka přehlédnutá: zvolil {pick}, platí výjimka {service} → {depot}', en: '✗ exception missed: picked {pick}, the exception {service} → {depot} applies' },
+  'timetable.label.misapplied': { cs: '✗ výjimka navíc: zvolil {pick}, výjimka je jen pro službu {service}; správně {depot}', en: '✗ exception wrongly applied: picked {pick}, the exception is only for the service {service}; right: {depot}' },
+  'timetable.label.neighbor': { cs: '✗ sousední řádek: zvolil {pick}, PSČ {zip} patří do {from}–{to} → {depot}', en: '✗ neighboring row: picked {pick}, ZIP {zip} belongs to {from}–{to} → {depot}' },
+  'timetable.label.bad': { cs: '✗ zvolil {pick}, správně {depot}', en: '✗ picked {pick}, right: {depot}' },
+  'legend.timetable.board': { cs: 'Cedule nad branami: 📦 zásilka (PSČ a služba), výjimka a trasy: rozsah PSČ → depo, oba kraje včetně.', en: 'Board above the gates: 📦 the parcel (ZIP code and service), the exception and the routes: ZIP range → depot, both ends included.' },
+  'legend.timetable.exception': { cs: 'Výjimka pro službu zásilky má přednost před tabulkou; výjimka pro jinou službu neplatí.', en: "An exception for the parcel's service wins over the table; an exception for another service does not apply." },
+  'legend.timetable.gates': { cs: 'Brány jsou depa; tečka u trasy má barvu depa. Modrý obrys = volba modelu.', en: 'The gates are the depots; the dot at a route has the color of its depot. Blue outline = the pick of the model.' },
+  'legend.timetable.out': { cs: 'Po průjezdu: zelený rámeček u správné brány a u toho, co rozhodlo (řádek trasy nebo výjimka); neplatná výjimka přeškrtnutá.', en: 'After the car passes: a green frame at the right gate and at what decided (the route row or the exception); an exception that does not apply is struck through.' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -2796,16 +2809,87 @@ function timetableService(s) {
   return t(TIMETABLE_SERVICE_NAME[s]);
 }
 
-// Řada jízdního řádu odspodu: šest bran s jmény dep, správná po průjezdu zeleně. Cedule, obrysy a štítek doplní další úkol. globalAlpha nastaví volající.
-function drawTimetable(r, y) {
-  const hw = LW * 0.44;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '600 11px "Segoe UI", sans-serif';
-  for (let lane = 0; lane < 6; lane++) {
-    const x = (lane + 0.5) * LW;
-    ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
-    ctx.beginPath(); ctx.roundRect(x - hw, y - 17, 2 * hw, 34, 6); ctx.fill();
-    ctx.fillStyle = '#e6edf3'; ctx.fillText(timetableDepot(TIMETABLE_DEPOTS[lane]), x, y, 2 * hw - 4);
+// šest barev depa dobře rozlišitelných i pro barvoslepé; brána, tečka u trasy i jméno depa na bráně
+const TIMETABLE_COLOR = { alder: '#56b4e9', birch: '#e69f00', cedar: '#009e73', maple: '#f0e442', oak: '#cc79a7', pine: '#d55e00' };
+
+// Rozvržení cedule bez kreslení a bez textů: zásilka, výjimka, řádky tras (do 6 jeden sloupec, od 7 dva, v prvním Math.ceil(n / 2)) a po průjezdu to, co rozhodlo.
+// mark: 'exception' u platné výjimky, jinak index řádku s PSČ zásilky; před průjezdem null. Správné depo je v r.answer.
+function timetableBoard(r) {
+  const n = r.rows.length, cols = n > 6 ? 2 : 1, first = cols === 2 ? Math.ceil(n / 2) : n, done = r.result != null;
+  return {
+    parcel: { zip: r.zip, service: r.service },
+    exception: r.exception ? { service: r.exception[0], depot: r.exception[1] } : null,
+    cols,
+    lines: r.rows.map(([from, to, depot], i) => ({ from, to, depot, col: i < first ? 0 : 1, line: i < first ? i : i - first })),
+    mark: !done ? null : r.rule === 'applies' ? 'exception' : timetableIndex(r.rows.map(x => x.slice(0, 2)), r.zip),
+    struck: done && r.rule === 'decoy',
+  };
+}
+// Štítek výsledku slovem; depo je vždy správné (r.answer), from a to jsou hranice řádku s PSČ zásilky, service je služba výjimky.
+function timetableLabel(r) {
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const depot = timetableDepot(r.answer), zip = r.zip;
+  const [from, to] = r.rows[timetableIndex(r.rows.map(x => x.slice(0, 2)), r.zip)];
+  const service = r.exception ? timetableService(r.exception[0]) : '';
+  if (r.result === 'ok') {
+    return { text: r.rule === 'applies' ? t('timetable.label.exception', { depot, service }) : t('timetable.label.route', { depot, from, to }), color: RESULT.ok.color };
   }
+  const choice = TIMETABLE_DEPOTS[r.chosen] ?? null;
+  if (choice === null) return { text: t('label.invalid'), color: RESULT.late.color };
+  const pick = timetableDepot(choice), kind = timetableErrorKind(r, choice);
+  const key = { missed: 'timetable.label.missed', misapplied: 'timetable.label.misapplied', neighbor: 'timetable.label.neighbor' }[kind] ?? 'timetable.label.bad';
+  return { text: t(key, { pick, service, depot, zip, from, to }), color: RESULT.bad.color };
+}
+
+// Řada jízdního řádu odspodu: cedule nad branami (zásilka, výjimka, řádky tras s tečkou v barvě depa), šest bran v barvě depa se jménem, modrý obrys volby před průjezdem,
+// po průjezdu zelený rámeček u správné brány a u toho, co rozhodlo, přeškrtnutá neplatná výjimka a štítek pod řadou. Rámečky a štítek jdou v plné krytosti
+// (řada po průjezdu bledne), štítek leží v y + 32, protože řada se po rozhodnutí posouvá dolů a pásmo dole od ~y + 41 už je tmavé. globalAlpha nastaví volající.
+function drawTimetable(r, y) {
+  const hw = LW * 0.44, lineH = 13, board = timetableBoard(r), alpha = ctx.globalAlpha;
+  const first = board.cols === 2 ? Math.ceil(board.lines.length / 2) : board.lines.length;
+  const h = 6 + (2 + first) * lineH, top = y - 24 - h;
+  const colW = (W - 4) / board.cols, blockW = Math.min(170, colW - 8);
+  const rowY = i => top + 3 + (2 + i) * lineH + lineH / 2;
+  ctx.fillStyle = 'rgba(11,16,22,.85)'; ctx.fillRect(2, top, W - 4, h);
+  ctx.textBaseline = 'middle'; ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center';
+  const parcel = t('timetable.parcel', board.parcel);
+  const rule = board.exception ? t('timetable.exception', { service: timetableService(board.exception.service), depot: timetableDepot(board.exception.depot) }) : t('timetable.noException');
+  ctx.fillStyle = '#e6edf3'; ctx.fillText(parcel, W / 2, top + 3 + lineH / 2, W - 8);
+  ctx.fillStyle = '#f2cc0c'; ctx.fillText(rule, W / 2, top + 3 + lineH * 1.5, W - 8);
+  const ruleW = Math.min(ctx.measureText(rule).width, W - 8);
+  for (const x of board.lines) {
+    const left = 2 + x.col * colW + (colW - blockW) / 2, ly = rowY(x.line);
+    const span = `${x.from}–${x.to}`;
+    ctx.textAlign = 'start'; ctx.fillStyle = '#c9d4de'; ctx.fillText(span, left, ly, 72);
+    ctx.fillStyle = TIMETABLE_COLOR[x.depot]; ctx.fillText('●', left + 76, ly);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(timetableDepot(x.depot), left + 88, ly, blockW - 88);
+  }
+  ctx.textAlign = 'center';
+  for (let lane = 0; lane < 6; lane++) {
+    const x = (lane + 0.5) * LW, color = TIMETABLE_COLOR[TIMETABLE_DEPOTS[lane]];
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.roundRect(x - hw, y - 17, 2 * hw, 34, 6); ctx.fill();
+    ctx.fillStyle = ink(color); ctx.fillText(timetableDepot(TIMETABLE_DEPOTS[lane]), x, y, 2 * hw - 4);
+  }
+  ctx.globalAlpha = 1;
+  if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 6) {      // volba modelu před průjezdem
+    ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 17, 2 * hw, 34);
+  }
+  if (r.result !== null) {
+    ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 4; ctx.strokeRect((r.truth + 0.5) * LW - hw - 2, y - 19, 2 * hw + 4, 38);
+    ctx.lineWidth = 2;
+    if (board.mark === 'exception') ctx.strokeRect(W / 2 - ruleW / 2 - 4, top + 3 + lineH, ruleW + 8, lineH);
+    else if (board.mark !== null) {
+      const x = board.lines[board.mark];
+      ctx.strokeRect(2 + x.col * colW + (colW - blockW) / 2 - 4, rowY(x.line) - lineH / 2, blockW + 8, lineH);
+    }
+    if (board.struck) {
+      ctx.strokeStyle = '#8b9aa8'; ctx.beginPath(); ctx.moveTo(W / 2 - ruleW / 2, top + 3 + lineH * 1.5); ctx.lineTo(W / 2 + ruleW / 2, top + 3 + lineH * 1.5); ctx.stroke();
+    }
+    const lab = timetableLabel(r);
+    drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10));
+  }
+  ctx.lineWidth = 1; ctx.globalAlpha = alpha;
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 
@@ -2814,7 +2898,9 @@ const timetable = {
   id: 'timetable', fixedLanes: 6, lanes: () => 6,          // pruh = depo, silnice má vždy 6 pruhů, volič je zamčený jako u závory
   gap: TIMETABLE_GAP, keep: 4.5,                           // cedule sahá asi 3 pole nad bod řady
   get about() { return t('scenario.timetable.about'); },
-  panels: ['confPanel', 'legend'], get extraTitle() { return t('scenario.timetable.extraTitle'); },
+  panels: ['confPanel', 'legend'],
+  legend: [[null, 'legend.timetable.board'], [null, 'legend.timetable.exception'], [null, 'legend.timetable.gates'], ['#3fb950', 'legend.timetable.out']],
+  get extraTitle() { return t('scenario.timetable.extraTitle'); },
   get extraTip() { return t('scenario.timetable.extraTip'); },
   get matchTip() { return t('scenario.timetable.tip.match'); },
   newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
@@ -2840,7 +2926,7 @@ const timetable = {
     if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, sum: timetableSummary(g.cases, g.choices) };
     return g.summary.sum;
   },
-  drawItems(g) {                                           // brány s jmény dep; cedule, obrysy a štítek přidá další úkol
+  drawItems(g) {                                           // cedule, brány v barvě depa, obrysy a po průjezdu rámečky a štítek (vše v drawTimetable)
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;

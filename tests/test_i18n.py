@@ -739,6 +739,10 @@ class PageTexts(unittest.TestCase):
             self.assertTrue(self.texts[key]["cs"].endswith(cs), key)
             self.assertTrue(self.texts[key]["en"].endswith(en), key)
         self.assertEqual(node("[[3, 5], [9, 12]].map(([lo, hi]) => t('timetable.size', { d: `${lo}–${hi}` }))"), ["3–5 řádků", "9–12 řádků"])
+        self.assertEqual(node("t('timetable.parcel', { zip: 81335, service: 'x' })"), "📦 PSČ 81335 · x")
+        self.assertEqual(node("t('timetable.parcel', { zip: 81335, service: 'x' })", lang="en"), "📦 ZIP 81335 · x")
+        for key in ("board", "exception", "gates", "out"):
+            self.assertIn("legend.timetable." + key, self.texts)
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],

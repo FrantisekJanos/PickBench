@@ -576,6 +576,61 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka, ge
                                           "model:   depa a služby dostává anglicky (alder, birch, …; standard, express, …)"])
         self.assertEqual(en.split("\n")[3], "chosen:     Cedar  (correct: Maple)")
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_board_marks_what_decided(self):                       # rozvržení cedule a zvýraznění po průjezdu: řádek s PSČ, nebo platná výjimka
+        from test_parity import run_js, timetable_js
+        code = "(() => {" + page_function("timetableBoard") + (
+            "return arg.map(([c, result]) => timetableBoard({ ...c, result })); })()")
+        twelve = bench.timetable_cases(200, seed=5)
+        big = next(c for c in twelve if len(c[0]) == 12)
+        small = next(c for c in twelve if len(c[0]) == 4)
+        got = run_js(code, [[timetable_js(DECOY), "ok"], [timetable_js(APPLIES), "bad"], [timetable_js(DECOY), None],
+                            [timetable_js(big), "ok"], [timetable_js(small), "late"]])
+        decoy, applies, before, wide, four = got
+        self.assertEqual(decoy["parcel"], {"zip": 81335, "service": "express"})
+        self.assertEqual(decoy["exception"], {"service": "economy", "depot": "cedar"})
+        self.assertEqual((decoy["mark"], decoy["struck"]), (1, True))          # PSČ 81335 je v řádku 81334–87678; výjimka pro jinou službu
+        self.assertEqual((applies["mark"], applies["struck"]), ("exception", False))
+        self.assertEqual((before["mark"], before["struck"]), (None, False))   # před průjezdem nic: divák vidí volbu modelu, ne řešení
+        self.assertEqual(decoy["cols"], 1)
+        self.assertEqual([(x["from"], x["to"], x["depot"]) for x in decoy["lines"]], list(ROWS))
+        self.assertEqual(wide["cols"], 2)
+        self.assertEqual([(x["col"], x["line"]) for x in wide["lines"]], [(0, i) for i in range(6)] + [(1, i) for i in range(6)])
+        self.assertEqual([(x["from"], x["to"], x["depot"]) for x in wide["lines"]], list(big[0]))          # v pořadí PSČ, jako ve stavu
+        want = "exception" if small[8] == "applies" else bench.timetable_row([r[:2] for r in small[0]], small[2])
+        self.assertEqual((four["cols"], four["mark"], max(x["line"] for x in four["lines"])), (1, want, 3))
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek: trasa, výjimka, výjimka přehlédnutá / navíc, sousední řádek, jiné, neplatná, nestihl
+        from test_parity import run_js, timetable_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "TIMETABLE_DEPOT_NAME", "TIMETABLE_SERVICE_NAME"))
+        code = "(() => {" + consts + page_function("timetableDepot") + page_function("timetableService") + page_function("timetableLabel") + (
+            "return arg.map(([c, result, chosen]) => timetableLabel({ ...c, result, chosen })); })()")
+        d = list(bench.TIMETABLE_DEPOTS).index
+        rows = [[timetable_js(DECOY), "ok", d("maple")], [timetable_js(APPLIES), "ok", d("cedar")], [timetable_js(APPLIES), "bad", d("maple")],
+                [timetable_js(DECOY), "bad", d("cedar")], [timetable_js(DECOY), "bad", d("birch")], [timetable_js(DECOY), "bad", d("oak")],
+                [timetable_js(DECOY), "bad", -1], [timetable_js(DECOY), "late", None]]
+        cs, en = run_js(code, rows), run_js(code, rows, "en")
+        self.assertEqual([x["text"] for x in cs], [
+            "✓ Javor: PSČ v řádku 81334–87678", "✓ Cedr: platí výjimka úsporná → Cedr",
+            "✗ výjimka přehlédnutá: zvolil Javor, platí výjimka úsporná → Cedr",
+            "✗ výjimka navíc: zvolil Cedr, výjimka je jen pro službu úsporná; správně Javor",
+            "✗ sousední řádek: zvolil Bříza, PSČ 81335 patří do 81334–87678 → Javor", "✗ zvolil Dub, správně Javor",
+            "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[4]["text"], "✗ neighboring row: picked Birch, ZIP 81335 belongs to 81334–87678 → Maple")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950"] * 2 + ["#f85149"] * 4 + ["#8b9aa8"] * 2)
+
+    def test_drawing_writes_only_through_t(self):
+        self.assertNotIn("fillText(", page_function("timetableBoard"))                         # rozvržení bez kreslení a bez textů
+        draw = page_function("drawTimetable")
+        self.assertEqual(re.findall(r"fillText\(\s*['\"`][^'\"`]*[A-Za-zÁ-ž]", draw), [])          # žádný doslovný text s písmeny
+        for part in ("timetableBoard(r)", "timetableLabel(r)", "drawRowLabel(", "t('timetable.parcel'", "t('timetable.exception'",
+                     "t('timetable.noException')", "timetableDepot(", "TIMETABLE_COLOR[", "strokeRect("):
+            self.assertIn(part, draw)
+        self.assertIn("legend: [[null, 'legend.timetable.board'], [null, 'legend.timetable.exception'], [null, 'legend.timetable.gates'], ['#3fb950', 'legend.timetable.out']],",
+                      timetable_body())
+
 
 if __name__ == "__main__":
     unittest.main()
