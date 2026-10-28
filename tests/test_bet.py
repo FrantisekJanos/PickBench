@@ -346,7 +346,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; generátor 
     def test_scenario_is_offered_selected_and_wired(self):
         page = page_source()
         self.assertEqual(page.count('<option value="bet" data-i18n="opt.scenario.bet"></option>'), 1)
-        self.assertIn(", bet }[v];", REGISTRY)
+        self.assertRegex(REGISTRY, r", bet[,\s]")
         self.assertEqual(page.count(REGISTRY), 1)
         self.assertEqual(page.count("// ---------- scénář: sázka na pruh ----------"), 1)
         # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče

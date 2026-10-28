@@ -22,7 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
-from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 BANDS = (20, 40, 60, 100, 150, 220)
@@ -388,6 +388,10 @@ class Cli(unittest.TestCase):
             self.assertRegex(text, r"python bench\.py \[N\] --cruise .*\[--mirror\] \[--inject\] \[--deadline-ms L\] model1 model2 \.\.\.")
 
 
+def cruise_body():
+    return page_source().split("\nconst cruise = {", 1)[1].split("\n};\n", 1)[0]
+
+
 class Page(unittest.TestCase):              # scénář ve stránce; tabulka pásem, generátor a rozbor hlídá tests/test_parity.py (Cruise)
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_variant_matches_bench(self):                          # zrcadlo: obrácené pořadí stupňů a ALT.speed, jako bench.variant
@@ -398,6 +402,40 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka pá
             "process.stdout.write(JSON.stringify([0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(Q)), v))));")
         for v, js in enumerate(run_page_js(code)):
             self.assertEqual(json.dumps(js), json.dumps(bench.variant(bench.cruise_question(), v)), v)
+
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="cruise" data-i18n="opt.scenario.cruise"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("|| v === 'cruise'"), 1)      # bez „) {“: jízdní řád podmínku prodlouží
+        self.assertEqual(page.count("// ---------- scénář: tempomat ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(cruiseWarm(), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, cruiseRow(rnd), 7)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(cruiseRow(rnd)); },"), 1)
+        body = cruise_body()
+        for call in ("rollInject([d.truth], 7)", "cruiseState(d.m, d.road, d.fog)", "injectText(INJECT_NOTE, levelKeys()[inject])",
+                     "variantOf(cruiseQuestion(), v)", "a.speed?.choice", "cruiseSummary(g.cases, g.levels)", "laneOf: (r, move) => move,",
+                     "panels: ['confPanel'"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    def test_lanes_are_fixed(self):                                # pruh = stupeň: vždy 7, volič zamčený a po přepnutí jinam se vrátí volba uživatele
+        page, body = page_source(), cruise_body()
+        self.assertIn("  fixedLanes: 7, lanes: () => 7,", body)
+        self.assertNotIn("lanesFree", body)
+        self.assertEqual(page.count("  if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }"), 1)
+        self.assertEqual(page.count("for (let n = 2; n <= 8; n++) $('lanes').add(new Option(n, n));"), 1)       # volba 7 ve voliči je
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_level(self):             # počítají se všechny odpovědi; neplatná je null (v MAE 6)
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", cruise_body(), re.S).group(0)[1:-1]
+        top = re.search(r"\nconst CRUISE_TOP = [^\n]*\n", page_source()).group(0)          # tally čte CRUISE_TOP ze sdíleného bloku
+        code = top + "const base = { tally() {} }; const o = { __proto__: base," + tally + "};" + (
+            "const g = { cases: [], levels: [] }, task = { m: 97, road: 'icy', fog: 'none', answer: 2, cls: 'road', place: 'middle', truth: 1, state: {} };"
+            "[1, 6, -1, 0].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"m": 97, "road": "icy", "fog": "none", "answer": 2, "cls": "road", "place": "middle"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 4, "levels": [2, 7, None, 1]})
 
 
 if __name__ == "__main__":
