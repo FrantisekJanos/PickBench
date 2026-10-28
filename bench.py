@@ -2839,6 +2839,106 @@ def bandit_pattern(cls, totals, answer):
     return out
 
 
+def bandit_tried(rng):
+    """Vyzkoušená brána: šance, průjezdy z „málo“ nebo „hodně“, výhry binomicky."""
+    chance = rng.choice(BANDIT_CHANCES)
+    drives = rng.randint(*rng.choice(BANDIT_SPLIT))
+    return sum(rng.random() < chance / 100 for _ in range(drives)), drives, chance
+
+
+def bandit_tie_multiples(b):
+    """Násobky m, pro které má brána s podílem a/b (zkrácený zlomek) b·m průjezdů v rozsahu vyzkoušené brány."""
+    return [m for m in range(1, 11) if BANDIT_EXPLORE <= b * m <= BANDIT_SPLIT[1][1]]
+
+
+# Společné podíly dvojice ve shodě: zkrácené zlomky a/b pod 1, které jdou zapsat aspoň dvěma počty průjezdů (2/4 a 4/8 …), vzestupně.
+BANDIT_TIE_SHARES = tuple(sorted({(f.numerator, f.denominator) for b in range(1, BANDIT_SPLIT[1][1] + 1) for a in range(1, b)
+                                  for f in (Fraction(a, b),) if len(bandit_tie_multiples(f.denominator)) >= 2},
+                                 key=lambda ab: Fraction(*ab)))
+
+
+def bandit_tie_pair(rng):
+    """Dvě brány se stejným podílem a různým počtem průjezdů. Skrytá šance každé z nich je ta z BANDIT_CHANCES, která je
+    nejblíž podílu posunutému o náhodnou odchylku ±0,15 (jedna odchylka na bránu)."""
+    a, b = rng.choice(BANDIT_TIE_SHARES)
+    m1, m2 = sorted(rng.sample(bandit_tie_multiples(b), 2))
+
+    def near():
+        target = a / b + rng.uniform(-0.15, 0.15)
+        return min(BANDIT_CHANCES, key=lambda c: abs(c / 100 - target))
+    first = near()
+    return [(a * m1, b * m1, first), (a * m2, b * m2, near())]
+
+
+def bandit_raw(rng, k, cls):
+    """Jeden pokus o úlohu třídy cls: (brány, správná), nebo None, když nesplní třídu, mez průjezdů, odstup nebo kontrolu."""
+    if cls == "explore":
+        wins, drives = rng.choice(BANDIT_FRESH)
+        gates = [(wins, drives, rng.choice(BANDIT_CHANCES))] + [bandit_tried(rng) for _ in range(k - 1)]
+    elif cls == "tie":
+        gates = bandit_tie_pair(rng) + [bandit_tried(rng) for _ in range(k - 2)]
+    else:
+        gates = [bandit_tried(rng) for _ in range(k)]
+    rng.shuffle(gates)
+    if sum(n for _, n, _ in gates) > BANDIT_TOTAL * k:
+        return None
+    totals = [(w, n) for w, n, _ in gates]
+    got = bandit_answer(totals)
+    if got is None or got[1] != cls or bandit_check(totals) != got[0]:
+        return None
+    shares = sorted((bandit_share(w, n) for w, n in totals if n >= BANDIT_EXPLORE), reverse=True)
+    top = 2 if cls == "tie" else 1
+    if cls != "explore" and len(shares) > top and shares[top - 1] - shares[top] < BANDIT_MARGIN:
+        return None
+    if cls == "tie" and shares[0] == 1:              # shoda podílu 1 (3/3 a 7/7) by vznikala hlavně náhodou z ostatních bran
+        return None
+    return tuple(gates), got[0]
+
+
+def bandit_case(rng, k, cls, patterns=None):
+    """Vrací (brány, správná, třída). Vzor zkratek se losuje podle vah (patterns = {vzor: váha}, výchozí BANDIT_PATTERNS[k][cls])
+    a pokusy se opakují, dokud úloha vzor nemá; po BANDIT_TRIES pokusech RuntimeError. Nic se neopravuje potichu."""
+    if k not in BANDIT_GATES or cls not in BANDIT_CLASSES:
+        raise RuntimeError(f"bandit_case: unsupported task for {k} gates and class {cls}")
+    patterns = BANDIT_PATTERNS[k][cls] if patterns is None else patterns
+    want = rng.choices(list(patterns), weights=list(patterns.values()))[0]
+    for _ in range(BANDIT_TRIES):
+        got = bandit_raw(rng, k, cls)
+        if got is not None and bandit_pattern(cls, [(w, n) for w, n, _ in got[0]], got[1]) == want:
+            return got[0], got[1], cls
+    raise RuntimeError(f"bandit_case: no {cls} task ({want}) for {k} gates after {BANDIT_TRIES} tries")
+
+
+def bandit_log(rng, gates, answer):
+    """Deník: všechny průjezdy souhrnu v náhodném pořadí (nejstarší první) jako n-tice (brána, výhra?). Předem se losuje,
+    jestli má správnou bránu trefit zkratka „poslední výhra“ a „poslední průjezd“ (každá s pravděpodobností 1/K), a pořadí
+    se míchá, dokud to nesedí (nejvýš BANDIT_TRIES, pak RuntimeError)."""
+    drives = [(i, True) for i, (w, _, _) in enumerate(gates) for _ in range(w)]
+    drives += [(i, False) for i, (w, n, _) in enumerate(gates) for _ in range(n - w)]
+    q = 1 / len(gates)
+    only = all(w == 0 for i, (w, _, _) in enumerate(gates) if i != answer) and gates[answer][0] > 0
+    want_win = only or (rng.random() < q and gates[answer][0] > 0)       # vyhrává jen správná: poslední výhra je vždy její
+    want_last = rng.random() < q and gates[answer][1] > 0
+    if want_last and gates[answer][0] == gates[answer][1]:   # samé výhry: poslední průjezd je zároveň poslední výhra
+        want_win = True
+    for _ in range(BANDIT_TRIES):
+        rng.shuffle(drives)
+        wins = [i for i, ok in drives if ok]
+        if (bool(wins) and wins[-1] == answer) == want_win and (drives[-1][0] == answer) == want_last:
+            return tuple(drives)
+    raise RuntimeError("bandit_log: no order fits")
+
+
+def bandit_cases(n, k=4, seed=1):
+    """n úloh ze semínka: třída rovnoměrně na každou úlohu, pak úloha a deník (obě podoby stavu tak mají stejné úlohy)."""
+    rng = random.Random(seed)
+    tasks = []
+    for _ in range(n):
+        gates, answer, cls = bandit_case(rng, k, rng.choice(BANDIT_CLASSES))
+        tasks.append((gates, answer, cls, bandit_log(rng, gates, answer)))
+    return tasks
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",

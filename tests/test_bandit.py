@@ -153,5 +153,99 @@ class Rule(unittest.TestCase):
 
 
 
+class Generator(unittest.TestCase):
+    def test_cases_keep_the_guarantees(self):
+        for k in bench.BANDIT_GATES:
+            for gates, answer, cls, log in cases(900, k):
+                totals = [(w, n) for w, n, _ in gates]
+                with self.subTest(k=k, gates=gates):
+                    self.assertTrue(isinstance(gates, tuple) and isinstance(log, tuple) and len(gates) == k)
+                    self.assertTrue(all(0 <= w <= n and c in bench.BANDIT_CHANCES for w, n, c in gates))
+                    self.assertEqual(bench.bandit_answer(totals), (answer, cls))
+                    self.assertEqual(bench.bandit_check(totals), answer)
+                    fresh = [i for i, (_, n) in enumerate(totals) if n < 3]
+                    self.assertEqual(fresh, [answer] if cls == "explore" else [])               # nejvýš jedna brána k průzkumu
+                    if cls == "explore":
+                        self.assertIn(totals[answer], bench.BANDIT_FRESH)
+                    self.assertTrue(all(n <= 16 for _, n in totals))
+                    self.assertLessEqual(sum(n for _, n in totals), 10 * k)
+                    shares = sorted((Fraction(w, n) for w, n in totals if n >= 3), reverse=True)
+                    if cls == "exploit":
+                        self.assertGreaterEqual(shares[0] - shares[1], Fraction(1, 10))
+                    if cls == "tie":
+                        pair = [i for i, (w, n) in enumerate(totals) if n >= 3 and Fraction(w, n) == shares[0]]
+                        self.assertEqual(len(pair), 2)
+                        self.assertNotEqual(totals[pair[0]][1], totals[pair[1]][1])
+                        self.assertLess(shares[0], 1)
+                        self.assertGreaterEqual(shares[1] - shares[2], Fraction(1, 10))
+                    self.assertEqual(Counter(log), Counter([(i, True) for i, (w, _) in enumerate(totals) for _ in range(w)] +
+                                                           [(i, False) for i, (w, n) in enumerate(totals) for _ in range(n - w)]))
+
+    def test_classes_and_answers_are_spread(self):
+        for k, low, high in ((4, 0.18, 0.32), (5, 0.14, 0.26)):
+            c = cases(900, k)
+            classes, answers = Counter(x[2] for x in c), Counter(x[1] for x in c)
+            for cls in bench.BANDIT_CLASSES:
+                self.assertTrue(0.28 <= classes[cls] / len(c) <= 0.38, (k, classes))
+            for gate in range(k):
+                self.assertTrue(low <= answers[gate] / len(c) <= high, (k, answers))
+
+    def test_cheap_shortcuts_stay_near_chance(self):             # spec: každá levná zkratka nejvýš 0,40 (K = 4) a 0,36 (K = 5)
+        for k, top in ((4, 0.40), (5, 0.36)):
+            c = cases(900, k)
+            for cls in bench.BANDIT_CLASSES:
+                sub = [x for x in c if x[2] == cls]
+                for name in ("most_wins", "most_tries", "fewest_tries", "fewest_losses", "lowest_rate", "lowest_rate_tried", "exclusion"):
+                    if cls == "explore" and name == "fewest_tries":
+                        continue                                  # v explore je to přímo pravidlo 1 (test níž)
+                    with self.subTest(k=k, cls=cls, shortcut=name):
+                        self.assertLessEqual(share(sub, name), top)
+
+    def test_partial_strategies(self):                           # poloviny pravidla: každá padá ve své třídě
+        for k in bench.BANDIT_GATES:
+            c = cases(900, k)
+            sub = {cls: [x for x in c if x[2] == cls] for cls in bench.BANDIT_CLASSES}
+            with self.subTest(k=k):
+                self.assertEqual(share(sub["exploit"], "greedy"), 1)
+                self.assertLessEqual(share(sub["explore"], "greedy"), 0.35)
+                self.assertEqual(share(sub["tie"], "greedy"), 0.5)                     # dvojice ve shodě: polovina
+                self.assertEqual(share(sub["explore"], "fewest_tries"), 1)
+                self.assertLessEqual(max(share(sub["exploit"], "fewest_tries"), share(sub["tie"], "fewest_tries")), 0.35)
+                self.assertEqual(share(sub["tie"], "tie_more"), 0)
+                self.assertEqual(share(sub["exploit"], "tie_more"), 1)
+
+    def test_log_order_is_not_a_shortcut(self):                  # spec: „poslední výhra“ a „poslední průjezd“ nejvýš 0,35 v každé třídě
+        for k in bench.BANDIT_GATES:
+            c = cases(900, k)
+            for cls in bench.BANDIT_CLASSES:
+                sub = [x for x in c if x[2] == cls]
+                last_win = sum(([i for i, won in log if won] or [None])[-1] == answer for _, answer, _, log in sub) / len(sub)
+                last_drive = sum(log[-1][0] == answer for _, answer, _, log in sub if log) / len(sub)
+                with self.subTest(k=k, cls=cls):
+                    self.assertLessEqual(max(last_win, last_drive), 0.35)
+
+    def test_same_seed_same_tasks(self):
+        self.assertEqual(bench.bandit_cases(20), bench.bandit_cases(20, 4, seed=1))
+        self.assertEqual(bench.bandit_cases(20), cases(900)[:20])
+        self.assertNotEqual(bench.bandit_cases(20), bench.bandit_cases(20, seed=2))
+        self.assertNotEqual([x[0] for x in bench.bandit_cases(20)], [x[0][:4] for x in bench.bandit_cases(20, 5)])
+
+    def test_bounded_search_and_bad_arguments_raise(self):
+        with mock.patch.object(bench, "BANDIT_TRIES", 50), self.assertRaises(RuntimeError):
+            bench.bandit_case(random.Random(1), 4, "explore", {"HHMMM": 1})        # nejvyšší i nejnižší podíl naráz: nesplnitelné
+        for k, cls in ((3, "explore"), (6, "tie"), (4, "odd")):
+            with self.subTest(k=k, cls=cls), self.assertRaises(RuntimeError):
+                bench.bandit_case(random.Random(1), k, cls)
+        with mock.patch.object(bench, "BANDIT_TRIES", 0), self.assertRaises(RuntimeError):
+            bench.bandit_log(random.Random(1), EXPLORE, 3)
+
+    def test_tie_shares(self):
+        self.assertEqual(len(bench.BANDIT_TIE_SHARES), 21)
+        self.assertEqual(bench.BANDIT_TIE_SHARES[:3], ((1, 8), (1, 7), (1, 6)))
+        self.assertEqual(bench.BANDIT_TIE_SHARES[-1], (7, 8))
+        for a, b in bench.BANDIT_TIE_SHARES:
+            self.assertTrue(0 < a < b and Fraction(a, b).denominator == b and len(bench.bandit_tie_multiples(b)) >= 2, (a, b))
+
+
 if __name__ == "__main__":
     unittest.main()
