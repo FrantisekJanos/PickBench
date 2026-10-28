@@ -1,13 +1,13 @@
 24 úloh s piškvorkami 3×3 (tah na výhru, pole jménem); sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  goodput  tokenů
-m1                       11ms     11ms    17ms    5ms    17ms     92.3       8%      76%    68%        0%       4%     255   (výhra 1/7, blok 0/8, výhra před blokem 1/3, vidlička 0/6)
-                    přesnost variant: původní 8%, obrácené pořadí 8%, jiná formulace 17%
+m1                       11ms     11ms    17ms    5ms    17ms     92.3       8%      71%    63%        0%       8%     255   (výhra 1/7, blok 1/8, výhra před blokem 0/3, vidlička 0/6)
+                    přesnost variant: původní 8%, obrácené pořadí 12%, jiná formulace 12%
                     trojský kůň: 6 úloh s pokynem, odolal 17%, podlehl 17%, jiná chyba 67%; přesnost bez pokynu 6%
-                    hraje X 0/12, hraje O 2/12; volná pole 2–3 0/6, 4–6 2/18
-                    chyby: blok místo výhry 1, přehlédnutá výhra 2, přehlédnutý blok 3, vidlička soupeře 2, jen jedna hrozba 1, obsazené pole 13, jiné 0, neplatné 0
-m2                       11ms     11ms    17ms    5ms    17ms     89.9       8%      71%    62%        0%       0%     255   (výhra 0/7, blok 1/8, výhra před blokem 0/3, vidlička 1/6)
-                    přesnost variant: původní 8%, obrácené pořadí 4%, jiná formulace 8%
-                    trojský kůň: 6 úloh s pokynem, odolal 17%, podlehl 0%, jiná chyba 83%; přesnost bez pokynu 6%
-                    hraje X 0/12, hraje O 2/12; volná pole 2–3 1/6, 4–6 1/18
-                    chyby: blok místo výhry 0, přehlédnutá výhra 3, přehlédnutý blok 3, vidlička soupeře 0, jen jedna hrozba 0, obsazené pole 16, jiné 0, neplatné 0
+                    hraje X 1/12, hraje O 1/12; volná pole 2–3 1/6, 4–6 1/18
+                    chyby: blok místo výhry 0, přehlédnutá výhra 3, přehlédnutý blok 3, vidlička soupeře 1, jen jedna hrozba 0, obsazené pole 15, jiné 0, neplatné 0
+m2                       11ms     11ms    17ms    5ms    17ms     89.9      21%      77%    56%        0%       0%     255   (výhra 2/7, blok 0/8, výhra před blokem 2/3, vidlička 1/6)
+                    přesnost variant: původní 21%, obrácené pořadí 4%, jiná formulace 8%
+                    trojský kůň: 6 úloh s pokynem, odolal 17%, podlehl 0%, jiná chyba 83%; přesnost bez pokynu 22%
+                    hraje X 3/12, hraje O 2/12; volná pole 2–3 1/6, 4–6 4/18
+                    chyby: blok místo výhry 0, přehlédnutá výhra 1, přehlédnutý blok 3, vidlička soupeře 1, jen jedna hrozba 0, obsazené pole 14, jiné 0, neplatné 0

@@ -1,6 +1,6 @@
 12 tasks of 3×3 tic-tac-toe (winning move, board as rows), the same for all models
 
 model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
-m1                       11ms     12ms    17ms    5ms    17ms     88.2       0%      79%    79%     225   (win 0/3, block 0/5, win before block 0/0, fork 0/4)
-                    plays X 0/3, plays O 0/9; free cells 2–3 0/2, 4–6 0/10
-                    errors: block instead of win 0, win missed 2, block missed 1, opponent's fork 2, single threat only 0, occupied cell 7, other 0, invalid 0
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      75%    58%     225   (win 1/3, block 0/5, win before block 0/0, fork 1/4)
+                    plays X 0/3, plays O 2/9; free cells 2–3 0/2, 4–6 2/10
+                    errors: block instead of win 0, win missed 0, block missed 2, opponent's fork 2, single threat only 0, occupied cell 6, other 0, invalid 0

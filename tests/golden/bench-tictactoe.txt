@@ -1,6 +1,6 @@
 24 úloh s piškvorkami 3×3 (tah na výhru, pole jménem); sada je pro všechny modely stejná
 
 model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
-m1                       11ms     12ms    17ms    5ms    17ms     87.6       4%      74%    70%     255   (výhra 0/7, blok 0/8, výhra před blokem 1/3, vidlička 0/6)
-                    hraje X 0/12, hraje O 1/12; volná pole 2–3 0/6, 4–6 1/18
-                    chyby: blok místo výhry 1, přehlédnutá výhra 3, přehlédnutý blok 3, vidlička soupeře 3, jen jedna hrozba 1, obsazené pole 12, jiné 0, neplatné 0
+m1                       11ms     12ms    17ms    5ms    17ms     87.6       8%      73%    65%     255   (výhra 1/7, blok 1/8, výhra před blokem 0/3, vidlička 0/6)
+                    hraje X 1/12, hraje O 1/12; volná pole 2–3 2/6, 4–6 0/18
+                    chyby: blok místo výhry 0, přehlédnutá výhra 3, přehlédnutý blok 5, vidlička soupeře 1, jen jedna hrozba 0, obsazené pole 13, jiné 0, neplatné 0

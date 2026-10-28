@@ -1687,6 +1687,12 @@ class Tictactoe(unittest.TestCase):
         for case, state in zip(cases, states):
             self.assertEqual(json.dumps(state), json.dumps(bench.tictactoe_state(case, "cells")), case)      # bajtově, i pořadí klíčů
         self.assertEqual(json.dumps(run_js("tictactoeQuestion()", None)), json.dumps(bench.tictactoe_question("cells")))
+        questions = run_js("arg.map(c => tictactoeQuestion(c))", [tictactoe_js(c) for c in cases])      # nabídka zamíchaná podle desky
+        for case, q in zip(cases, questions):
+            self.assertEqual(json.dumps(q), json.dumps(bench.tictactoe_question("cells", case)), case)
+        orders = {tuple(bench.tictactoe_order(c)) for c in cases}
+        self.assertGreater(len(orders), 200)                                                  # pořadí se mezi deskami opravdu liší (desky se v sadě opakují)
+        self.assertEqual(sum(o[0][:2] == "r1" for o in orders) / len(orders) < 0.5, True)    # řádek 1 už není vždy první
 
     def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
         import bench

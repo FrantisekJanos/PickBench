@@ -455,7 +455,9 @@ class RunTictactoe(unittest.TestCase):
             with self.subTest(form=form):
                 self.assertEqual(len(sent), 6)                                  # zahřátí a pět úloh
                 self.assertEqual([p["state"] for p in sent], [bench.tictactoe_state(c[0], form)] + [bench.tictactoe_state(x, form) for x in c])
-                self.assertTrue(all(p["questions"] == bench.tictactoe_question(form) for p in sent))
+                self.assertTrue(all(p["questions"] == bench.tictactoe_question(form) for p in sent))     # stejné klíče a texty
+                order = [list(next(iter(p["questions"].values()))["criteria"]) for p in sent]          # pořadí nabídky: == u slovníku ho nehlídá
+                self.assertEqual(order, [list(bench.TICTACTOE_CELLS)] + [bench.tictactoe_order(x) for x in c])      # zahřátí v pořadí čtení, úlohy zamíchané
 
     def test_mirror_and_inject(self):
         c = cases(40)
@@ -628,7 +630,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; pravidla, k
         self.assertEqual(page.count("  randomTask() { return this.task(tictactoeRow(rnd)); },"), 1)
         body = tictactoe_body()
         for call in ("rollInject(tictactoeTaken(d), 9)", "rowBase.newRow(g, y, d, 9, tictactoeTaken(d))", "tictactoeState(d)",
-                     "injectText(INJECT_NOTE, TICTACTOE_CELLS[inject])", "variantOf(tictactoeQuestion(), v)", "a.cell_cells?.choice",
+                     "injectText(INJECT_NOTE, TICTACTOE_CELLS[inject])", "variantOf(tictactoeQuestion(task), v)", "a.cell_cells?.choice",
                      "tictactoeSummary(", "tictactoeErrorKind(", "laneOf: (r, move) => move % 3,"):
             self.assertIn(call, body + page_function("tictactoeLabel"))                         # definice ze sdíleného bloku, ne opsané
 

@@ -22,6 +22,7 @@ async () => {
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const p = n.parentElement;
       if (!p || p.closest('script, style, #tip') || (!last && p.closest('#last'))) continue;      // #tip: bublina drží po skrytí poslední text a naplní ji i skutečný ukazatel myši nad oknem; je to kopie data-tip, které se bere zvlášť jako „tip“
+      if (p.closest('#sent')) { for (const line of n.nodeValue.split('\n')) if (line.startsWith('//')) add('text', line); continue; }      // okno „Co přesně dostal model“: JSON jsou data dotazu (hlídá je asks), texty rozhraní jsou jen řádky //
       add('text', p.closest('#last') ? scrub(n.nodeValue) : n.nodeValue);
     }
     for (const e of document.querySelectorAll('[data-tip]')) add('tip', e.dataset.tip);
@@ -177,12 +178,15 @@ async () => {
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'hint', lanes: 3, mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'diff', lanes: 5, mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'pattern', mirror: true, inject: true })).why);
+    $('sentOpen').click(); snap(); $('sentDlg').close();        // okno „Co přesně dostal model“: poslední dotaz a obě zrcadla
+    SENT = null; $('sentOpen').click(); snap(); $('sentDlg').close();      // ukázka před prvním dotazem: zahřívací dotaz scénáře
     if (emails.length) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: emails[0], benchn: 8, inject: true })).why);
     for (const scenario of publics) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario, benchn: 6 })).why);
   }
 
   // tabulka výsledků: export, mazání s potvrzením
   await use({});
+  $('sentOpen').click(); snap(); $('sentDlg').close();          // řidič Pravidla se modelu neptá
   $('csv').click();
   const del = $('results').querySelector('.rowdel button'); if (del) { del.click(); snap(); disarmRow(); }
   $('clear').click(); snap(); await sleep(4200); snap();

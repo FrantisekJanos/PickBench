@@ -39,6 +39,13 @@
   #status { color:var(--warn); min-height:20px; margin-top:8px; }
   #about { color:var(--dim); margin:0 0 12px; max-width:920px; }
   #last { font-family:Consolas, monospace; font-size:12px; color:var(--dim); white-space:pre-wrap; margin:0; }
+  #sentOpen { margin-left:auto; border-color:var(--acc); color:var(--acc); padding:4px 12px; }      /* v záhlaví vpravo: vidět hned po načtení i nad silnicí během jízdy, i na nízkém monitoru */
+  #sentDlg { width:min(860px, calc(100vw - 32px)); max-height:calc(100vh - 48px); background:var(--panel, #161b22); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  #sentDlg::backdrop { background:rgba(0,0,0,.6); }
+  #sentDlg .head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  #sentDlg h2 { margin:0; }
+  #sentNote { color:var(--dim); font-size:13px; margin:8px 0 10px; }
+  #sent { font-family:Consolas, monospace; font-size:12px; white-space:pre-wrap; word-break:break-word; margin:0; }
   table { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
   th, td { text-align:right; padding:5px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
   #results th:nth-child(-n+5), #results td:nth-child(-n+5) { text-align:left; }
@@ -86,7 +93,7 @@
   #sqNote { display:block; color:var(--dim); margin-top:4px; }
   #sqNote:empty { display:none; }
   #tip { position:fixed; z-index:20; max-width:360px; background:#05080b; color:var(--text); border:1px solid var(--acc); border-radius:6px; padding:8px 10px;
-         font:400 12.5px/1.45 "Segoe UI", system-ui, sans-serif; letter-spacing:0; text-transform:none; white-space:normal; box-shadow:0 6px 18px rgba(0,0,0,.55); pointer-events:none; }
+         font:400 12.5px/1.45 "Segoe UI", system-ui, sans-serif; letter-spacing:0; text-transform:none; white-space:normal; box-shadow:0 6px 18px rgba(0,0,0,.55); pointer-events:none; max-height:calc(100vh - 8px); overflow:hidden; box-sizing:border-box; }
   label[data-tip], th[data-tip], h2[data-tip], small[data-tip], .m[data-tip] small { text-decoration:underline dotted #5d6b78; text-underline-offset:3px; }
   .m[data-tip], th[data-tip], h2[data-tip], small[data-tip] { cursor:help; }
   [data-tip]:focus-visible { outline:1px solid var(--acc); outline-offset:2px; }
@@ -96,15 +103,10 @@
 </style>
 </head>
 <body>
-<header><h1>PickBench</h1><span id="langSwitch" role="group"><button id="lang-cs" type="button">CS</button><button id="lang-en" type="button">EN</button></span><span><span data-i18n="page.subtitle"></span> <code>/v1/systemone</code></span></header>
+<header><h1>PickBench</h1><span id="langSwitch" role="group"><button id="lang-cs" type="button">CS</button><button id="lang-en" type="button">EN</button></span><span><span data-i18n="page.subtitle"></span> <code>/v1/systemone</code></span><button id="sentOpen" type="button" data-i18n="ui.sentOpen"></button></header>
 <main>
   <section>
     <div id="stage"><div id="road-col"><canvas id="road" width="300" height="600"></canvas><canvas id="trail" width="300" height="70" hidden></canvas></div><div id="queue" hidden></div></div>
-    <div class="panel" id="legend" style="margin-top:14px" hidden></div>
-    <div class="panel" style="margin-top:14px">
-      <h2 data-i18n="ui.last"></h2>
-      <pre id="last">—</pre>
-    </div>
   </section>
   <section>
     <div class="panel">
@@ -153,6 +155,12 @@
       </div>
       <div id="status"></div>
       <div id="hostedWarn" hidden><span id="hostedText"></span><button id="hostedOk" data-i18n="ui.hostedOk"></button></div>
+    </div>
+    <div class="panel" id="legend" hidden></div>
+    <div class="panel">
+      <h2 data-i18n="ui.last"></h2>
+      <pre id="last">—</pre>
+      <dialog id="sentDlg"><div class="head"><h2 data-i18n="ui.sent"></h2><button id="sentClose" type="button" data-i18n="ui.sentClose"></button></div><p id="sentNote"></p><pre id="sent">—</pre></dialog>
     </div>
 
     <div class="panel">
@@ -257,6 +265,16 @@ const TEXTS = {
   'lang.tip': { cs: 'Přepne texty stránky mezi češtinou a angličtinou. Volba se pamatuje v tomto prohlížeči; nastavení, fronta ani výsledky se nemění. Za běhu hry, benchmarku nebo fronty je přepínač vypnutý.', en: 'Switches the page texts between Czech and English. This browser remembers the choice; the settings, the queue and the results do not change. The switch is disabled while a game, a benchmark or the queue is running.' },
   // statické HTML, panel Ovládání: nadpisy, popisky polí, tlačítka (prvek nese data-i18n="klíč")
   'ui.last': { cs: 'Poslední rozhodnutí', en: 'Last decision' },
+  'ui.sent': { cs: 'Co přesně dostal model', en: 'What exactly the model got' },
+  'ui.sentOpen': { cs: 'Co přesně dostal model…', en: 'What exactly the model got…' },
+  'ui.sentClose': { cs: 'Zavřít', en: 'Close' },
+  'sent.last': { cs: 'Poslední dotaz, jak odešel modelu {model} (POST /decide, server ho beze změny předá na /v1/systemone nebo poskytovateli), a odpověď modelu.', en: 'The last request as it went to the model {model} (POST /decide, the server passes it unchanged to /v1/systemone or the provider), and the model\'s answer.' },
+  'sent.preview': { cs: 'Zatím nic neodešlo. Ukázka: zahřívací dotaz scénáře, který hra pošle modelu {model} při startu. Úlohy během jízdy mají stejné zadání (instructions) a jiný stav (state).', en: 'Nothing has been sent yet. Sample: the scenario\'s warm-up request, which the game sends to the model {model} at the start. Tasks during the run have the same instructions and a different state.' },
+  'sent.noModel': { cs: 'Zvolený řidič se modelu neptá, nic neodešlo.', en: 'The selected driver does not ask a model, nothing was sent.' },
+  'sent.request': { cs: '// dotaz', en: '// request' },
+  'sent.answer': { cs: '// odpověď modelu', en: '// model answer' },
+  'sent.mirror': { cs: '// zrcadlo, varianta {v}: dotaz', en: '// mirror, variant {v}: request' },
+  'sent.error': { cs: '(chyba: {error})', en: '(error: {error})' },
   'ui.controls': { cs: 'Ovládání', en: 'Controls' },
   'ui.scenario': { cs: 'Scénář', en: 'Scenario' },
   'ui.lanes': { cs: 'Pruhů', en: 'Lanes' },
@@ -1440,6 +1458,7 @@ function renderLang() {                                    // všechno na strán
   $('extraTitle').textContent = SC.extraTitle || ''; setTip($('extraTitle'), SC.extraTip);      // texty scénáře; „Poslední rozhodnutí“ je řádek protokolu a zůstává v jazyce, ve kterém vzniklo
   $('about').textContent = aboutText(); setTip($('start'), SC.benchOnly ? t('public.benchOnly') : t('tip.start'));      // applyTips výš dává tlačítku vždy tip.start
   queueKey = null; renderLegend();                         // karty e-mailů, legenda kategorií nebo řádky scénáře
+  renderSent();                                            // vysvětlivka okna „Co přesně dostal model“ (JSON zůstává, jak odešel)
   drawStats(); draw(G); renderResults(); renderPlan(); renderDbNote(); syncRun();      // drawStats kreslí ze zapamatovaného, ne z ovladačů, a s ním i panel Hardware; syncRun varování poskytovatele
   if (tipFor && tipFor.isConnected) showTip(tipFor);       // otevřená bublina (typicky u přepínače, na který divák právě klikl) ukáže nový text
 }
@@ -3272,7 +3291,7 @@ const tictactoe = {
   spawnRow(g, y) { g.rows.push(this.newRow(g, y, tictactoeRow(rnd))); },
   randomTask() { return this.task(tictactoeRow(rnd)); },
   warmTask() { return this.task(tictactoeWarm(), null, null); },
-  questions: (v = 0) => variantOf(tictactoeQuestion(), v),
+  questions: (v = 0, task = null) => variantOf(tictactoeQuestion(task), v),      // nabídka v pořadí podle desky úlohy (tictactoeOrder)
   parse: a => ({ move: TICTACTOE_CELLS.indexOf(a.cell_cells?.choice), conf: a.cell_cells?.confidence, probs: a.cell_cells?.probabilities }),
   randomMove: () => Math.floor(Math.random() * 9),
   tally(g, task, move) {                                   // počítají se všechny odpovědi, i pozdní; rozbor dělá tictactoeSummary ve sdíleném bloku
@@ -5256,10 +5275,24 @@ function tictactoePools() {                                // { třída: [pozice
 function tictactoeState(c) {                               // stav ve stejném tvaru a pořadí klíčů jako tictactoe_state(…, "cells") v bench.py
   return { you: c.you, cells: Object.fromEntries(TICTACTOE_CELLS.map((k, i) => [k, c.board[i] === TICTACTOE_EMPTY ? '' : c.board[i]])) };
 }
-function tictactoeQuestion() {                             // otázka podoby cells: devět polí v pořadí čtení, i obsazená
+// Pořadí devíti polí v nabídce úlohy: zamíchané podle desky a značky (FNV-1a, xorshift32, Fisher–Yates), jako tictactoe_order v bench.py.
+// Bez míchání modely volí hlavně pole, která jsou v nabídce první.
+function tictactoeOrder(c) {
+  let h = 0x811C9DC5;
+  for (const ch of c.board + c.you) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  h = h || 1;
+  const out = [...TICTACTOE_CELLS];
+  for (let i = out.length - 1; i > 0; i--) {
+    h = (h ^ (h << 13)) >>> 0; h = (h ^ (h >>> 17)) >>> 0; h = (h ^ (h << 5)) >>> 0;
+    const j = h % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+function tictactoeQuestion(c = null) {                     // otázka podoby cells, i obsazená pole; bez úlohy v pořadí čtení, s úlohou v pořadí tictactoeOrder
   const text = 'cells gives the mark in each cell, rNcM is row N from the top and column M from the left, and an empty string is an empty cell.';
   return { cell_cells: { type: 'choice', instructions: `You play tic-tac-toe on a 3x3 board and it is your move; you is your mark, X or O. ${text} ${TICTACTOE_RULES}`,
-    criteria: Object.fromEntries(TICTACTOE_CELLS.map(k => [k, `Row ${k[1]}, column ${k[3]}`])) } };
+    criteria: Object.fromEntries((c ? tictactoeOrder(c) : TICTACTOE_CELLS).map(k => [k, `Row ${k[1]}, column ${k[3]}`])) } };
 }
 const tictactoeCellType = i => i === TICTACTOE_CENTER ? 'center' : TICTACTOE_CORNERS.includes(i) ? 'corner' : 'edge';
 function tictactoeTop(b, score) {
@@ -5867,13 +5900,19 @@ function setTip(elm, text) {                               // nastaví (nebo zru
 function applyTips() {                                     // popisek dostane štítek nebo dlaždice kolem prvku s daným id, jinak prvek sám
   for (const id of TIPS) { const e = $(id); if (e) setTip(e.closest('label, .m') || e, t('tip.' + id)); }
 }
-function showTip(elm) {                                    // nad prvkem; když se nahoře nevejde, pod ním; vodorovně uvnitř okna
-  const tip = $('tip'), gap = 8;
-  tipFor = elm; tip.textContent = elm.dataset.tip; tip.hidden = false;
-  const r = elm.getBoundingClientRect(), t = tip.getBoundingClientRect();
-  const above = r.top - t.height - gap >= 4;
-  tip.style.top = (above ? r.top - t.height - gap : r.bottom + gap) + 'px';
-  tip.style.left = Math.max(4, Math.min(r.left + r.width / 2 - t.width / 2, document.documentElement.clientWidth - t.width - 4)) + 'px';
+// Nad prvkem; když se nahoře nevejde, pod ním. Dlouhý text, který se nevejde ani nad, ani pod prvek, dostane širší bublinu a stojí
+// tam, kde je víc místa, posunutý dovnitř okna (může prvek překrýt); nikdy nepřeteče přes okraj okna.
+function showTip(elm) {
+  const tip = $('tip'), gap = 8, vw = document.documentElement.clientWidth, vh = innerHeight;
+  tipFor = elm; tip.textContent = elm.dataset.tip; tip.hidden = false; tip.style.maxWidth = '';
+  const r = elm.getBoundingClientRect();
+  const fits = h => r.top - h - gap >= 4 || r.bottom + gap + h <= vh - 4;
+  if (!fits(tip.getBoundingClientRect().height)) tip.style.maxWidth = Math.max(360, Math.min(720, vw - 8)) + 'px';
+  const t = tip.getBoundingClientRect(), up = r.top - gap - 4, down = vh - 4 - r.bottom - gap;
+  const above = t.height <= up || (t.height > down && up > down);
+  const top = above ? r.top - t.height - gap : r.bottom + gap;
+  tip.style.top = Math.max(4, Math.min(top, vh - t.height - 4)) + 'px';
+  tip.style.left = Math.max(4, Math.min(r.left + r.width / 2 - t.width / 2, vw - t.width - 4)) + 'px';
   tip.dataset.side = above ? 'above' : 'below';
 }
 function hideTip() { tipFor = null; $('tip').hidden = true; }
@@ -5976,11 +6015,39 @@ $('hostedOk').onclick = () => {
 };
 
 // ---------- jádro: rozhodování ----------
+// Okno „Co přesně dostal model“: poslední tělo dotazu na /decide a odpověď (answers), jak přišla; zrcadla pod ním. Než scénář cokoli pošle,
+// ukáže se zahřívací dotaz (warmTask je pevný, neubírá z náhody úloh). Kreslí se jen v otevřeném okně, za běhu se obnovuje s každou odpovědí.
+let SENT = null;
+const sentJson = x => typeof x === 'string' ? x : JSON.stringify(x, null, 2);
+function renderSent() {
+  if (!$('sentDlg').open) return;
+  const model = $('model').value;
+  if ($('driver').value !== 'model' && !running) { $('sentNote').textContent = t('sent.noModel'); $('sent').textContent = '—'; return; }
+  if (SENT && SENT.sc === $('scenario').value) {      // u e-mailů a veřejných sad je hodnota volby jméno sady
+    $('sentNote').textContent = t('sent.last', { model: SENT.model });
+    const parts = [t('sent.request'), sentJson(SENT.request), '', t('sent.answer'), sentJson(SENT.answer)];
+    for (const m of SENT.mirrors) parts.push('', t('sent.mirror', { v: m.v }), sentJson(m.request), '', t('sent.answer'), sentJson(m.answer));
+    $('sent').textContent = parts.join('\n');
+    return;
+  }
+  $('sentNote').textContent = t('sent.preview', { model });
+  try { $('sent').textContent = t('sent.request') + '\n' + sentJson(requestBody(SC.warmTask())); }
+  catch (e) { $('sent').textContent = '—'; }                // scénář bez načtené sady (e-maily, veřejná sada) ještě úlohu nesestaví
+}
+$('sentOpen').onclick = () => { $('sentDlg').showModal(); renderSent(); $('sent').scrollTop = 0; };
+$('sentClose').onclick = () => $('sentDlg').close();
+$('sentDlg').onclick = e => { if (e.target === $('sentDlg')) $('sentDlg').close(); };      // klik vedle okna (na pozadí) zavře
+document.addEventListener('change', () => setTimeout(renderSent));      // jiný scénář, model, řidič, pruhy nebo sada: ukázka podle nich (po obsluze dané volby)
+const requestBody = (task, variant = 0) => ({ model: $('model').value, state: SC.stateOf?.(task, variant) ?? task.state, questions: SC.questions(variant, task) });
 async function askModel(task, variant = 0) {
-  const body = { model: $('model').value, state: SC.stateOf?.(task, variant) ?? task.state, questions: SC.questions(variant, task) };
+  const body = requestBody(task, variant);
   const t0 = performance.now();
   const r = await req('/decide', { method: 'POST', body: JSON.stringify(body) });
   const j = await r.json();
+  const answer = j.answers ?? t('sent.error', { error: j.error || r.statusText });
+  if (!variant) SENT = { sc: $('scenario').value, model: body.model, request: body, answer, mirrors: [] };
+  else if (SENT) SENT.mirrors.push({ v: variant, request: body, answer });       // zrcadla jdou hned po původním zadání téže úlohy
+  renderSent();
   const ms = performance.now() - t0 - (Number.isFinite(j._waited_ms) ? j._waited_ms : 0);   // čekání mezi opakováními na serveru (429, 5xx) se do latence nepočítá
   if (j._spend && typeof j._spend === 'object') SPEND = j._spend;
   if (!r.ok) throw Object.assign(new Error((j.error || r.statusText) + (task.name ? ` (${task.name})` : '')), { code: j.code, upstream: j.upstream_status });      // druh chyby: kód a stav HTTP poskytovatele nebo Ollamy, ne věta
@@ -6984,7 +7051,7 @@ async function selectScenario() {
     if (!SC.hasExtra) $('extra').checked = false;
     setTip($('start'), SC.benchOnly ? t('public.benchOnly') : t('tip.start'));
     injectOn = $('inject').checked && !SC.benchOnly;
-    syncControls(); syncRun(); renderLegend(); resetGame(); drawSweep();
+    syncControls(); syncRun(); renderLegend(); resetGame(); drawSweep(); renderSent();      // sada e-mailů a veřejná se načítá později než událost change
   };
   const benchBack = () => { if (benchBefore !== null) { $('benchn').value = benchBefore; benchBefore = null; } };
   const notLoaded = r => apiError('', r.status, () => t('run.datasetFailed'));      // věta stránky: chyba ji nese i jako funkci say a stav ji po přepnutí jazyka složí znovu
