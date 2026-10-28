@@ -351,6 +351,7 @@ import sys
 import time
 import urllib.request
 from collections import Counter
+from fractions import Fraction
 
 import i18n
 import metrics
@@ -2725,6 +2726,117 @@ def tictactoe_summary(cases, choices):
             "by_side": class_tally(("X", "O"), [(a, m) for _, m, a, _ in cases], choices, keys),
             "by_free": class_tally(("few", "many"), [(a, free(b)) for b, _, a, _ in cases], choices, keys),
             "errors": tictactoe_errors(cases, choices)}
+
+
+# ---------- scénář: mýtné brány ----------
+# Brána je (výhry, průjezdy, skrytá šance v %), souhrn je [(výhry, průjezdy)]. Úloha je (brány, správná brána, třída, deník);
+# deník = n-tice (brána, výhra?) všech průjezdů od nejstaršího. Losuje se vždy, takže obě podoby stavu mají stejné úlohy.
+# Podíly výher se porovnávají přesně (Fraction), ne v plovoucí čárce; stránka totéž v celých číslech (křížové násobení).
+BANDIT_GATES = (4, 5)                                # podporovaný počet bran, výchozí první; K = 3 vyvážit nejde, K >= 6 natáhne deník
+BANDIT_EXPLORE = 3                                   # bránu s méně průjezdy model volí hned (pravidlo 1); rozhodnuto po pokusu
+BANDIT_SPLIT = ((3, 6), (9, 16))                     # průjezdy vyzkoušené brány: půl na půl „málo“, nebo „hodně“
+BANDIT_TOTAL = 10                                    # průjezdů celkem nejvýš tolik na bránu v průměru (délka deníku)
+BANDIT_MARGIN = Fraction(1, 10)                      # nejvyšší podíl je aspoň o 0,1 nad dalším (v tie společný podíl dvojice)
+BANDIT_CHANCES = tuple(range(10, 95, 5))             # skryté šance 10–90 % po 5
+BANDIT_CLASSES = ("explore", "exploit", "tie")       # rozhodlo pravidlo 1, 2, 3
+BANDIT_FRESH = ((0, 0), (0, 1), (0, 2), (1, 2), (1, 1), (2, 2))   # (výhry, průjezdy) brány k průzkumu, rovnoměrně
+BANDIT_FORMS = ("totals", "history")
+BANDIT_FORM = "totals"                               # výchozí podoba stavu; rozhodla hlavní session po pokusu (Volby po pokusu)
+BANDIT_TRIES = 20000                                 # mez pokusů na úlohu (vzor zkratek) i na pořadí deníku
+# Hlídané zkratky podle třídy. Vzor úlohy má pro každou zkratku písmeno: H = trefí jen správnou bránu, T = správná je ve shodě
+# s jinou, M = netrefí. Vzor se losuje podle vah BANDIT_PATTERNS a úloha se přijme, jen když ho má (vzor lookahead_case).
+BANDIT_WATCH = {
+    "explore": ("greedy", "lowest_rate", "fewest_losses", "most_wins", "exclusion"),
+    "exploit": ("most_wins", "most_tries", "fewest_tries", "fewest_losses", "exclusion"),
+    "tie": ("fewest_tries", "fewest_losses", "lowest_rate_tried", "exclusion"),
+}
+# Váhy vzorů z prototypu (--search K 0.3, semínko 1, strop jednoho vzoru 30 %): každá hlídaná zkratka trefí co nejblíž 1/K.
+BANDIT_PATTERNS = {
+    4: {
+        "explore": {"MHMMM": 12, "TMTMT": 12, "MTMMM": 17, "MMMMT": 12, "HMHMT": 2, "MMMMH": 10, "MHMMT": 4, "TMTMM": 27, "MTMMT": 2, "HMHTM": 3},
+        "exploit": {"HHMMM": 22, "MMHHM": 20, "HMMMM": 1, "MMMMH": 25, "HTMMT": 1, "TMMMT": 8, "MMMTM": 20, "MMMTT": 1, "HTMMM": 1},
+        "tie": {"HHMM": 15, "MHMM": 3, "MMMT": 30, "MMMH": 20, "THMM": 2, "MTMM": 30},
+    },
+    5: {
+        "explore": {"TMTMM": 26, "TMTMT": 6, "HMHMM": 1, "MHMMM": 5, "MMMMT": 29, "HMHMT": 2, "MTMMT": 1, "MTMMM": 28, "HMHTT": 1},
+        "exploit": {"MMHHM": 15, "MMMTT": 6, "HHMMM": 6, "MMMTM": 13, "TMMMM": 21, "HHMMT": 8, "MMMMT": 30},
+        "tie": {"HHMM": 6, "MHMM": 1, "MTMT": 20, "MTMM": 30, "MMMH": 10, "MMMT": 30, "THMM": 3},
+    },
+}
+
+
+def bandit_share(wins, drives):
+    """Podíl výher; brána bez průjezdu má 0 (jen pro zkratky, pravidlo ji volí dřív)."""
+    return Fraction(wins, drives) if drives else Fraction(0)
+
+
+def bandit_best(values, best=max):
+    """Množina indexů s nejlepší hodnotou (při shodě všechny)."""
+    top = best(values)
+    return {i for i, v in enumerate(values) if v == top}
+
+
+def bandit_answer(totals):
+    """Správná brána podle pravidla v zadání; totals = [(výhry, průjezdy)]. Vrací (index, třída), nebo None, když pravidlo
+    jedinou bránu nedá (dvě brány pod BANDIT_EXPLORE, shoda nejvyššího podílu se stejným počtem průjezdů)."""
+    fresh = [i for i, (_, n) in enumerate(totals) if n < BANDIT_EXPLORE]
+    if len(fresh) > 1:
+        return None
+    if fresh:
+        return fresh[0], "explore"
+    top = bandit_best([bandit_share(w, n) for w, n in totals])
+    if len(top) == 1:
+        return next(iter(top)), "exploit"
+    drives = [totals[i][1] for i in top]
+    if drives.count(min(drives)) > 1:
+        return None
+    return min(top, key=lambda i: totals[i][1]), "tie"
+
+
+def bandit_check(totals):
+    """Nezávislé čtení zadání (hlídá bandit_answer): seřadí brány podle (vyzkoušená?, −podíl, průjezdy), první musí být
+    jediná. Vrací index, nebo None (zadání slibuje nejvýš jednu bránu k průzkumu)."""
+    if sum(n < BANDIT_EXPLORE for _, n in totals) > 1:
+        return None
+    key = lambda i: (totals[i][1] >= BANDIT_EXPLORE, -bandit_share(*totals[i]), totals[i][1])
+    order = sorted(range(len(totals)), key=key)
+    return None if key(order[0]) == key(order[1]) else order[0]
+
+
+def bandit_tie_more(totals):
+    """Částečné uvažování: průzkum i podíl správně, při shodě nejvyššího podílu brána s víc průjezdy."""
+    top = bandit_best([bandit_share(w, n) if n >= BANDIT_EXPLORE else Fraction(-1) for w, n in totals])
+    return {max(top, key=lambda i: totals[i][1])} if len(top) > 1 else top
+
+
+def bandit_exclusion(totals):
+    """Vyloučení: brány, které netrefí žádná levná zkratka kromě fewest_tries; když žádná nezbude, všechny."""
+    flagged = set().union(*(BANDIT_SHORTCUTS[name](totals) for name in ("most_wins", "most_tries", "fewest_losses", "lowest_rate")))
+    return (set(range(len(totals))) - flagged) or set(range(len(totals)))
+
+
+# Zkratky a částečné strategie nad souhrnem: vrací množinu bran, mezi kterými by se zkratka rozhodla (při shodě všechny).
+BANDIT_SHORTCUTS = {
+    "most_wins": lambda t: bandit_best([w for w, _ in t]),
+    "most_tries": lambda t: bandit_best([n for _, n in t]),
+    "fewest_tries": lambda t: bandit_best([n for _, n in t], min),
+    "fewest_losses": lambda t: bandit_best([n - w for w, n in t], min),
+    "lowest_rate": lambda t: bandit_best([bandit_share(w, n) for w, n in t], min),
+    "lowest_rate_tried": lambda t: bandit_best([bandit_share(w, n) if n >= BANDIT_EXPLORE else Fraction(2) for w, n in t], min),
+    "greedy": lambda t: bandit_best([bandit_share(w, n) for w, n in t]),                    # pravidlo 1 vynechá, 0/0 = 0
+    "greedy_tried": lambda t: bandit_best([bandit_share(w, n) if n >= BANDIT_EXPLORE else Fraction(-1) for w, n in t]),
+    "tie_more": bandit_tie_more,
+    "exclusion": bandit_exclusion,
+}
+
+
+def bandit_pattern(cls, totals, answer):
+    """Vzor úlohy: písmeno H / T / M pro každou hlídanou zkratku třídy (BANDIT_WATCH)."""
+    out = ""
+    for name in BANDIT_WATCH[cls]:
+        picks = BANDIT_SHORTCUTS[name](totals)
+        out += "H" if picks == {answer} else "T" if answer in picks else "M"
+    return out
 
 
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
