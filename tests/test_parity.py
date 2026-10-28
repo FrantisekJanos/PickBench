@@ -1424,6 +1424,25 @@ def timetable_js(case):
 TIMETABLE_TABLE_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "timetableTable(rand, arg.lanes)")
 assert TIMETABLE_TABLE_JS != ROWS_JS
 
+# Generátor Jízdního řádu stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy timetableRow.
+TIMETABLE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "timetableRow(rand)")
+assert TIMETABLE_ROWS_JS != ROWS_JS
+TIMETABLE_PAGE = {}
+
+
+def timetable_case_of(r):
+    """Úloha stránky jako n-tice timetable_case (řádky, pořadí, PSČ, služba, výjimka, depo, velikost, poloha, výjimka)."""
+    return (tuple(tuple(x) for x in r["rows"]), tuple(r["order"]), r["zip"], r["service"], tuple(r["exception"]) if r["exception"] else None,
+            r["answer"], r["size"], r["pos"], r["rule"])
+
+
+def timetable_page(n=900, seed=1):
+    """Úlohy generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py."""
+    if (n, seed) not in TIMETABLE_PAGE:
+        raw = run_js(TIMETABLE_ROWS_JS, {"seed": seed, "n": n})
+        TIMETABLE_PAGE[n, seed] = raw, [timetable_case_of(r) for r in raw]
+    return TIMETABLE_PAGE[n, seed]
+
 
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class Timetable(unittest.TestCase):
@@ -1484,6 +1503,123 @@ class Timetable(unittest.TestCase):
         page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
         alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
         self.assertEqual(re.findall(r'^  depot: "([^"\\]*)",$', alt, re.M), [bench.ALT["depot"]])
+
+    def test_generated_rows_keep_the_guarantees(self):             # jako tests/test_timetable.py (Generator.test_cases_keep_the_guarantees)
+        import bench
+        from test_timetable import position, route_index, solve
+        raw, cases = timetable_page()
+        for r, case in zip(raw, cases):
+            rows, order, z, service, exception, answer, size, pos, rule = case
+            with self.subTest(case=case):
+                self.assertEqual(list(r), ["rows", "order", "zip", "service", "exception", "answer", "size", "pos", "rule", "truth"])
+                self.assertEqual(sorted(order), list(range(len(rows))))
+                lo, hi = bench.TIMETABLE_SIZES[size]
+                self.assertTrue(lo <= len(rows) <= hi)
+                self.assertEqual((rows[0][0], rows[-1][1]), (10000, 99999))
+                self.assertTrue(all(rows[k][1] + 1 == rows[k + 1][0] and rows[k][2] != rows[k + 1][2] for k in range(len(rows) - 1)))
+                self.assertGreaterEqual(min(b - a + 1 for a, b, _ in rows), 300)
+                i = route_index(rows, z)
+                self.assertEqual(position(rows, i, z), pos)
+                near = {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < len(rows)}
+                self.assertIn(service, bench.TIMETABLE_SERVICES)
+                if rule == "none":
+                    self.assertIsNone(exception)
+                else:
+                    self.assertIn(exception[0], bench.TIMETABLE_EXC_SERVICES)
+                    self.assertNotIn(exception[1], near | {rows[i][2]})
+                    if rule == "applies":
+                        self.assertEqual(service, exception[0])
+                    else:
+                        self.assertIn(service, bench.TIMETABLE_EXC_SERVICES)
+                        self.assertNotEqual(service, exception[0])
+                self.assertEqual(answer, exception[1] if rule == "applies" else rows[i][2])
+                self.assertEqual(solve(bench.timetable_state(case, "sorted")), answer)
+                self.assertEqual(r["truth"], bench.TIMETABLE_DEPOTS.index(answer))
+
+    def test_classes_answers_and_sides_are_spread(self):           # meze jako tests/test_timetable.py
+        import bench
+        from test_timetable import route_index
+        _, c = timetable_page()
+        for k, order in ((6, bench.TIMETABLE_SIZES), (7, bench.TIMETABLE_POSITIONS), (8, bench.TIMETABLE_RULES)):
+            counts = Counter(x[k] for x in c)
+            for cls in order:
+                self.assertTrue(0.25 <= counts[cls] / len(c) <= 0.42, counts)
+        answers = Counter(x[5] for x in c)
+        for depot in bench.TIMETABLE_DEPOTS:
+            self.assertTrue(0.10 <= answers[depot] / len(c) <= 0.25, answers)
+        edge = [x for x in c if x[7] != "inner"]
+        low = sum(x[2] - x[0][route_index(x[0], x[2])][0] <= bench.TIMETABLE_NEAR for x in edge)      # u zip_from, ne u zip_to
+        self.assertTrue(0.4 <= low / len(edge) <= 0.6, low / len(edge))
+
+    def test_table_shortcuts_stay_well_below_the_answer(self):     # první řádek a nejčastější depo nejvýš 0,45 (podoba sorted)
+        import bench
+        from test_timetable import expected_hit, most_frequent
+        _, c = timetable_page()
+        for pos in bench.TIMETABLE_POSITIONS:
+            sub = [x for x in c if x[7] == pos and x[8] != "applies"]
+            first = sum(expected_hit(x[5], {x[0][0][2]}) for x in sub) / len(sub)
+            frequent = sum(expected_hit(x[5], most_frequent(x[0])) for x in sub) / len(sub)
+            with self.subTest(pos=pos):
+                self.assertLessEqual(first, 0.45)
+                self.assertLessEqual(frequent, 0.45)
+
+    def test_a_boundary_is_one_of_two_rows(self):                  # u hranice je správně jeden ze dvou sousedních řádků, laťka 0,5
+        import bench
+        from test_timetable import exclusive, expected_hit, nearest
+        _, c = timetable_page()
+        near = [x for x in c if x[7] == "near" and x[8] != "applies"]
+        for x in near:
+            self.assertEqual(expected_hit(x[5], nearest(x[0], x[2], 0)) + expected_hit(x[5], nearest(x[0], x[2], 1)), 1, x)
+        for end in (0, 1):
+            share = sum(expected_hit(x[5], nearest(x[0], x[2], end)) for x in near) / len(near)
+            self.assertTrue(0.35 <= share <= 0.65, (end, share))
+        for pos, want in (("inner", 1), ("near", 1), ("bound", 0)):                     # hranice bez rovnosti padá jen na hranici
+            sub = [x for x in c if x[7] == pos and x[8] != "applies"]
+            self.assertEqual(sum(exclusive(bench.timetable_state(x, "sorted")) == x[5] for x in sub) / len(sub), want, pos)
+
+    def test_exception_is_balanced(self):
+        import bench
+        from test_timetable import always_exception, never_exception
+        with_exception = [x for x in timetable_page()[1] if x[4] is not None]
+        for model in (always_exception, never_exception):
+            share = sum(model(bench.timetable_state(x, "sorted")) == x[5] for x in with_exception) / len(with_exception)
+            self.assertTrue(0.4 <= share <= 0.6, (model.__name__, share))
+
+    def test_same_seed_same_rows(self):
+        first = run_js(TIMETABLE_ROWS_JS, {"seed": 7, "n": 40})
+        self.assertEqual(run_js(TIMETABLE_ROWS_JS, {"seed": 7, "n": 40}), first)
+        self.assertNotEqual(run_js(TIMETABLE_ROWS_JS, {"seed": 8, "n": 40}), first)
+
+    def test_unknown_classes_raise(self):
+        got = run_js("[['huge', 'inner', 'none'], ['small', 'edge', 'none'], ['small', 'inner', 'maybe']]"
+                     ".map(([s, p, r]) => { try { timetableCase(Math.random, s, p, r); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["timetableCase: unknown class huge, inner, none", "timetableCase: unknown class small, edge, none",
+                               "timetableCase: unknown class small, inner, maybe"])
+
+    def test_summary_matches_bench(self):                          # i neplatné volby: jiný typ, jiné velikost písmen, nic
+        import bench
+        cases, rng = bench.timetable_cases(300, seed=4), random.Random(6)
+        depots = list(bench.TIMETABLE_DEPOTS)
+        choices = [rng.choice(depots + depots + [None, "Oak", "depot_1", 3]) for _ in cases]
+        js = [timetable_js(c) for c in cases]
+        got = run_js("timetableSummary(arg.cases, arg.choices)", {"cases": js, "choices": choices})
+        self.assertEqual(json.dumps(got), json.dumps(bench.timetable_summary(cases, choices)))      # i pořadí klíčů
+        kinds = run_js("arg.cases.map((c, i) => timetableErrorKind(c, arg.choices[i]))", {"cases": js, "choices": choices})
+        self.assertEqual(Counter(k for k in kinds if k), Counter({k: v for k, v in bench.timetable_errors(cases, choices).items() if v}))
+        self.assertEqual(run_js("timetableSummary([], [])", None)["by_rule"]["applies"], [0, 0])     # prázdná hra: stránka ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("timetableWarm()", None)
+        case = timetable_case_of(warm)
+        self.assertEqual(list(warm), ["rows", "order", "zip", "service", "exception", "answer", "size", "pos", "rule", "truth"])
+        self.assertEqual(len(case[0]), 12)
+        self.assertEqual((case[0][0][0], case[0][-1][1]), (10000, 99999))
+        self.assertTrue(all(case[0][k][1] + 1 == case[0][k + 1][0] and case[0][k][2] != case[0][k + 1][2] for k in range(11)))
+        self.assertEqual(bench.timetable_solve(bench.timetable_state(case, "sorted")), warm["answer"])
+        self.assertEqual((warm["rule"], warm["truth"]), ("decoy", bench.TIMETABLE_DEPOTS.index(warm["answer"])))
+        longest = max(len(json.dumps(bench.timetable_state(c, "sorted"))) for c in bench.timetable_cases(300, seed=2))
+        self.assertGreaterEqual(len(json.dumps(bench.timetable_state(case, "sorted"))), longest)      # horní odhad délky dotazu ve stepEstimate
 
 
 if __name__ == "__main__":

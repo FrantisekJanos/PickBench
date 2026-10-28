@@ -3949,6 +3949,81 @@ function timetableQuestion() {
     instructions: "Route the parcel to a depot. Each row of routes covers the ZIP codes from zip_from to zip_to, both included, and sends those parcels to its depot. exceptions override routes: a parcel whose service matches an exception goes to that exception's depot instead. Choose the depot for the parcel.",
     criteria: Object.fromEntries(TIMETABLE_DEPOTS.map(d => [d, 'Depot ' + d[0].toUpperCase() + d.slice(1)])) } };
 }
+// Úloha Jízdního řádu dané třídy: port timetable_case z bench.py, stejné kroky a pořadí volání rand, náhoda z předané funkce (stránka dává rnd);
+// jiné úlohy než bench.py, protože Python má jiný generátor náhody. Poloha a strana se berou jen u hranice se sousedem, depo výjimky není depo trasy
+// ani sousedů, decoy má jinou nestandardní službu. Zamíchání se losuje vždy, aby obě podoby měly ze stejného semínka stejné úlohy.
+// Kontrola záruk je nad hotovou úlohou, porušení vyhodí chybu, nic se neopravuje potichu. Vrací { rows, order, zip, service, exception, answer, size, pos, rule }.
+function timetableCase(rand, size, pos, rule) {
+  if (!Object.hasOwn(TIMETABLE_SIZES, size) || !TIMETABLE_POSITIONS.includes(pos) || !TIMETABLE_RULES.includes(rule))
+    throw new Error(`timetableCase: unknown class ${size}, ${pos}, ${rule}`);
+  const rows = timetableTable(rand, pickInt(rand, ...TIMETABLE_SIZES[size]));
+  const n = rows.length;
+  const i = Math.floor(rand() * n);
+  const [a, b, route] = rows[i];
+  let z;
+  if (pos === 'inner') z = pickInt(rand, a + TIMETABLE_INNER, b - TIMETABLE_INNER);
+  else {
+    const side = pickOf(rand, [['low', i > 0], ['high', i < n - 1]].filter(([, ok]) => ok).map(([s]) => s));
+    const k = pos === 'bound' ? 0 : pickInt(rand, 1, TIMETABLE_NEAR);
+    z = side === 'low' ? a + k : b - k;
+  }
+  const near = new Set([i - 1, i + 1].filter(j => j >= 0 && j < n).map(j => rows[j][2]));
+  let service, exception;
+  if (rule === 'none') { service = pickOf(rand, TIMETABLE_SERVICES); exception = null; }
+  else {
+    const es = pickOf(rand, TIMETABLE_EXC_SERVICES);
+    exception = [es, pickOf(rand, TIMETABLE_DEPOTS.filter(d => d !== route && !near.has(d)))];
+    service = rule === 'applies' ? es : pickOf(rand, TIMETABLE_EXC_SERVICES.filter(s => s !== es));
+  }
+  const order = shuffleWith(rand, [...Array(n).keys()]);
+  const answer = rule === 'applies' ? exception[1] : route;
+  const c = { rows, order, zip: z, service, exception, answer, size, pos, rule };
+  const edges = [];
+  if (i > 0) edges.push(z - a);
+  if (i < n - 1) edges.push(b - z);
+  const least = Math.min(...edges);
+  const real = Math.min(z - a, b - z) >= TIMETABLE_INNER ? 'inner' : least === 0 ? 'bound' : least >= 1 && least <= TIMETABLE_NEAR ? 'near' : null;
+  let ok = rows[0][0] === TIMETABLE_ZIP[0] && rows[n - 1][1] === TIMETABLE_ZIP[1]
+    && Math.min(...rows.map(([s, e]) => e - s + 1)) >= TIMETABLE_MIN_WIDTH && real === pos
+    && (exception === null || (exception[1] !== route && !near.has(exception[1])));
+  for (let k = 0; ok && k < n - 1; k++) ok = rows[k][1] + 1 === rows[k + 1][0] && rows[k][2] !== rows[k + 1][2];
+  ok = ok && timetableIndex(rows.map(r => r.slice(0, 2)), z) === i && timetableSolve(timetableState(c)) === answer;
+  if (!ok) throw new Error('timetableCase: broken guarantee');
+  return c;
+}
+function timetableRow(rand) {                                // velikost, poloha a výjimka se losují v pořadí timetable_cases; truth = index správného depa
+  const c = timetableCase(rand, pickOf(rand, Object.keys(TIMETABLE_SIZES)), pickOf(rand, TIMETABLE_POSITIONS), pickOf(rand, TIMETABLE_RULES));
+  return { ...c, truth: TIMETABLE_DEPOTS.indexOf(c.answer) };
+}
+function timetableErrorKind(c, choice) {                     // jeden krok timetable_errors; c = { rows, zip, exception, answer, rule }; správná volba dá null
+  if (typeof choice !== 'string' || !TIMETABLE_DEPOTS.includes(choice)) return 'invalid';
+  if (choice === c.answer) return null;
+  const i = timetableIndex(c.rows.map(r => r.slice(0, 2)), c.zip);
+  if (c.rule === 'applies' && choice === c.rows[i][2]) return 'missed';
+  if (c.rule === 'decoy' && choice === c.exception[1]) return 'misapplied';
+  if ([i - 1, i + 1].some(j => j >= 0 && j < c.rows.length && c.rows[j][2] === choice)) return 'neighbor';
+  return 'other';
+}
+function timetableErrors(cases, choices) {
+  const counts = { neighbor: 0, missed: 0, misapplied: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = timetableErrorKind(c, choices[i]); if (kind) counts[kind]++; });
+  return counts;
+}
+function timetableSummary(cases, choices) {                  // port timetable_summary: velikost a výjimka ze všech úloh, poloha jen z úloh s výjimkou v TIMETABLE_POSITION_RULES
+  const picked = cases.map((c, i) => [c, choices[i]]).filter(([c]) => TIMETABLE_POSITION_RULES.includes(c.rule));
+  return { by_size: classTally(Object.keys(TIMETABLE_SIZES), cases.map(c => [TIMETABLE_DEPOTS.indexOf(c.answer), c.size]), choices, TIMETABLE_DEPOTS),
+           by_position: classTally(TIMETABLE_POSITIONS, picked.map(([c]) => [TIMETABLE_DEPOTS.indexOf(c.answer), c.pos]), picked.map(([, ch]) => ch), TIMETABLE_DEPOTS),
+           by_rule: classTally(TIMETABLE_RULES, cases.map(c => [TIMETABLE_DEPOTS.indexOf(c.answer), c.rule]), choices, TIMETABLE_DEPOTS),
+           errors: timetableErrors(cases, choices) };
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. Stav je nejdelší možný: 12 řádků, pětipísmenná depa a výjimka se sedmipísmennou službou.
+// PSČ 55555 leží v řádku 6 (depo cedar, sousedé birch a maple), služba economy výjimku express nespustí, takže platí řádek trasy (decoy, inner, large).
+function timetableWarm() {
+  const names = ['alder', 'birch', 'cedar', 'maple'];
+  const rows = Array.from({ length: 12 }, (_, k) => [10000 + 7500 * k, 17499 + 7500 * k, names[k % 4]]);
+  return { rows, order: rows.map((_, k) => k), zip: 55555, service: 'economy', exception: ['express', 'alder'], answer: 'cedar',
+           size: 'large', pos: 'inner', rule: 'decoy', truth: TIMETABLE_DEPOTS.indexOf('cedar') };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
