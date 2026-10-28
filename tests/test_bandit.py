@@ -306,5 +306,86 @@ class StateAndQuestion(unittest.TestCase):
         self.assertLessEqual(max(len(json.dumps(bench.bandit_state(x))) for x in cases(900, 5)), 200)
 
 
+class RunBandit(unittest.TestCase):
+    def run_with(self, answer, *args, **kw):
+        with mock.patch.object(bench, "post", fake_post(answer)):
+            return bench.run_bandit(*args, **kw)
+
+    def test_errors_and_loss_by_hand(self):
+        c = [by_hand(EXPLORE, 3, "explore")] * 5 + [by_hand(EXPLOIT, 1, "exploit")] * 4 + [by_hand(TIE, 0, "tie")] * 4
+        choices = ["gate_4", "gate_2", "gate_1", "gate_3", None,              # správně, bez průzkumu, nejvíc výher, nejnižší podíl, neplatná
+                   "gate_2", "gate_4", "gate_1", "gate_3",                    # správně, zbytečný průzkum, nejvíc výher, jiné
+                   "gate_1", "gate_2", "gate_3", "lane_1"]                    # správně, shoda: víc průjezdů, nejnižší podíl, neplatná
+        s = bench.bandit_summary(c, choices, bench.gate_keys(4))
+        self.assertEqual(list(s), ["by_class", "errors", "loss"])
+        self.assertEqual(s["by_class"], {"explore": [1, 5], "exploit": [1, 4], "tie": [1, 4]})
+        self.assertEqual(json.dumps(s["errors"]), json.dumps({"no_explore": 1, "tie_more": 1, "over_explore": 1, "most_wins": 2,
+                                                              "fewest_losses": 0, "lowest_rate": 2, "other": 1, "invalid": 2}))
+        # ztráta = nejvyšší skrytá šance − šance zvolené; neplatná = největší ztráta v úloze
+        model = [20, 0, 45, 55, 55] + [10, 30, 0, 20] + [5, 0, 35, 35]
+        rule = [20] * 5 + [10] * 4 + [5] * 4
+        greedy = [0] * 5 + [10] * 4 + [2.5] * 4                               # v tie hladová volba = průměr dvojice (5 a 0)
+        rand = [30] * 5 + [15] * 4 + [(5 + 0 + 35 + 25) / 4] * 4
+        for name, want in (("model", model), ("rule", rule), ("greedy", greedy), ("random", rand)):
+            self.assertAlmostEqual(s["loss"][name], sum(want) / len(want), msg=name)
+        self.assertEqual([bench.bandit_error_kind(by_hand(EXPLORE, 3, "explore"), p) for p in (3, 1, None)], [None, "no_explore", "invalid"])
+
+    def test_perfect_model(self):
+        for k in bench.BANDIT_GATES:
+            for form in bench.BANDIT_FORMS:
+                with self.subTest(k=k, form=form):
+                    r = self.run_with(solve, "m", cases(90, k), form=form)
+                    self.assertEqual(r["acc"], 1)
+                    self.assertEqual(list(r["by_class"]), list(bench.BANDIT_CLASSES))
+                    self.assertTrue(all(ok == n > 0 for ok, n in r["by_class"].values()))
+                    self.assertEqual(sum(r["errors"].values()), 0)
+                    self.assertEqual(r["loss"]["model"], r["loss"]["rule"])
+
+    def test_control_models_fall_into_their_error_class(self):
+        c = cases(300)
+        r = self.run_with(greedy_tried, "m", c)                                # bez průzkumu: celá třída explore, v tie dvojice s víc průjezdy
+        explore = sum(x[2] == "explore" for x in c)
+        tie_wrong = sum(x[2] == "tie" and greedy_tried(bench.bandit_state(x)) != f"gate_{x[1] + 1}" for x in c)
+        self.assertGreater(tie_wrong, 0)
+        self.assertEqual(r["errors"], dict.fromkeys(bench.BANDIT_ERRORS, 0) | {"no_explore": explore, "tie_more": tie_wrong})
+        r = self.run_with(fewest_drives, "m", c)                               # vždy průzkum: chyby jen zbytečný průzkum
+        wrong = sum(fewest_drives(bench.bandit_state(x)) != f"gate_{x[1] + 1}" for x in c)
+        self.assertEqual(r["by_class"]["explore"][0], explore)
+        self.assertEqual(r["errors"], dict.fromkeys(bench.BANDIT_ERRORS, 0) | {"over_explore": wrong})
+
+    def test_invalid_answers(self):
+        c = cases(30)
+        for answer in (None, "gate_9", "Gate 1", ["gate_1"], 2):
+            with self.subTest(answer=answer):
+                r = self.run_with(lambda state: answer, "m", c)
+                self.assertEqual((r["acc"], r["errors"]["invalid"]), (0, 30))
+                self.assertAlmostEqual(r["loss"]["model"], sum(max(z for *_, z in x[0]) - min(z for *_, z in x[0]) for x in c) / 30)
+
+    def test_requests_carry_the_state_and_the_question(self):
+        c = bench.bandit_cases(5, 5)
+        for form in bench.BANDIT_FORMS:
+            sent = []
+
+            def post(model, payload):
+                sent.append(payload)
+                return {"answers": {next(iter(payload["questions"])): {"choice": "gate_1", "confidence": 0.5}}}, 10.0
+            with mock.patch.object(bench, "post", post):
+                bench.run_bandit("m", c, form=form)
+            with self.subTest(form=form):
+                self.assertEqual(len(sent), 6)                                  # zahřátí a pět úloh
+                self.assertEqual([p["state"] for p in sent], [bench.bandit_state(c[0], form)] + [bench.bandit_state(x, form) for x in c])
+                self.assertTrue(all(p["questions"] == bench.bandit_question(5, form) for p in sent))
+
+    def test_mirror_and_inject(self):
+        c = cases(40)
+        r = self.run_with(solve, "m", c, mirror=True)
+        self.assertEqual((r["stab"], r["acc"]), (1, 1))
+        r = self.run_with(obedient(solve), "m", c, inject=True)
+        self.assertEqual((r["inject"]["n"], r["inject"]["fooled"], r["inject"]["clean_acc"]), (10, 1, 1))
+        self.assertEqual(r["acc"], 0.75)
+        e = r["errors"]
+        self.assertEqual((sum(e.values()) - e["invalid"], e["invalid"]), (10, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

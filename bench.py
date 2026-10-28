@@ -2978,6 +2978,59 @@ def bandit_question(k, form=None):
                                                          "criteria": position_criteria(gate_keys(k), "Gate")}}
 
 
+BANDIT_ERRORS = ("no_explore", "tie_more", "over_explore", "most_wins", "fewest_losses", "lowest_rate", "other", "invalid")
+
+
+def bandit_error_kind(case, pick):
+    """Druh chyby, nebo None u správné volby; pick = index zvolené brány, nebo None (neplatná odpověď). Pořadí rozhoduje,
+    kam patří volba, která sedí na víc druhů: no_explore (explore: nejvyšší podíl mezi vyzkoušenými), tie_more (tie: brána
+    ze shody s víc průjezdy), over_explore (exploit, tie: nejméně průjezdů), pak levné zkratky most_wins, fewest_losses,
+    lowest_rate, nakonec other."""
+    gates, answer, cls = case[:3]
+    if pick is None:
+        return "invalid"
+    if pick == answer:
+        return None
+    totals = [(w, n) for w, n, _ in gates]
+    if cls == "explore" and pick in BANDIT_SHORTCUTS["greedy_tried"](totals):
+        return "no_explore"
+    if cls == "tie" and pick in BANDIT_SHORTCUTS["tie_more"](totals):
+        return "tie_more"
+    if cls != "explore" and pick in BANDIT_SHORTCUTS["fewest_tries"](totals):
+        return "over_explore"
+    for name in ("most_wins", "fewest_losses", "lowest_rate"):
+        if pick in BANDIT_SHORTCUTS[name](totals):
+            return name
+    return "other"
+
+
+def bandit_loss(gates, i):
+    """Ztráta jednoho kroku: nejvyšší skrytá šance minus šance zvolené brány, v procentních bodech."""
+    return max(c for _, _, c in gates) - gates[i][2]
+
+
+def bandit_summary(cases, choices, keys):
+    """Přesnost podle třídy, druhy chyb a ztráta jednoho kroku. loss = průměr přes úlohy v p. b.: model (neplatná odpověď
+    = největší ztráta v úloze), pravidlo (správné odpovědi), hladová volba (nejvyšší podíl, 0/0 = 0; shoda = průměr) a náhoda.
+    Ztráta není míra kvality: průzkum v jednom kroku vždy stojí, jeho užitek přijde až v dalších krocích, které tu nejsou."""
+    errors = dict.fromkeys(BANDIT_ERRORS, 0)
+    loss = dict.fromkeys(("model", "rule", "greedy", "random"), 0.0)
+    for case, choice in zip(cases, choices):
+        gates, answer = case[:2]
+        pick = keys.index(choice) if isinstance(choice, str) and choice in keys else None
+        kind = bandit_error_kind(case, pick)
+        if kind:
+            errors[kind] += 1
+        every = [bandit_loss(gates, i) for i in range(len(gates))]
+        greedy = BANDIT_SHORTCUTS["greedy"]([(w, n) for w, n, _ in gates])
+        loss["model"] += every[pick] if pick is not None else max(every)
+        loss["rule"] += every[answer]
+        loss["greedy"] += sum(every[i] for i in greedy) / len(greedy)
+        loss["random"] += sum(every) / len(every)
+    return {"by_class": class_tally(BANDIT_CLASSES, [(answer, cls) for _, answer, cls, _ in cases], choices, keys),
+            "errors": errors, "loss": {name: total / len(cases) for name, total in loss.items()}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -3613,6 +3666,18 @@ def run_tictactoe(model, cases, mirror=False, inject=False, deadline=None, form=
     items = [(with_note(tictactoe_state(case, form), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r.update(tictactoe_summary(cases, choices))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_bandit(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys = gate_keys(len(cases[0][0]))
+    question = bandit_question(len(keys), form)
+    ask(model, bandit_state(cases[0], form), question)           # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[1]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(bandit_state(case, form), note), {keys[case[1]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(bandit_summary(cases, choices, keys))               # z původní varianty zadání, jako přesnost
     return r
 
 
