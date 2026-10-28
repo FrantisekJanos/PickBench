@@ -3863,14 +3863,18 @@ const pattern = {
     return t('last.pattern', { moves: task.moves.map(move).join(', '), pick: name(res.move), truth: name(task.truth) }) +
       (res.probs ? '\n' + t('last.probs', { list: PATTERN_MOVES.map((m, i) => `${move(m)}: ${pctOf(res.probs[m] ?? 0, 1)}`).join(', ') }) : '');
   },
+  summary(g) {                                             // rozbor jednou na překreslení: quality i renderExtra čtou tentýž
+    if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, ...patternSummary(g.cases, g.choices) };
+    return g.summary;
+  },
   quality(g, s, inGame) {                                  // za první dlaždici protitah místo předpovědi z rozboru (i pozdní odpovědi)
     const tiles = this.matchTiles(g, s, inGame, t('scenario.pattern.tile.match'), t('scenario.pattern.tile.rate'));
-    const k = patternSummary(g.cases, g.choices).errors.counter_given, n = g.cases.length;
+    const k = this.summary(g).errors.counter_given, n = g.cases.length;
     tiles.splice(1, 0, [n ? `${k} / ${n}` : '—', t('pattern.counterGiven'), t('scenario.pattern.tip.counter')]);
     return tiles;
   },
   renderExtra(g) {                                         // přesnost podle periody a pod ní řádek chyb jako bench.py
-    const sum = patternSummary(g.cases, g.choices);
+    const sum = this.summary(g);
     const head = el('tr'); head.append(el('th', '', t('scenario.pattern.col.class')), el('th', '', t('scenario.pattern.col.ratio')), el('th', '', t('metric.accuracy')));
     const rows = PATTERN_CLASSES.map(c => {
       const [ok, total] = sum.by_period[c], tr = el('tr');
@@ -6203,16 +6207,21 @@ function addResult(how, inGame) {                          // zapíše běh do t
 // Průchod 2–8 (jako bench.py --sweep-lanes): tlačítko přidá do fronty sedm kroků benchmarku s počtem pruhů 2 až 8 a frontu spustí.
 // Graf kreslí z tabulky výsledků: nejnovější dávka, která má pro zvolený scénář a řidiče (model) aspoň dva různé počty pruhů.
 const SWEEP_SC = ['obstacles', 'numbers'];                 // jako bench.py: jen překážky a číselné duely; ostatní scénáře mají pruhy pevné nebo je nepoužívají
+function withLanes(n, fn) {                                // fn s dočasně jiným počtem pruhů: zadání úloh (warmTask, questions) čte LANES a KEYS; silnice se nepřekreslí
+  const keep = [LANES, KEYS];
+  LANES = n; KEYS = laneKeys(n);
+  try { return fn(); } finally { [LANES, KEYS] = keep; }
+}
 function sweepAdd() {
   if (!SWEEP_SC.includes(SC.id)) return sqSay(() => t('plan.sweep.scenario'));
-  if (planRunning || running || PLAN.steps.some(st => st.state === 'wait')) return sqSay(() => t('plan.sweep.busy'));
+  if (planRunning || running || PLAN.steps.some(planPending)) return sqSay(() => t('plan.sweep.busy'));      // i přerušený nebo chybný krok: runPlan by ho pustil znovu s průchodem
   const s = readSettings(), whole = (v, min, max) => Math.min(max, Math.max(min, Math.floor(v) || 0));
   s.deadline = deadlineOf(s.deadline); s.benchn = whole(s.benchn, 5, 1000); s.runlen = whole(s.runlen, 0, 100000);      // stejné meze jako addStep
   if (PLAN.steps.length + 7 > PLAN_MAX) return sqSay(() => t('plan.full', { max: PLAN_MAX }));
   if (s.driver === 'model' && !s.model) return sqSay(() => t('plan.add.noModel'));
   if (needConsent()) return sqSay(() => t('plan.add.consent'));                 // hostovaný model: souhlas jako u addStep
   for (let k = 2; k <= 8; k++) {
-    const settings = { ...s, lanes: k }, est = stepEstimate('bench', settings);
+    const settings = { ...s, lanes: k }, est = withLanes(k, () => stepEstimate('bench', settings));      // odhad ze zadání s k pruhy, ne s pruhy stránky
     PLAN.steps.push({ kind: 'bench', settings, state: 'wait', note: '', ...(est ? { est } : {}) });
   }
   sqSay(''); planChanged(); runPlan();
@@ -6651,10 +6660,11 @@ function holdPlan() {                                      // true = frontu teď
 }
 function releasePlan() { if (planRelease) planRelease(); planRelease = null; }
 
+const planPending = st => st.state === 'wait' || st.state === 'abort' || st.state === 'error';      // kroky, které runPlan pustí (znovu); sweepAdd s nimi průchod nepřidá
 async function runPlan() {
   if (planRunning) return;
   if (running) return sqSay(() => t('plan.run.busy'));
-  const todo = PLAN.steps.filter(st => st.state === 'wait' || st.state === 'abort' || st.state === 'error');
+  const todo = PLAN.steps.filter(planPending);
   if (!todo.length) return sqSay(() => t('plan.run.nothing'));
   planRunning = true; renderPlan();                        // hned: druhé kliknutí během čekání na zámek nic nespustí a ovládání je zamčené od první chvíle
   const over = await overBudget(todo);                     // hostované kroky: odhad + dosavadní útrata nesmí překročit strop serveru
@@ -6753,12 +6763,16 @@ function idleSample(g, now) {                              // ze vzorku /gpu; b�
   if (g && g.available && Number.isFinite(g.power_w)) hwIdleSamples.push(g.power_w);
   if (now < hwIdleUntil) return;
   hwIdleUntil = 0;
-  hwIdle = hwIdleSamples.length >= HW_MIN_SAMPLES ? { watts: hwIdleSamples.reduce((a, b) => a + b, 0) / hwIdleSamples.length, samples: hwIdleSamples.length } : null;
+  hwIdle = hwIdleSamples.length >= HW_MIN_SAMPLES ? { watts: hwIdleSamples.reduce((a, b) => a + b, 0) / hwIdleSamples.length, samples: hwIdleSamples.length, at: now } : null;      // at: konec měření (ms)
   $('hwIdleText').textContent = hwIdle ? t('hw.idle.done', { w: f(hwIdle.watts, 1), k: hwIdle.samples }) : t('hw.idle.few', { min: HW_MIN_SAMPLES });
   syncIdle(); renderHw(now);
 }
+let hwDrawn = '';                                          // co graf Hardware naposled nakreslil u skončeného běhu; '' = kreslit znovu
 function drawHwChart(now = performance.now()) {            // průběh posledního běhu: příkon a teplota ze vzorků, latence jako body
-  const c = $('hwChart'), x = c.getContext('2d'); c.width = c.clientWidth || 900;
+  const c = $('hwChart'), key = S.t1 === null ? '' : [S.t0, S.t1, S.hw.length, S.when.length, c.clientWidth, LANG].join();
+  if (key && key === hwDrawn) return;                      // skončený běh se nemění: vzorek GPU každou sekundu ho znovu nekreslí
+  hwDrawn = key;
+  const x = c.getContext('2d'); c.width = c.clientWidth || 900;
   const t0 = S.t0 / 1000, t1 = (S.t1 ?? now) / 1000, span = Math.max(1, t1 - t0), w = c.width, h = c.height - 18;
   x.font = '11px "Segoe UI", sans-serif'; x.fillStyle = '#8b9aa8'; x.fillText(t('hw.chart.legend'), 4, 12);
   const line = (pts, color) => {
@@ -6769,7 +6783,7 @@ function drawHwChart(now = performance.now()) {            // průběh poslední
     x.stroke();
   };
   line(S.hw.map(s => [s[0], s[1]]), '#e69f00'); line(S.hw.map(s => [s[0], s[2]]), '#f85149');
-  const maxMs = Math.max(1, ...S.lat); x.fillStyle = '#4cc2ff';
+  const maxMs = S.lat.reduce((m, v) => v > m ? v : m, 1); x.fillStyle = '#4cc2ff';      // ne Math.max(...S.lat): nad ~120 000 rozhodnutí hodí RangeError a zastaví dotazy na /gpu
   S.when.forEach((tt, i) => x.fillRect((tt - t0) / span * w - 1, 18 + h - S.lat[i] / maxMs * (h - 4) - 1, 2, 2));
 }
 
@@ -6792,7 +6806,8 @@ function energyOf(samples, n, t0, t1) {
 function runEnergy(now = performance.now()) {              // energie právě běžícího (nebo posledního) běhu
   const e = energyOf(S.hw, S.n, S.t0 / 1000, (S.t1 ?? now) / 1000);
   const hosted = !!(runSettings && runSettings.driver === 'model' && hostedOf(runSettings.model));
-  const net = hwIdle && Number.isFinite(e.joules) && S.n ? (e.joules - hwIdle.watts * ((S.t1 ?? now) - S.t0) / 1000) / S.n : NaN;      // J bez klidu
+  const idle = hwIdle && hwIdle.at <= S.t0 ? hwIdle : null;          // jen klid změřený před během (jak říká dlaždice); měření po běhu je s teplou GPU a platí až pro další běh
+  const net = idle && Number.isFinite(e.joules) && S.n ? (e.joules - idle.watts * ((S.t1 ?? now) - S.t0) / 1000) / S.n : NaN;      // J bez klidu
   if (runSettings && runSettings.driver === 'model' && !hosted) return { ...e, perNet: net };
   return { ...e, joules: NaN, perDecision: NaN, avgPower: NaN, perNet: NaN,       // Pravidla a Náhodně: byl by to jen klidový příkon GPU, který vypadá jako výsledek
            ...(hosted ? { maxTemp: NaN } : {}) };                    // hostovaný model: GPU tohoto počítače s během nesouvisí vůbec, ani teplota
@@ -6913,6 +6928,9 @@ function syncControls() {                                  // co jde měnit jen 
   if (+lanes.value > (SC.maxLanes ?? 8)) lanes.value = SC.maxLanes;
   $('extra').disabled = running || !SC.hasExtra;
   $('speed').disabled = running && $('mode').value === 'ladder';
+  const inject = $('inject');                              // rušivá nápověda zaškrtávátko odškrtne (níže); volba uživatele se po odchodu vrátí jako počet pruhů výše
+  if (SC.noInject) inject.dataset.free ??= inject.checked ? '1' : '';
+  else if (inject.dataset.free !== undefined) { inject.checked = !!inject.dataset.free; injectOn = inject.checked && !SC.benchOnly; delete inject.dataset.free; }
   $('mirror').disabled = $('inject').disabled = running || !!SC.benchOnly;      // veřejná sada: zrcadla ani trojský kůň nejsou
   if (SC.benchOnly) $('mirror').checked = $('inject').checked = false;
   if (SC.noInject) { $('inject').disabled = true; $('inject').checked = false; injectOn = false; }      // rušivá nápověda: pole note vedle nápovědy by tah nedalo číst (jako bench.py --hint)
