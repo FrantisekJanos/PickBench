@@ -1893,7 +1893,7 @@ const measure = (samples, cancel) => {                    // jedno měření: kl
   hwIdle = null; measureIdle();
   const started = hwIdleUntil;
   samples.forEach((w, i) => { if (cancel && i === cancel.at) cancel.set(); idleSample(g(w), i === samples.length - 1 ? started : 0); });
-  return { started: !!started, hwIdleUntil, idle: hwIdle, text: $('hwIdleText').textContent, disabled: $('hwIdle').disabled };
+  return { started: !!started, end: started, hwIdleUntil, idle: hwIdle, text: $('hwIdleText').textContent, disabled: $('hwIdle').disabled };
 };
 out.mean = measure([10, 20, 30, 40, 50, 60], null);                  // poslední vzorek přijde v čase konce měření
 out.few = measure([10, 20, 30], null);
@@ -1904,7 +1904,7 @@ out.cancelPlan = measure([10, 20, 30], { at: 1, set: () => { planRunning = true;
 syncIdle(); out.btnFree = $('hwIdle').disabled;
 process.stdout.write(JSON.stringify(out));
 """ % (piece(r"^function measureIdle\(.*?^\}$"), piece(r"^function syncIdle\(.*?^\}$"), piece(r"^function idleSample\(.*?^\}$")))
-        self.assertEqual(got["mean"]["idle"], {"watts": 35, "samples": 6})         # od 5 vzorků je to průměr
+        self.assertEqual(got["mean"]["idle"], {"watts": 35, "samples": 6, "at": got["mean"]["end"]})      # od 5 vzorků je to průměr; at = konec měření (runEnergy ho bere jen pro pozdější běh)
         self.assertEqual(got["mean"]["text"], "Klidový příkon 35.0 W (6 vzorků).")
         self.assertTrue(got["few"]["started"])
         self.assertIsNone(got["few"]["idle"])                                 # méně než 5 vzorků: žádná hodnota
@@ -1918,6 +1918,66 @@ process.stdout.write(JSON.stringify(out));
             self.assertIsNone(got[key]["idle"])
             self.assertEqual(got[key]["text"], "")
         self.assertFalse(got["btnFree"])
+
+    def test_idle_counts_only_for_a_run_that_started_after_it(self):          # dlaždice slibuje klid změřený před během: pozdější měření (teplá GPU) se poslednímu běhu neodečte
+        got = node_run("""
+let hwIdle = null, runSettings = { driver: 'model', model: 'm' }, S = { hw: [], n: 10, t0: 5000, t1: 15000 };
+const energyOf = () => ({ joules: 100, perDecision: 10, avgPower: 10, maxTemp: 60 }), hostedOf = () => null;
+%s
+const out = {};
+for (const at of [4000, 5000, 20000]) { hwIdle = { watts: 5, samples: 6, at }; out[at] = runEnergy().perNet; }
+hwIdle = null; out.none = runEnergy().perNet;
+process.stdout.write(JSON.stringify(out));
+""" % piece(r"^function runEnergy\(.*?^\}$"))
+        self.assertEqual((got["4000"], got["5000"]), (5, 5))                  # (100 J − 5 W × 10 s) ÷ 10 rozhodnutí
+        self.assertIsNone(got["20000"])                                       # změřeno po běhu: NaN (JSON null), dlaždice ukáže „—“
+        self.assertIsNone(got["none"])
+
+    def test_hardware_chart_survives_a_long_run_and_skips_a_finished_one(self):      # 1 Hz překreslení: max bez rozkladu pole do argumentů, skončený běh se znovu nekreslí
+        got = node_run("""
+let S;
+const ctx = { fillText() {}, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {} };
+let draws = 0;
+const canvas = { clientWidth: 900, height: 110, set width(v) { draws++; }, get width() { return 900; }, getContext: () => ctx }, $ = () => canvas;
+%s
+%s
+const big = 300000, out = {};
+S = { t0: 0, t1: 300000, hw: [[0, 10, 50], [1, 12, 51]], lat: Array.from({ length: big }, (_, i) => i %% 1000), when: Array.from({ length: big }, (_, i) => i / 1000) };
+try { drawHwChart(); out.big = draws; } catch (e) { out.big = e.name; }
+drawHwChart(); out.same = draws;
+LANG = 'en'; drawHwChart(); out.lang = draws; LANG = 'cs';
+canvas.clientWidth = 600; drawHwChart(); out.resized = draws;
+S = { t0: 0, t1: null, hw: [], lat: [5], when: [0.5] }; drawHwChart(1000); drawHwChart(2000); out.running = draws;
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^let hwDrawn = [^\n]*$"),piece(r"^function drawHwChart\(.*?^\}$")))
+        self.assertEqual(got["big"], 1)                                       # 300 000 rozhodnutí: Math.max(...pole) by hodil RangeError a zastavil dotazy na /gpu
+        self.assertEqual(got["same"], 1)                                      # nic se nezměnilo: nekreslí se
+        self.assertEqual(got["lang"], 2)                                      # jiný jazyk legendy
+        self.assertEqual(got["resized"], 3)                                   # jiná šířka plátna
+        self.assertEqual(got["running"], 5)                                   # běžící běh se kreslí při každém vzorku
+
+    def test_sweep_estimates_each_step_with_its_lanes_and_waits_for_failed_steps(self):     # odhad ceny ze zadání s počtem pruhů kroku; neúspěšný krok by runPlan spustil znovu
+        got = node_run("""
+let LANES = 3, KEYS = ['lane_1', 'lane_2', 'lane_3'], planRunning = false, running = false, started = 0, said = [];
+const SC = { id: 'numbers' }, SWEEP_SC = ['obstacles', 'numbers'], PLAN_MAX = 50, PLAN = { steps: [] };
+const sqSay = m => said.push(typeof m === 'function' ? m() : m), planChanged = () => {}, runPlan = () => { started++; };
+const readSettings = () => ({ driver: 'model', model: 'test:echo', lanes: 3, deadline: 0, benchn: 20, runlen: 0 }), deadlineOf = d => d, needConsent = () => false;
+const stepEstimate = (kind, s) => ({ lanes: LANES, keys: KEYS.length, asked: s.lanes });
+%s
+%s
+%s
+%s
+const out = { blocked: {} };
+for (const state of ['wait', 'abort', 'error']) { PLAN.steps = [{ state }]; said = []; sweepAdd(); out.blocked[state] = [PLAN.steps.length, said[0]]; }
+PLAN.steps = [{ state: 'done' }]; said = []; sweepAdd();
+out.est = PLAN.steps.slice(1).map(st => st.est); out.lanes = [LANES, KEYS]; out.started = started;
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^const laneKeys = [^\n]*$"), piece(r"^const planPending = [^\n]*$"),piece(r"^function withLanes\(.*?^\}$"), piece(r"^function sweepAdd\(.*?^\}$")))
+        busy = node("TEXTS")["plan.sweep.busy"]["cs"]
+        self.assertEqual(got["blocked"], {state: [1, busy] for state in ("wait", "abort", "error")})
+        self.assertEqual(got["est"], [{"lanes": k, "keys": k, "asked": k} for k in range(2, 9)])
+        self.assertEqual(got["lanes"], [3, ["lane_1", "lane_2", "lane_3"]])  # pruhy stránky zůstanou, jak byly
+        self.assertEqual(got["started"], 1)
 
 
 # ---------- znění angličtiny ----------

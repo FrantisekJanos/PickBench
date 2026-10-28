@@ -639,7 +639,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka, ge
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_lane_choice_is_restored_before_the_minimum(self):        # 2 pruhy -> zamčený scénář -> sázka (min. 3): volič ukazuje 3, ne zakázané 2
         fake = ("const sel = { value: '2', disabled: false, dataset: {}, options: [2, 3, 4, 5, 6, 7, 8].map(n => ({ value: String(n), disabled: false })) };"
-                "const $ = id => id === 'lanes' ? sel : { disabled: false, value: '', checked: false };"
+                "const $ = id => id === 'lanes' ? sel : { disabled: false, value: '', checked: false, dataset: {} };"
                 "let running = false, SC = null;")
         code = ("(() => {" + fake + page_function("syncControls") + "const out = [];"
                 "for (const s of [{ lanesFree: true }, { fixedLanes: 7 }, { lanesFree: true, minLanes: 3 }]) { SC = s; syncControls(); out.push([String(sel.value),sel.options.filter(o => o.disabled).map(o => o.value)]); }"

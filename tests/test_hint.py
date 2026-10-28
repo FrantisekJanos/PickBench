@@ -346,6 +346,25 @@ class Page(unittest.TestCase):              # scénář ve stránce; čísla, tr
         self.assertLess(sync.index("$('inject').disabled = running"), sync.index(line))         # až za společným řádkem, jinak by ho přepsal
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_trojan_horse_choice_comes_back_after_the_hint(self):     # odškrtnutí platí jen pro nápovědu: jiný scénář dostane volbu uživatele zpět (jako počet pruhů u pevných pruhů)
+        code = ("let running = false, injectOn = true, SC;"
+                "const box = () => ({ checked: false, disabled: false, value: '3', dataset: {}, options: [] }), els = {}, $ = id => els[id] ??= box();"
+                "const obstacles = { lanesFree: true }, hint = { lanesFree: true, noInject: true }, open = { benchOnly: true };"
+                + page_function("syncControls") +
+                "const see = () => [$('inject').checked, $('inject').disabled, injectOn], out = {};"
+                "$('inject').checked = true; SC = hint; syncControls(); out.hint = see(); syncControls(); out.again = see();"
+                "SC = obstacles; syncControls(); out.back = see();"
+                "$('inject').checked = false; injectOn = false; SC = hint; syncControls(); SC = obstacles; syncControls(); out.offBack = see();"
+                "$('inject').checked = true; injectOn = true; SC = hint; syncControls(); SC = open; syncControls(); out.toPublic = see();"
+                "process.stdout.write(JSON.stringify(out));")
+        got = run_page_js(code)
+        self.assertEqual(got["hint"], [False, True, False])                   # nápověda: odškrtnuto, vypnuto, injectOn = false
+        self.assertEqual(got["again"], [False, True, False])                  # druhé volání (třeba setRunning) volbu nepřepíše
+        self.assertEqual(got["back"], [True, False, True])                    # zpět u překážek: zaškrtnuto jako před nápovědou
+        self.assertEqual(got["offBack"], [False, False, False])               # nezaškrtnuté zůstane nezaškrtnuté
+        self.assertEqual(got["toPublic"], [False, True, False])               # veřejná sada odškrtne dál po svém (jako dřív)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_rows_come_in_trios_on_the_road(self):           # tři řady po sobě se stejnými čísly a všemi třemi podmínkami
         from test_parity import run_js
         line = re.search(r"\n  (nextRow\(g\) \{[^\n]*\}),\n", hint_body()).group(1)

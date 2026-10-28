@@ -23,6 +23,7 @@ import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
 from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
+from test_queue import method                                                   # víceřádková metoda objektu scénáře
 
 LANG_ENV = "PICKBENCH_LANG"
 MOVES = ("rock", "paper", "scissors")
@@ -534,6 +535,19 @@ class Page(unittest.TestCase):              # scénář ve stránce; řešitel, 
         for call in ("rollInject([d.truth], 3)", "patternState(d.moves)", "injectText(INJECT_NOTE, PATTERN_MOVES[inject])", "variantOf(patternQuestion(), v)",
                      "a.opponent_throw?.choice", "patternSummary(", "fixedLanes: 3, lanes: () => 3,", "panels: ['confPanel', 'trail', 'legend']"):
             self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_summary_runs_once_per_new_answer(self):               # quality i renderExtra čtou tentýž rozbor jako u nápovědy a Co se změnilo
+        body = pattern_body()
+        for name in ("quality", "renderExtra"):
+            self.assertIn("this.summary(g)", method(body, name))
+            self.assertNotIn("patternSummary(", method(body, name))
+        code = ("let calls = 0; const patternSummary = (c, ch) => { calls++; return { errors: { counter_given: c.length } }; };"
+                "const o = {" + method(body, "summary") + "};"
+                "const g = { cases: [1, 2], choices: ['rock', 'paper'] }, a = o.summary(g), b = o.summary(g);"
+                "g.cases.push(3); g.choices.push(null); const c = o.summary(g);"
+                "process.stdout.write(JSON.stringify({ calls, same: a === b, n: c.n, k: c.errors.counter_given }));")
+        self.assertEqual(run_page_js(code), {"calls": 2, "same": True, "n": 3, "k": 3})
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
