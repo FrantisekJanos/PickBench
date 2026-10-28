@@ -965,7 +965,15 @@ class PageTexts(unittest.TestCase):
                              .replace("{p50_first}", "{p50First}").replace("{p50_last}", "{p50Last}"), code)
             self.assertIn("2–8", page_text("ui.sweep"), code)
 
-    def test_command_line_says_the_same_words_as_the_page(self):              # bench.py tiskne tytéž věci jako stránka: stejné slovo, v záhlaví nejvýš zkrácené
+    def test_length_line_matches_bench(self):                              # řádek pod tabulkou e-mailů a veřejné sady jako bench.py --by-length
+        for code in ("cs", "en"):
+            names = {"short": "shortOk", "medium": "mediumOk", "long": "longOk"}
+            want = i18n.TEXTS["bench.byLength"][code]
+            for cls, var in names.items():
+                want = want.replace(f"{{{cls}_ok}}", f"{{{var}}}").replace(f"{{{cls}_n}}", f"{{{cls}N}}")
+            self.assertEqual(self.texts["length.line"][code], want, code)
+
+    def test_command_line_says_the_same_words_as_the_page(self):             # bench.py tiskne tytéž věci jako stránka: stejné slovo, v záhlaví nejvýš zkrácené
         columns = {"avg": "col.avg", "p50": "col.p50", "p95": "col.p95", "min": "col.min", "max": "col.max", "rate": "col.rate", "acc": "col.acc",
                    "conf": "tile.conf.label", "ece": "col.ece", "stab": "col.stab", "goodput": "col.goodput", "tokens": "last.tokens"}
         for code in ("cs", "en"):

@@ -579,7 +579,7 @@ const TEXTS = {
   'card.fooled': { cs: ' — podlehl pokynu', en: ' — fooled by the instruction' },
   'scenario.emails.about': { cs: 'E-maily: každá řada na silnici patří jednomu e-mailu z fronty vedle silnice. Model dostane jen předmět a text e-mailu a vybere kategorii; barvy nevidí. Auto pak zajede do pruhu, kde je v té řadě bod v barvě zvolené kategorie. Barva karty ve frontě je správná kategorie: když auto projede bodem stejné barvy, je to správně (zelený kroužek), jinou barvou špatně (červené bliknutí). Nestihl = odpověď nepřišla dřív, než řada dojela k autu.', en: 'E-mails: every row on the road belongs to one e-mail from the list of cards next to the road. The model gets only the subject and the text of the e-mail and picks a category; it does not see the colors. The car then moves into the lane where that row has a dot in the color of the chosen category. The color of the card in the list is the correct category: when the car passes through a dot of the same color, it is correct (green ring); through a dot of a different color, it is wrong (red flash). Missed = the answer did not arrive before the row reached the car.' },
   'scenario.emails.extraTitle': { cs: 'Záměny kategorií', en: 'Category confusions' },
-  'scenario.emails.extraTip': { cs: 'Řádek je správná kategorie e-mailu, sloupec kategorie, kterou zvolil model; sloupec „?“ je odpověď mimo sadu. Čísla mimo úhlopříčku (červeně) jsou záměny. Počítají se všechny odpovědi modelu, i ty, které přišly pozdě.', en: 'A row is the correct category of the e-mail, a column is the category the model chose; the "?" column is an answer outside the dataset. The numbers off the diagonal (in red) are confusions. All of the model\'s answers count, including those that arrived late.' },
+  'scenario.emails.extraTip': { cs: 'Řádek je správná kategorie e-mailu, sloupec kategorie, kterou zvolil model; sloupec „?“ je odpověď mimo sadu. Čísla mimo úhlopříčku (červeně) jsou záměny. Počítají se všechny odpovědi modelu, i ty, které přišly pozdě. Poslední řádek: přesnost podle délky textu ve slovech; texty celé sady se rozdělí na třetiny podle délky, jako bench.py --by-length.', en: 'A row is the correct category of the e-mail, a column is the category the model chose; the "?" column is an answer outside the dataset. The numbers off the diagonal (in red) are confusions. All of the model\'s answers count, including those that arrived late. The last row: the accuracy by text length in words; the texts of the whole dataset are split into thirds by length, as in bench.py --by-length.' },
   'scenario.emails.confHead': { cs: 'správně ↓  zvoleno →', en: 'correct ↓  chosen →' },
   'scenario.emails.tile.match': { cs: 'shoda barev', en: 'color match' },
   'scenario.emails.tip.match': { cs: 'Kolika řadami auto projelo bodem správné barvy, ze všech projetých řad. Zahrnuje kvalitu i rychlost: řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows where the car passed through the dot of the correct color, out of all rows passed. It includes both quality and speed: a row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
@@ -940,7 +940,7 @@ const TEXTS = {
   'scenario.public.aboutOwn': { cs: 'Veřejná sada (každá úloha má vlastní nabídku štítků): model dostane text úlohy a vybere jeden štítek z nabídky. Běží jen jako benchmark bez hry — tlačítko Start je vypnuté, auto nejede. {rest}', en: 'Public dataset (every task has its own list of labels): the model gets the text of the task and picks one label from the list. It runs only as a benchmark without the game — the Start button is disabled and the car does not move. {rest}' },
   'scenario.public.task': { cs: 'úloha: {text}', en: 'task: {text}' },
   'scenario.public.extraTitle': { cs: 'Třídy od nejhorší a nejčastější záměny', en: 'Classes, worst first, and the most frequent confusions' },
-  'scenario.public.extraTip': { cs: 'Každý řádek je jedna třída (štítek), která má v běhu aspoň jednu úlohu, seřazeno od nejnižšího F1. Precision = z odpovědí tímto štítkem kolik bylo správně; recall = z úloh této třídy kolik model poznal; F1 je jejich harmonický průměr. Pod třídami jsou nejčastější záměny: správný štítek → zvolený. U vzorku připadá na třídu jen pár úloh, takže jednotlivé řádky jsou hrubé. Za běhu se tabulka obnovuje po deseti rozhodnutích.', en: 'Every row is one class (label) that has at least one task in the run, sorted by F1, lowest first. Precision = the share of answers with this label that were correct; recall = the share of this class\'s tasks that the model recognized; F1 is their harmonic mean. Below the classes are the most frequent confusions: correct label → chosen label. In a sample there are only a few tasks per class, so the individual rows are rough. During a run the table refreshes every ten decisions.' },
+  'scenario.public.extraTip': { cs: 'Každý řádek je jedna třída (štítek), která má v běhu aspoň jednu úlohu, seřazeno od nejnižšího F1. Precision = z odpovědí tímto štítkem kolik bylo správně; recall = z úloh této třídy kolik model poznal; F1 je jejich harmonický průměr. Pod třídami jsou nejčastější záměny: správný štítek → zvolený. U vzorku připadá na třídu jen pár úloh, takže jednotlivé řádky jsou hrubé. Za běhu se tabulka obnovuje po deseti rozhodnutích. Poslední řádek: přesnost podle délky textu ve slovech; texty celé sady se rozdělí na třetiny podle délky, jako bench.py --by-length.', en: 'Every row is one class (label) that has at least one task in the run, sorted by F1, lowest first. Precision = the share of answers with this label that were correct; recall = the share of this class\'s tasks that the model recognized; F1 is their harmonic mean. Below the classes are the most frequent confusions: correct label → chosen label. In a sample there are only a few tasks per class, so the individual rows are rough. During a run the table refreshes every ten decisions. The last row: the accuracy by text length in words; the texts of the whole dataset are split into thirds by length, as in bench.py --by-length.' },
   'scenario.public.col.class': { cs: 'třída (od nejhorší)', en: 'class (worst first)' },
   'scenario.public.col.n': { cs: 'úloh', en: 'tasks' },
   'scenario.public.col.confusions': { cs: 'nejčastější záměny: správně → zvoleno', en: 'most frequent confusions: correct → chosen' },
@@ -966,6 +966,8 @@ const TEXTS = {
   'tile.clean.label': { cs: 'přesnost na úlohách bez pokynu', en: 'accuracy on tasks without the instruction' },
   'cal.head': { cs: 'ECE {ece}  ·  {n} odpovědí s jistotou  ·  nad osou kolikrát správně, pod osou kolikrát špatně (šlo zvolit líp)', en: 'ECE {ece}  ·  {n} {n|answer|answers} with a confidence  ·  above the axis: correct answers, below the axis: wrong answers (the model could have chosen better)' },
   'cal.none': { cs: 'zatím žádná odpověď s jistotou (řidiči Pravidla a Náhodně ji nevrací)', en: 'no answer with a confidence yet (the Rules and Random drivers do not return one)' },
+  'length.line': { cs: 'přesnost podle délky textu: krátké {short} slov {shortOk}/{shortN}, střední {medium} slov {mediumOk}/{mediumN}, dlouhé {long} slov {longOk}/{longN}',
+                   en: 'accuracy by text length: short {short} words {shortOk}/{shortN}, medium {medium} words {mediumOk}/{mediumN}, long {long} words {longOk}/{longN}' },
   'cal.axis': { cs: 'jistota modelu →', en: 'model confidence →' },
   'cal.brier': { cs: 'Brierovo skóre {brier}', en: 'Brier score {brier}' },
   'cal.cover': { cs: 'Práh {threshold}: model by rozhodl {covered} z {n} úloh ({coverage}), z nich správně {acc}; ostatní předat člověku nebo pravidlům: {handed}.',
@@ -1625,7 +1627,7 @@ const emails = {
   lanes: () => DS.categories.length,
   newGame() {
     queueKey = null;
-    return { ...this.baseGame(), order: [], matrix: DS.categories.map(() => Array(DS.categories.length + 1).fill(0)) };
+    return { ...this.baseGame(), order: [], matrix: DS.categories.map(() => Array(DS.categories.length + 1).fill(0)), byLength: emptyLength(), len: lengthTally(DS.emails, e => words(e.subject) + words(e.body)) };
   },
   nextEmail(g) { if (!g.order.length) g.order = shuffled(DS.emails.length); return DS.emails[g.order.pop()]; },
   task(e, row = null, inject = row ? row.inject : rollInject([DS.index[e.category]])) {      // úloha bez pokynu má stav beze změny
@@ -1644,7 +1646,7 @@ const emails = {
   parse: a => ({ move: DS.index[a.category?.choice] ?? -1, conf: a.category?.confidence, probs: a.category?.probabilities }),
   randomMove: () => Math.floor(Math.random() * DS.categories.length),
   labelsOf: (task, move) => [DS.categories[task.truth].key, move >= 0 ? DS.categories[move].key : null],
-  tally(g, task, move) { super.tally(g, task, move); g.matrix[task.truth][move >= 0 ? move : DS.categories.length]++; },
+  tally(g, task, move) { super.tally(g, task, move); g.matrix[task.truth][move >= 0 ? move : DS.categories.length]++; const b = g.byLength[g.len.of.get(task.email)]; b[0] += move === task.truth; b[1]++; },
   drawItems(g) {
     const rad = Math.min(LW, CELL) * 0.36;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 ${Math.round(rad)}px "Segoe UI", sans-serif`;
@@ -1676,7 +1678,7 @@ const emails = {
       const tr = el('tr');
       tr.append(th(labelOf(c), c.color), ...g.matrix[i].map((n, j) => { const td = el('td', '', n || '·'); if (n && i !== j) td.style.color = 'var(--bad)'; return td; }));
       return tr;
-    }));
+    }), lengthRow(g, cats.length + 2));
   },
 };
 
@@ -3510,8 +3512,8 @@ const publicSet = {
   oos: () => PS.oos,
   labelsOf: (task, move) => [task.item.label, move >= 0 ? task.keys[move] : null],
   lanes: () => 3,
-  newGame: () => ({ lane: 1, visLane: 1, dist: 0, sinceSpawn: 0, flash: 0, order: [] }),
-  move() {}, spawnRow() {}, onStep() {}, apply() {}, tally() {},
+  newGame: () => ({ lane: 1, visLane: 1, dist: 0, sinceSpawn: 0, flash: 0, order: [], byLength: emptyLength(), len: lengthTally(PS.items, it => words(it.text)) }),
+  move() {}, spawnRow() {}, onStep() {}, apply() {}, tally(g, task, move) { const b = g.byLength[g.len.of.get(task.item)]; b[0] += move === task.truth; b[1]++; },
   nextTask: () => null,
   nextItem(g) { if (!g.order.length) g.order = shuffled(PS.items.length); return PS.items[g.order.pop()]; },
   task(it) {
@@ -3553,6 +3555,7 @@ const publicSet = {
       if (s.cm.confusions.length) rows.push(row([t('scenario.public.col.confusions'), t('scenario.public.col.count'), '', '', ''], true));
       for (const [truth, pred, k] of s.cm.confusions.slice(0, 10)) rows.push(row([`${truth} → ${pred ?? t('answer.invalid')}`, k, '', '', '']));
     }
+    rows.push(lengthRow(g, 5));
     $('conf').replaceChildren(...rows);
   },
   result: () => ({ errors: '—', late: '—' }),
@@ -5300,6 +5303,20 @@ function calib(cal) {                                      // 10 pásem jistoty;
   for (const [c, hit] of cal) { const b = bins[Math.min(9, Math.max(0, Math.floor(c * 10)))]; b.n++; b.conf += c; b.ok += hit; }
   return { bins, ece: cal.length ? bins.reduce((s, b) => s + Math.abs(b.ok - b.conf), 0) / cal.length : NaN };
 }
+
+// Přesnost podle délky textu (bench.py --by-length): třídy z celé sady, ne z vylosovaných úloh; počty v g.byLength.
+const words = text => (text.match(/\S+/g) || []).length;
+function lengthTally(list, wordsOf) {                      // { of: Map(položka → třída), ranges }, počítá se při startu hry
+  const lc = lengthClasses(list.map(wordsOf));
+  return { of: new Map(list.map((it, i) => [it, lc.classes[i]])), ranges: lc.ranges };
+}
+function lengthRow(g, cols) {                              // řádek tabulky panelu přes všechny sloupce
+  const span = cls => g.len.ranges[cls] ? `${g.len.ranges[cls][0]}–${g.len.ranges[cls][1]}` : '—', b = g.byLength;
+  const tr = el('tr'), cell = el('td', '', t('length.line', { short: span('short'), shortOk: b.short[0], shortN: b.short[1],
+    medium: span('medium'), mediumOk: b.medium[0], mediumN: b.medium[1], long: span('long'), longOk: b.long[0], longN: b.long[1] }));
+  cell.colSpan = cols; tr.append(cell); return tr;
+}
+const emptyLength = () => ({ short: [0, 0], medium: [0, 0], long: [0, 0] });
 
 function summary() {
   const secs = runSecs(S.t1 ?? performance.now());
