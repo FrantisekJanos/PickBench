@@ -197,6 +197,8 @@
     <div class="panel">
       <h2 data-i18n="ui.hardware"></h2>
       <div class="grid" id="hw"></div>
+      <canvas id="hwChart" width="900" height="110" style="margin-top:8px"></canvas>
+      <div class="controls" style="margin-top:6px"><button id="hwIdle" data-i18n="ui.hwIdle"></button> <small id="hwIdleText"></small></div>
       <div id="hwWarn"></div>
       <small id="hwNote" data-i18n="ui.hwNote"></small>
     </div>
@@ -307,7 +309,14 @@ const TEXTS = {
   'ui.chartCap': { cs: 'Graf latence', en: 'Latency chart' },
   // statické HTML, panely Hardware, Kvalita, Kalibrace jistoty a Výsledky měření
   'ui.hardware': { cs: 'Hardware', en: 'Hardware' },
-  'ui.hwNote': { cs: 'Příkon je jen GPU podle nvidia-smi (ne celý notebook) a klidový příkon se neodečítá. Energie se počítá jen u řidiče Model a u běhů s aspoň 5 vzorky (přibližně jeden za sekundu).', en: 'Power draw covers only the GPU, as reported by nvidia-smi (not the whole laptop), and the page does not subtract idle power draw. It computes energy only for the Model driver and for runs with at least 5 samples (about one per second).' },
+  'ui.hwIdle': { cs: 'Změřit klid (10 s)', en: 'Measure idle (10 s)' },
+  'tip.hwIdle': { cs: 'Deset sekund bez dotazů čte stav GPU a klidový příkon vezme jako průměr (aspoň 5 vzorků). Dlaždice „J na rozhodnutí bez klidu“ ho pak odečte: (energie běhu − klidový příkon × délka běhu) ÷ počet rozhodnutí. Jako hwbench.py soak --idle. Platí do obnovení stránky; spuštění běhu měření zruší.',
+                  en: 'For ten seconds without requests the page reads the GPU state and takes the idle power draw as the mean (at least 5 samples). The "J per decision without idle" tile then subtracts it: (run energy − idle power draw × run duration) ÷ number of decisions. Like hwbench.py soak --idle. It holds until the page reloads; starting a run cancels the measurement.' },
+  'hw.idle.measuring': { cs: 'Měřím klidový příkon, {s} s bez dotazů…', en: 'Measuring the idle power draw, {s} s without requests…' },
+  'hw.idle.done': { cs: 'Klidový příkon {w} W ({k} vzorků).', en: 'Idle power draw {w} W ({k} {k|sample|samples}).' },
+  'hw.idle.few': { cs: 'Klid se nepodařilo změřit: méně než {min} vzorků.', en: 'The idle power draw could not be measured: fewer than {min} samples.' },
+  'hw.chart.legend': { cs: 'průběh běhu: oranžově příkon W, červeně teplota °C, body latence ms', en: 'course of the run: orange power draw W, red temperature °C, dots latency ms' },
+  'ui.hwNote': { cs: 'Příkon je jen GPU podle nvidia-smi (ne celý notebook) a klidový příkon se neodečítá. Energie se počítá jen u řidiče Model a u běhů s aspoň 5 vzorky (přibližně jeden za sekundu). Dlaždice „J na rozhodnutí bez klidu“ klidový příkon odečítá, když je změřený tlačítkem „Změřit klid (10 s)“.', en: 'Power draw covers only the GPU, as reported by nvidia-smi (not the whole laptop), and the page does not subtract idle power draw. It computes energy only for the Model driver and for runs with at least 5 samples (about one per second). The "J per decision without idle" tile subtracts it once the "Measure idle (10 s)" button has measured it.' },
   'ui.quality': { cs: 'Kvalita', en: 'Quality' },
   'ui.calTitle': { cs: 'Kalibrace jistoty', en: 'Confidence calibration' },
   'ui.calThreshold': { cs: 'Práh jistoty', en: 'Confidence threshold' },
@@ -1068,6 +1077,9 @@ const TEXTS = {
   'tile.hwPstate.label': { cs: 'stav (pstate)', en: 'performance state (pstate)' },
   'tile.hwMem.label': { cs: 'paměť GPU', en: 'GPU memory' },
   'tile.hwJoule.label': { cs: 'J na rozhodnutí (běh celkem {wh} Wh)', en: 'J per decision (run total {wh} Wh)' },
+  'tile.hwJouleNet.label': { cs: 'J na rozhodnutí bez klidu', en: 'J per decision without idle' },
+  'tile.hwJouleNet': { cs: 'Energie GPU na rozhodnutí bez klidového příkonu: (energie za celý běh − klidový příkon × délka běhu) ÷ počet rozhodnutí. Klid změří tlačítko „Změřit klid (10 s)“; bez něj „—“. Klid je změřený před během, ne během něj.',
+                       en: 'GPU energy per decision without the idle power draw: (energy for the whole run − idle power draw × run duration) ÷ number of decisions. The "Measure idle (10 s)" button measures the idle power draw; without it "—". The idle power draw is measured before the run, not during it.' },
   'tile.hwAvgPower.label': { cs: 'průměrný příkon za běh', en: 'mean power draw over the run' },
   'tile.hwMaxTemp.label': { cs: 'nejvyšší teplota za běh', en: 'highest temperature over the run' },
   'hw.none': { cs: 'GPU není k dispozici', en: 'No GPU is available' },
@@ -5117,7 +5129,7 @@ function lengthClasses(lengths) {
 // popisky dlaždic, které nepatří jednomu scénáři (jistota, zrcadla, trojský kůň, hardware), jsou v TEXTS pod klíčem tile.<jméno>.
 const TIPS = ['mAvg', 'mP50', 'mP95', 'mMin', 'mMax', 'mRate', 'mOll', 'mUsd', 'mNet', 'mSpend', 'mN', 'chartCap', 'calTitle', 'calT', 'sweep', 'scenario', 'lanes', 'driver', 'model', 'mode',
   'speed', 'runlen', 'seed', 'extra', 'mirror', 'inject', 'benchn', 'deadline', 'bench', 'start', 'stop', 'csv', 'clear', 'planTitle', 'sqKind', 'sqAdd', 'pauseS', 'pauseTemp',
-  'pauseCap', 'sqReset', 'sqClear', 'sqRun', 'sqStop', 'lastBatch'];
+  'pauseCap', 'sqReset', 'sqClear', 'sqRun', 'sqStop', 'lastBatch', 'hwIdle'];
 let tipFor = null;                                         // prvek, u kterého je bublina právě zobrazená
 
 function setTip(elm, text) {                               // nastaví (nebo zruší) popisek prvku
@@ -5269,11 +5281,12 @@ function newStats() {
            pairs: [],                                      // [správný štítek, odpověď nebo null] u scénářů s třídami (e-maily, veřejná sada)
            timed: [],                                      // [správně?, ms] pro goodput benchmarku
            hw: [],                                         // vzorky GPU za běh: [čas s, příkon W, teplota °C]
+           when: [],                                       // čas každého rozhodnutí v s (stejné hodiny jako S.hw), pro graf panelu Hardware
            mir: { n: 0, agree: 0, ok: [0, 0, 0] },         // zrcadla: shoda tří variant a přesnost každé z nich
            inj: { n: 0, ok: 0, fooled: 0, cleanN: 0, cleanOk: 0 } };   // trojský kůň: úlohy s pokynem (odolal / podlehl) a bez něj
 }
 function record(res, task) {
-  S.n++; S.lat.push(res.ms);
+  S.n++; S.lat.push(res.ms); S.when.push(performance.now() / 1000);
   if (res.ollamaMs != null) S.oll.push(res.ollamaMs);
   if (Number.isFinite(res.usd)) S.usd.push(res.usd);
   S.retries += res.retries || 0;
@@ -5983,7 +5996,8 @@ function stopPlan() {                                      // ukončí běžíc�
   if (running) stop();
 }
 
-$('sqRun').onclick = runPlan; $('sqStop').onclick = stopPlan; $('sweep').onclick = sweepAdd;
+$('hwIdle').onclick = measureIdle;
+$('sqRun').onclick = runPlan;$('sqStop').onclick = stopPlan; $('sweep').onclick = sweepAdd;
 $('calT').oninput = () => drawCal();                       // práh mění jen výpočet pod grafem, ne běh
 $('lastBatch').onchange = renderResults;
 document.addEventListener('visibilitychange', () => {       // Wake Lock se při skrytí záložky ruší; po návratu si ho fronta vezme znovu
@@ -6000,6 +6014,40 @@ let hwBusy = false, hwTimer = null;
 let hwLoad = false;                                        // běží měřená část běhu s řidičem Model
 let hwLow = null;                                          // čas (ms), od kdy je takt pod zátěží pod prahem
 let hwThrottled = false;                                   // v tomto (nebo posledním) běhu byla GPU přiškrcená; varování zůstává do začátku dalšího běhu
+const HW_IDLE_S = 10;                                      // změření klidu: s bez dotazů
+let hwIdle = null;                                         // { watts, samples } klidového příkonu; platí do obnovení stránky
+let hwIdleUntil = 0, hwIdleSamples = [];                   // probíhající měření klidu (čas konce v ms) a jeho vzorky příkonu
+function measureIdle() {
+  if (running || hwOff || hwIdleUntil) return;
+  hwIdleUntil = performance.now() + HW_IDLE_S * 1000; hwIdleSamples = [];
+  $('hwIdleText').textContent = t('hw.idle.measuring', { s: HW_IDLE_S }); syncIdle();
+}
+function syncIdle() { $('hwIdle').disabled = running || hwOff || !!hwIdleUntil; }
+function idleSample(g, now) {                              // ze vzorku /gpu; běh měření ruší (vzorky pod zátěží nejsou klid)
+  if (!hwIdleUntil) return;
+  if (running) { hwIdleUntil = 0; $('hwIdleText').textContent = ''; syncIdle(); return; }
+  if (g && g.available && Number.isFinite(g.power_w)) hwIdleSamples.push(g.power_w);
+  if (now < hwIdleUntil) return;
+  hwIdleUntil = 0;
+  hwIdle = hwIdleSamples.length >= HW_MIN_SAMPLES ? { watts: hwIdleSamples.reduce((a, b) => a + b, 0) / hwIdleSamples.length, samples: hwIdleSamples.length } : null;
+  $('hwIdleText').textContent = hwIdle ? t('hw.idle.done', { w: f(hwIdle.watts, 1), k: hwIdle.samples }) : t('hw.idle.few', { min: HW_MIN_SAMPLES });
+  syncIdle(); renderHw(now);
+}
+function drawHwChart(now = performance.now()) {            // průběh posledního běhu: příkon a teplota ze vzorků, latence jako body
+  const c = $('hwChart'), x = c.getContext('2d'); c.width = c.clientWidth || 900;
+  const t0 = S.t0 / 1000, t1 = (S.t1 ?? now) / 1000, span = Math.max(1, t1 - t0), w = c.width, h = c.height - 18;
+  x.font = '11px "Segoe UI", sans-serif'; x.fillStyle = '#8b9aa8'; x.fillText(t('hw.chart.legend'), 4, 12);
+  const line = (pts, color) => {
+    const vals = pts.map(p => p[1]).filter(Number.isFinite); if (vals.length < 2) return;
+    const lo = Math.min(...vals), hi = Math.max(...vals, lo + 1);
+    x.strokeStyle = color; x.beginPath();
+    pts.filter(p => Number.isFinite(p[1])).forEach(([tt, v], i) => { const px = (tt - t0) / span * w, py = 18 + h - (v - lo) / (hi - lo) * (h - 4); i ? x.lineTo(px, py) : x.moveTo(px, py); });
+    x.stroke();
+  };
+  line(S.hw.map(s => [s[0], s[1]]), '#e69f00'); line(S.hw.map(s => [s[0], s[2]]), '#f85149');
+  const maxMs = Math.max(1, ...S.lat); x.fillStyle = '#4cc2ff';
+  S.when.forEach((tt, i) => x.fillRect((tt - t0) / span * w - 1, 18 + h - S.lat[i] / maxMs * (h - 4) - 1, 2, 2));
+}
 
 // vzorky [čas s, příkon W, teplota °C], n = počet rozhodnutí, t0 a t1 = začátek a konec běhu v s (stejné hodiny jako vzorky)
 function energyOf(samples, n, t0, t1) {
@@ -6020,8 +6068,9 @@ function energyOf(samples, n, t0, t1) {
 function runEnergy(now = performance.now()) {              // energie právě běžícího (nebo posledního) běhu
   const e = energyOf(S.hw, S.n, S.t0 / 1000, (S.t1 ?? now) / 1000);
   const hosted = !!(runSettings && runSettings.driver === 'model' && hostedOf(runSettings.model));
-  if (runSettings && runSettings.driver === 'model' && !hosted) return e;
-  return { ...e, joules: NaN, perDecision: NaN, avgPower: NaN,       // Pravidla a Náhodně: byl by to jen klidový příkon GPU, který vypadá jako výsledek
+  const net = hwIdle && Number.isFinite(e.joules) && S.n ? (e.joules - hwIdle.watts * ((S.t1 ?? now) - S.t0) / 1000) / S.n : NaN;      // J bez klidu
+  if (runSettings && runSettings.driver === 'model' && !hosted) return { ...e, perNet: net };
+  return { ...e, joules: NaN, perDecision: NaN, avgPower: NaN, perNet: NaN,       // Pravidla a Náhodně: byl by to jen klidový příkon GPU, který vypadá jako výsledek
            ...(hosted ? { maxTemp: NaN } : {}) };                    // hostovaný model: GPU tohoto počítače s během nesouvisí vůbec, ani teplota
 }
 
@@ -6035,9 +6084,11 @@ function renderHw(now = performance.now()) {               // texty se berou př
     [unit(g.clock_mhz, 'MHz'), t('tile.hwClock.label'), t('tile.hwClock')], [typeof g.pstate === 'string' ? g.pstate : '—', t('tile.hwPstate.label'), t('tile.hwPstate')],
     [unit(g.mem_mb, 'MB'), t('tile.hwMem.label'), t('tile.hwMem')],
     [f(e.perDecision, e.perDecision < 10 ? 2 : 1), t('tile.hwJoule.label', { wh: f(e.joules / 3600, 3) }), t('tile.hwJoule')],
+    [f(e.perNet, e.perNet < 10 ? 2 : 1), t('tile.hwJouleNet.label'), t('tile.hwJouleNet')],
     [unit(e.avgPower, 'W', 1), t('tile.hwAvgPower.label'), t('tile.hwAvgPower')], [unit(e.maxTemp, '°C'), t('tile.hwMaxTemp.label'), t('tile.hwMaxTemp')],
   ]);
   $('hwWarn').textContent = hwThrottled ? t('hw.throttled') : '';
+  drawHwChart(now); syncIdle();
 }
 
 function gpuSample(g, now = performance.now()) {           // zpracuje jednu odpověď /gpu (zvlášť, aby šlo ověřit i bez GPU)
@@ -6050,6 +6101,7 @@ function gpuSample(g, now = performance.now()) {           // zpracuje jednu odp
     hwLow = low ? hwLow ?? now : null;
     if (hwLow !== null && now - hwLow > THROTTLE_MS) hwThrottled = true;         // běh je poznamenaný celý, i když se takt potom vrátí
   } else if (!hwSeen && ++hwMisses >= HW_GIVE_UP) hwOff = true;      // jedno selhání může být jen pomalé probuzení karty
+  idleSample(g, now);
   renderHw(now);
 }
 

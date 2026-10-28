@@ -1011,6 +1011,7 @@ class PageTexts(unittest.TestCase):
             self.assertIn(left + tool("hw.didNotFit") + right, tool("hw.note.truncation"), code)            # věta cituje buňku tabulky
             self.assertIn(" " + tool("hw.col.inputTokens"), tool("hw.note.truncation"), code)               # a jmenuje sloupec
             summary = tool("hw.soak.summary")
+            self.assertIn(", " + page_text("tile.hwJouleNet.label") + " {net}", tool("hw.soak.idle"), code)      # J na rozhodnutí bez klidu
             self.assertIn(", " + page_text("tile.hwJoule.label").split(" (")[0] + " {j}", summary, code)    # J na rozhodnutí
             self.assertIn(", " + " ".join(page_text("tile.hwMaxTemp.label").split()[:2]) + " {temp} °C", summary, code)      # nejvyšší teplota
             self.assertTrue(page_text("tile.goodput.labelGame").endswith(" " + tool("hw.col.onTime")), code)                 # včas
@@ -1771,7 +1772,7 @@ let hosted = null, running = false, runHosted = null, hwOff = false, hwThrottled
 const els = {}, $ = id => els[id] ??= { textContent: '', replaceChildren(...kids) { this.kids = kids; this.tiles = null; } };
 const el = (tag, cls, text) => ({ text });
 const hostedNow = () => hosted;
-const runEnergy = () => ({ perDecision: 1.234, joules: 43.2, avgPower: 20, maxTemp: 61 });
+const runEnergy = () => ({ perDecision: 1.234, joules: 43.2, avgPower: 20, maxTemp: 61, perNet: 0.8 }), drawHwChart = () => {}, syncIdle = () => {};
 const renderTiles = (box, tiles) => { box.tiles = tiles; box.kids = null; };
 %s
 const read = () => ['cs', 'en', 'cs'].map(code => {       // přepnutí jazyka: renderLang → drawStats → renderHw
@@ -1786,9 +1787,9 @@ hwOff = false; hosted = { who: 'x' }; out.hosted = read();
 process.stdout.write(JSON.stringify(out));
 """ % piece(r"^function renderHw\(.*?^\}$"))
         texts = node("TEXTS")
-        names = ("hwTemp", "hwPower", "hwClock", "hwPstate", "hwMem", "hwJoule", "hwAvgPower", "hwMaxTemp")
+        names = ("hwTemp", "hwPower", "hwClock", "hwPstate", "hwMem", "hwJoule", "hwJouleNet", "hwAvgPower", "hwMaxTemp")
         cs, en, back = got["tiles"]
-        self.assertEqual(cs["labels"], ["teplota GPU", "příkon GPU", "takt GPU", "stav (pstate)", "paměť GPU", "J na rozhodnutí (běh celkem 0.012 Wh)",
+        self.assertEqual(cs["labels"], ["teplota GPU", "příkon GPU", "takt GPU", "stav (pstate)", "paměť GPU", "J na rozhodnutí (běh celkem 0.012 Wh)", "J na rozhodnutí bez klidu",
                                         "průměrný příkon za běh", "nejvyšší teplota za běh"])
         self.assertEqual(cs["warn"], "GPU je přiškrcená (USB-C napájení?) — měření neodpovídá plnému výkonu")
         self.assertEqual(back, cs)
