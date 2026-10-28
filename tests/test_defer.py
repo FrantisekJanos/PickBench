@@ -84,6 +84,16 @@ class Line(unittest.TestCase):
                                             "hand over to a person or the rules 2; Brier 0.270")
         self.assertEqual(len(printed("cs", bench.print_row, r, "")), len(cs) - 1)        # bez prahu řádek není
 
+    def test_threshold_that_is_not_a_whole_percent_keeps_one_decimal(self):
+        r = numbers_run([0.9, 0.8, 0.6, None])
+        for lang, word in (("cs", "práh jistoty"), ("en", "confidence threshold")):
+            with self.subTest(lang=lang):
+                self.assertTrue(printed(lang, bench.print_row, r, "", 0.825)[-1].strip().startswith(word + " 82.5%: "))
+                self.assertTrue(printed(lang, bench.print_row, r, "", 0.005)[-1].strip().startswith(word + " 0.5%: "))
+                self.assertTrue(printed(lang, bench.print_row, r, "", 0.8)[-1].strip().startswith(word + " 80%: "))
+                self.assertTrue(printed(lang, bench.print_row, r, "", 0.07)[-1].strip().startswith(word + " 7%: "))
+                self.assertTrue(printed(lang, bench.print_row, r, "", 1.0)[-1].strip().startswith(word + " 100%: "))
+
     def test_task_without_confidence_is_handed_over(self):
         r = numbers_run([None, None, None, None])
         self.assertEqual(printed("cs", bench.print_row, r, "", 0.5)[-1],

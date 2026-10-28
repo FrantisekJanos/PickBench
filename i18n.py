@@ -345,7 +345,6 @@ TEXTS = {
     "bench.err.allRefused": {"cs": "server odmítl všechny dotazy (HTTP 400)", "en": "the server refused all requests (HTTP 400)"},
     "bench.err.defer": {"cs": "--defer chce práh jistoty větší než 0 a nejvýš 1, třeba 0.8.",
                         "en": "--defer needs a confidence threshold above 0 and at most 1, such as 0.8."},
-    # --defer: řádek pod modelem; procenta přicházejí hotová, {covered}/{n} úloh nad prahem, {handed} pod prahem, {brier} = „0.142“ nebo „—“.
     "bench.err.sweepScenario": {"cs": "Volba --sweep-lanes jde jen s překážkami (bez volby scénáře) nebo s --numbers.",
                                 "en": "The --sweep-lanes option works only with obstacles (no scenario option) or with --numbers."},
     "bench.err.sweepCombo": {"cs": "Volba --sweep-lanes se nekombinuje s --lanes, --mirror, --inject, --deadline-ms ani --defer.",
@@ -365,6 +364,7 @@ TEXTS = {
     "bench.col.gates": {"cs": "bran", "en": "gates"},
     "bench.sweep.trend": {"cs": "od {first} do {last}: správně {acc_first} → {acc_last}, medián {p50_first} → {p50_last} ms",
                           "en": "from {first} to {last}: correct {acc_first} → {acc_last}, median {p50_first} → {p50_last} ms"},
+    # --defer: řádek pod modelem; procenta přicházejí hotová, {covered}/{n} úloh nad prahem, {handed} pod prahem, {brier} = „0.142“ nebo „—“.
     "bench.defer": {"cs": "práh jistoty {threshold}: pokrytí {coverage} ({covered}/{n}), přesnost nad prahem {acc}, "
                           "předat člověku nebo pravidlům {handed}; Brier {brier}",
                     "en": "confidence threshold {threshold}: coverage {coverage} ({covered}/{n}), accuracy above the threshold {acc}, "

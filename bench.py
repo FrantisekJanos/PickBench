@@ -3453,7 +3453,7 @@ def refusal_reason(e, limit=300):
     return (text if len(text) <= limit else text[:limit - 1] + "…") or None
 
 
-def run_public(model, ds, cases, deadline=None):
+def run_public(model, ds, cases, deadline=None, by_length=False):
     """Veřejná sada. Odmítne-li server už zahřívací dotaz stavem 400, sada se pro model neměří: {"fit": False}
     s doslovným důvodem od serveru v "reason" (None, když ho přečíst nejde). Proč server odmítl, kód nehádá;
     Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
@@ -3498,8 +3498,9 @@ def run_public(model, ds, cases, deadline=None):
             "conf": statistics.mean(conf) if conf else float("nan"), "ece": ece(cal), "brier": metrics.brier(cal), "cal": cal, "tasks": len(pairs), "tokens": tokens,
             "stab": None, "variant_acc": None, "inject": None, "deadline": deadline, "goodput": metrics.goodput(timed, deadline),
             "quality": quality, "refused": refused,
-            **dict(zip(("by_length", "length_ranges"), length_tally(cases, [pick == label for label, pick in pairs],
-                                                                    [(it, len(it["text"].split())) for it in ds["items"]])))}
+            **(dict(zip(("by_length", "length_ranges"), length_tally(cases, [pick == label for label, pick in pairs],
+                                                                     [(it, len(it["text"].split())) for it in ds["items"]])))
+               if by_length else {})}
 
 
 def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
@@ -3516,7 +3517,7 @@ def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
     return r
 
 
-def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None):
+def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None, by_length=False):
     question = email_question(ds)
     state = lambda e: {"subject": e["subject"], "body": e["body"]}
     ask(model, state(ds["emails"][0]), question)                 # zahřátí, nepočítá se
@@ -3526,8 +3527,9 @@ def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None):
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r["quality"] = metrics.classification([(e["category"], c if isinstance(c, str) and c in ds["index"] else None)
                                            for e, c in zip(cases, choices)])
-    r["by_length"], r["length_ranges"] = length_tally(cases, [c == e["category"] for e, c in zip(cases, choices)],
-                                                      [(e, email_words(e)) for e in ds["emails"]])
+    if by_length:                                    # --by-length: úlohy jsou tytéž slovníky jako v sadě (length_tally)
+        r["by_length"], r["length_ranges"] = length_tally(cases, [c == e["category"] for e, c in zip(cases, choices)],
+                                                          [(e, email_words(e)) for e in ds["emails"]])
     r["confusions"] = Counter()
     for e, choice in zip(cases, choices):
         if choice != e["category"]:
@@ -3917,7 +3919,8 @@ def print_row(r, note, defer=None):
                            clean=pct(j["clean_acc"])), flush=True)
     if defer is not None:                            # --defer: pokrytí a přesnost nad prahem jistoty, Brierovo skóre
         c = metrics.coverage(r["cal"], r["tasks"], defer)
-        print(pad + i18n.t("bench.defer", threshold=pct(defer), coverage=pct(c["coverage"]), covered=c["covered"], n=c["n"], acc=pct(c["acc"]),
+        whole = abs(defer * 100 - round(defer * 100)) < 1e-9     # celé procento jako pct, jinak na desetinu: práh, jak se použil
+        print(pad + i18n.t("bench.defer", threshold=pct(defer) if whole else f"{defer * 100:.1f}%", coverage=pct(c["coverage"]), covered=c["covered"], n=c["n"], acc=pct(c["acc"]),
                            handed=c["handed"], brier="—" if r["brier"] is None else f"{r['brier']:.3f}"), flush=True)
 
 
@@ -4254,7 +4257,7 @@ def main(argv):
         print(head)
         for m in args.models:
             with hosted_model(m):
-                print_public(run_public(m, ds, cases, args.deadline_ms), defer=args.defer, by_length=args.by_length)
+                print_public(run_public(m, ds, cases, args.deadline_ms, args.by_length), defer=args.defer, by_length=args.by_length)
     elif args.emails:
         try:
             ds = load_dataset(args.emails)
@@ -4266,7 +4269,7 @@ def main(argv):
         print(head)
         for m in args.models:
             with hosted_model(m):
-                r = run_emails(m, ds, cases, args.mirror, args.inject, args.deadline_ms)
+                r = run_emails(m, ds, cases, args.mirror, args.inject, args.deadline_ms, args.by_length)
                 top = ", ".join(f"{label[t]}→{label[c]} {n}×" for (t, c), n in r["confusions"].most_common(5))
                 row(r, i18n.t("bench.note.confusions", list=top or i18n.t("bench.none")))
                 if args.by_length:
