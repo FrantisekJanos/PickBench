@@ -1678,6 +1678,75 @@ class Tictactoe(unittest.TestCase):
             self.assertEqual((solved, value), (list(s) if s else None, bench.tictactoe_value(b)), b)
             self.assertEqual((wx, wo, fx, fo), (bench.tictactoe_wins(b, "X"), bench.tictactoe_wins(b, "O"), bench.tictactoe_forks(b, "X"), bench.tictactoe_forks(b, "O")), b)
 
+    def test_shortcuts_match_bench(self):
+        import bench
+        self.assertEqual(run_js("[TICTACTOE_ERRORS, Object.keys(TICTACTOE_SHORTCUTS)]", None), [list(bench.TICTACTOE_ERRORS), list(bench.TICTACTOE_SHORTCUTS)])
+        cases = bench.tictactoe_cases(300, seed=5)
+        got = run_js("arg.map(c => Object.keys(TICTACTOE_SHORTCUTS).map(name => [TICTACTOE_SHORTCUTS[name](c.board, c.you), tictactoeHit(c, name)]))",
+                     [tictactoe_js(c) for c in cases])
+        for case, per in zip(cases, got):
+            for name, (picks, hit) in zip(bench.TICTACTOE_SHORTCUTS, per):
+                self.assertEqual(picks, bench.TICTACTOE_SHORTCUTS[name](case[0], case[1]), (case, name))
+                self.assertEqual(hit, bench.tictactoe_hit(case, name), (case, name))
+
+    def test_weighted_pick_is_random_choices(self):                # stejné číslo z rand dá stejný prvek jako random.choices (bisect_right nad kumulativními váhami)
+        draws = [random.Random(k).random() for k in range(200)] + [0.0, 0.999999]
+        weights = [1, 3.3, 1, 3.3, 3.4, 3.3, 1, 3.3, 1]
+        got = run_js("arg.draws.map(x => tictactoePickWeighted(() => x, [...Array(9).keys()], arg.weights))", {"draws": draws, "weights": weights})
+        cum = list(itertools.accumulate(weights))
+        self.assertEqual(got, [bisect.bisect(cum, x * cum[-1], 0, 8) for x in draws])
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        raw, cases = tictactoe_page(900)
+        pools = bench.tictactoe_pools()
+        for r, (b, you, answer, cls) in zip(raw, cases):
+            with self.subTest(case=(b, you, answer, cls)):
+                self.assertEqual(list(r), ["board", "you", "answer", "cls", "truth"])
+                self.assertIn(b, pools[cls][answer])
+                self.assertEqual((you, r["truth"]), (bench.tictactoe_to_move(b), answer))
+
+    def test_classes_sides_and_shortcuts_are_balanced(self):       # meze jako tests/test_tictactoe.py, na generátoru stránky
+        import bench
+        _, cases = tictactoe_page(900)
+        counts = Counter(c[3] for c in cases)
+        for cls in bench.TICTACTOE_CLASSES:
+            sub = [c for c in cases if c[3] == cls]
+            with self.subTest(cls=cls):
+                self.assertTrue(0.2 <= counts[cls] / len(cases) <= 0.3, counts)
+                self.assertTrue(0.38 <= sum(c[1] == "X" for c in sub) / len(sub) <= 0.62)
+                for name in bench.TICTACTOE_SHORTCUTS:
+                    self.assertLessEqual(sum(bench.tictactoe_hit(c, name) for c in sub) / len(sub), 0.42, name)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(TICTACTOE_ROWS_JS, {"seed": 7, "n": 30})
+        self.assertEqual(run_js(TICTACTOE_ROWS_JS, {"seed": 7, "n": 30}), first)
+        self.assertNotEqual(run_js(TICTACTOE_ROWS_JS, {"seed": 8, "n": 30}), first)
+
+    def test_unknown_class_raises(self):
+        self.assertEqual(run_js("(() => { try { tictactoeCase(Math.random, 'draw'); return null; } catch (e) { return e.message; } })()", None),
+                         "tictactoeCase: unknown class draw")
+
+    def test_errors_and_summary_match_bench(self):
+        import bench
+        cases = bench.tictactoe_cases(300, seed=4)
+        rng = random.Random(2)
+        choices = [rng.choice([*bench.TICTACTOE_CELLS, bench.TICTACTOE_CELLS[c[2]], None, "R1C1", 4, ["r1c1"]]) for c in cases]
+        got = run_js("tictactoeSummary(arg.cases, arg.choices)", {"cases": [tictactoe_js(c) for c in cases], "choices": choices})
+        self.assertEqual(json.dumps(got), json.dumps(bench.tictactoe_summary(cases, choices)))      # i pořadí klíčů
+        self.assertTrue(all(got["errors"][k] > 0 for k in ("occupied", "missed_win", "missed_block", "invalid")), got["errors"])
+
+    def test_warm_task_is_fixed_and_has_the_longest_state(self):
+        import bench
+        warm = run_js("[tictactoeWarm(), tictactoeWarm()]", None)
+        self.assertEqual(warm[0], warm[1])
+        case = (warm[0]["board"], warm[0]["you"], warm[0]["answer"], warm[0]["cls"])
+        self.assertIn(case[0], bench.tictactoe_pools()[case[3]][case[2]])
+        self.assertEqual((case[1], warm[0]["truth"]), (bench.tictactoe_to_move(case[0]), case[2]))
+        longest = max(len(json.dumps(bench.tictactoe_state((b, bench.tictactoe_to_move(b), i, c), "cells")))
+                      for c, p in bench.tictactoe_pools().items() for i, bs in p.items() for b in bs)
+        self.assertEqual(len(json.dumps(bench.tictactoe_state(case, "cells"))), longest)
+
 
 if __name__ == "__main__":
     unittest.main()

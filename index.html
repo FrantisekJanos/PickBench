@@ -4341,6 +4341,79 @@ function tictactoeQuestion() {                             // otázka podoby cel
   return { cell_cells: { type: 'choice', instructions: `You play tic-tac-toe on a 3x3 board and it is your move; you is your mark, X or O. ${text} ${TICTACTOE_RULES}`,
     criteria: Object.fromEntries(TICTACTOE_CELLS.map(k => [k, `Row ${k[1]}, column ${k[3]}`])) } };
 }
+const tictactoeCellType = i => i === TICTACTOE_CENTER ? 'center' : TICTACTOE_CORNERS.includes(i) ? 'corner' : 'edge';
+function tictactoeTop(b, score) {
+  const free = tictactoeFree(b), best = Math.max(...free.map(score));
+  return free.filter(i => score(i) === best);
+}
+const tictactoeCount = (b, i, marks) => TICTACTOE_NEIGH[i].filter(j => marks.includes(b[j])).length;
+const TICTACTOE_SHORTCUTS = {                              // levné zkratky, podle kterých generátor zamítá (jako v bench.py)
+  center_corner: (b, m) => [[TICTACTOE_CENTER], TICTACTOE_CORNERS, TICTACTOE_EDGES].map(g => g.filter(i => b[i] === TICTACTOE_EMPTY)).find(g => g.length),
+  corner: (b, m) => { const g = TICTACTOE_CORNERS.filter(i => b[i] === TICTACTOE_EMPTY); return g.length ? g : tictactoeFree(b); },
+  edge: (b, m) => { const g = TICTACTOE_EDGES.filter(i => b[i] === TICTACTOE_EMPTY); return g.length ? g : tictactoeFree(b); },
+  neighbors: (b, m) => tictactoeTop(b, i => tictactoeCount(b, i, 'XO')),
+  own_neighbors: (b, m) => tictactoeTop(b, i => tictactoeCount(b, i, m)),
+  opp_neighbors: (b, m) => tictactoeTop(b, i => tictactoeCount(b, i, tictactoeOther(m))),
+  fewest_opp: (b, m) => tictactoeTop(b, i => -tictactoeCount(b, i, tictactoeOther(m))),
+};
+function tictactoeHit(c, name) {                           // očekávaná trefa zkratky na úloze
+  const picks = TICTACTOE_SHORTCUTS[name](c.board, c.you);
+  return (picks.includes(c.answer) ? 1 : 0) / picks.length;
+}
+function tictactoePickWeighted(rand, list, weights) {      // jako random.choices(list, weights)[0]: kumulativní váhy a bisect_right
+  return pickCum(rand, list, cumWeights(weights));
+}
+function tictactoeCase(rand, cls) {                        // jeden los úlohy třídy cls: { board, you, answer, cls }; kroky jako tictactoe_case
+  if (!TICTACTOE_CLASSES.includes(cls)) throw new Error(`tictactoeCase: unknown class ${cls}`);
+  const pool = tictactoePools()[cls], side = rand() < TICTACTOE_SIDE_X[cls] ? 'X' : 'O';
+  const cells = [...Array(9).keys()].filter(i => pool[i].some(b => tictactoeToMove(b) === side));
+  const cell = tictactoePickWeighted(rand, cells, cells.map(i => TICTACTOE_CELL_WEIGHT[cls][tictactoeCellType(i)]));
+  const board = pickOf(rand, pool[cell].filter(b => tictactoeToMove(b) === side));
+  const s = tictactoeSolve(board);
+  if (!s || s[0] !== cls || s[1] !== cell || !tictactoeStrict(board, cls, cell)) throw new Error(`tictactoeCase: broken guarantee ${board} ${cls} ${cell}`);
+  return { board, you: side, answer: cell, cls };
+}
+function tictactoeAccept(rand, c) {                        // zamítání podle zkratek; bere z rand právě jedno číslo
+  let q = 1;
+  for (const [name, a] of Object.entries(TICTACTOE_BALANCE[c.cls])) q *= 1 - tictactoeHit(c, name) * (1 - a);
+  return rand() < q;
+}
+function tictactoeRow(rand) {                              // třída se losuje před úlohou, jako tictactoe_cases; truth = index pole odpovědi
+  const cls = pickOf(rand, TICTACTOE_CLASSES);
+  for (let k = 0; k < TICTACTOE_TRIES; k++) {
+    const c = tictactoeCase(rand, cls);
+    if (tictactoeAccept(rand, c)) return { ...c, truth: c.answer };
+  }
+  throw new Error(`tictactoeRow: no ${cls} task after ${TICTACTOE_TRIES} tries`);
+}
+function tictactoeErrorKind(c, choice) {                   // druh chyby jedné volby (klíč pole nebo cokoli jiného), null = správně; pořadí jako tictactoe_error
+  if (typeof choice !== 'string' || !TICTACTOE_CELLS.includes(choice)) return 'invalid';
+  const i = TICTACTOE_CELLS.indexOf(choice), b = c.board, m = c.you;
+  if (i === c.answer) return null;
+  if (b[i] !== TICTACTOE_EMPTY) return 'occupied';
+  const own = tictactoeWins(b, m), opp = tictactoeWins(b, tictactoeOther(m));
+  if (own.length && opp.includes(i)) return 'block_not_win';
+  if (opp.length && !own.length) return 'missed_block';
+  if (own.length) return 'missed_win';
+  if (tictactoeForks(b, tictactoeOther(m)).includes(i)) return 'wrong_side';
+  return tictactoeThreats(b, i, m) >= 1 ? 'single_threat' : 'other';
+}
+function tictactoeErrors(cases, choices) {
+  const counts = Object.fromEntries(TICTACTOE_ERRORS.map(k => [k, 0]));
+  cases.forEach((c, i) => { const kind = tictactoeErrorKind(c, choices[i]); if (kind) counts[kind]++; });
+  return counts;
+}
+function tictactoeSummary(cases, choices) {                // { by_class, by_side, by_free: { třída: [správně, celkem] }, errors } jako tictactoe_summary
+  const tally = (order, of) => {
+    const out = Object.fromEntries(order.map(k => [k, [0, 0]]));
+    cases.forEach((c, i) => { const b = out[of(c)]; b[1]++; if (choices[i] === TICTACTOE_CELLS[c.answer]) b[0]++; });
+    return out;
+  };
+  return { by_class: tally(TICTACTOE_CLASSES, c => c.cls), by_side: tally(['X', 'O'], c => c.you),
+    by_free: tally(['few', 'many'], c => tictactoeFree(c.board).length <= TICTACTOE_FEW ? 'few' : 'many'), errors: tictactoeErrors(cases, choices) };
+}
+const TICTACTOE_WARM = { board: '.OXXOX.XO', you: 'O', answer: 0, cls: 'win' };     // pevná zahřívací úloha s nejdelším stavem (dvě volná pole)
+function tictactoeWarm() { return { ...TICTACTOE_WARM, truth: TICTACTOE_WARM.answer }; }
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
