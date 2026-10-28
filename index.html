@@ -513,7 +513,7 @@ const TEXTS = {
   'last.rule': { cs: 'deník:   {log}\nbrány:   {gates}\nzvoleno: {pick}  (správně: {truth})\nmodel:   znaky dostává anglicky (color, shape, count)', en: 'log:     {log}\ngates:   {gates}\nchosen:  {pick}  (correct: {truth})\nmodel:   gets the features in English (color, shape, count)' },
   'last.queue': { cs: 'fronty:  {queues}\nzvoleno: {pick}  (správně: {truth})', en: 'queues:  {queues}\nchosen:  {pick}  (correct: {truth})' },
   'last.bet': { cs: 'brány:   {gates}\nvýplaty: {payouts}\nzvoleno: {pick}  (správně: {truth})', en: 'gates:   {gates}\npayouts: {payouts}\nchosen:  {pick}  (correct: {truth})' },
-  'last.cruise': { cs: 'stav:    {state}\nzvoleno: {pick}  (správně: {truth})', en: 'state:   {state}\nchosen:  {pick}  (correct: {truth})' },
+  'last.cruise': { cs: 'stav:    {state}\nzvoleno: {pick}  (správně: {truth})\nvýpočet: {why}', en: 'state:   {state}\nchosen:  {pick}  (correct: {truth})\nwhy:     {why}' },
   // „Poslední rozhodnutí“, řádky společné všem scénářům: doba rozhodnutí (u hostovaného modelu za ní počet tokenů) a výsledek úlohy se schovaným pokynem
   'last.ms': { cs: '{ms} ms', en: '{ms} ms' },
   'last.tokens': { cs: ', vstupních tokenů: {n}', en: ', input tokens: {n}' },
@@ -746,6 +746,25 @@ const TEXTS = {
   'cruise.line': { cs: 'u hranice {edge}, uvnitř pásma {middle}; ±1 stupeň {within}, MAE {mae}, příliš rychle {fast}, příliš pomalu {slow}', en: 'near a boundary {edge}, inside a band {middle}; ±1 level {within}, MAE {mae}, too fast {fast}, too slow {slow}' },
   'cruise.errors': { cs: 'chyby: jen vzdálenost {distance}, vynechaná podmínka {omitted}, každá podmínka za 1 stupeň {flat}, sousední pásmo {neighbor}, jiné {other}, neplatné {invalid}', en: 'errors: distance only {distance}, condition left out {omitted}, each condition as 1 level {flat}, neighboring band {neighbor}, other {other}, invalid {invalid}' },
   'cruise.level': { cs: 'stupeň {n}', en: 'level {n}' },
+  'cruise.board': { cs: '⚠ překážka za {m} m', en: '⚠ obstacle {m} m ahead' },
+  'cruise.road.dry': { cs: 'sucho', en: 'dry road' },
+  'cruise.road.wet': { cs: 'mokro', en: 'wet road' },
+  'cruise.road.icy': { cs: 'náledí', en: 'icy road' },
+  'cruise.fog.none': { cs: 'bez mlhy', en: 'no fog' },
+  'cruise.fog.light': { cs: 'slabá mlha', en: 'light fog' },
+  'cruise.fog.dense': { cs: 'hustá mlha', en: 'dense fog' },
+  'cruise.why.band': { cs: '{m} m → stupeň {level}', en: '{m} m → level {level}' },
+  'cruise.why.wet': { cs: 'mokro −1', en: 'wet road −1' },
+  'cruise.why.icy': { cs: 'náledí −2', en: 'icy road −2' },
+  'cruise.why.light': { cs: 'slabá mlha −1', en: 'light fog −1' },
+  'cruise.why.dense': { cs: 'hustá mlha −2', en: 'dense fog −2' },
+  'cruise.label.ok': { cs: '✓ stupeň {level}: {why}', en: '✓ level {level}: {why}' },
+  'cruise.label.fast': { cs: '✗ příliš rychle: stupeň {pick}, správně {level} ({why})', en: '✗ too fast: level {pick}, correct {level} ({why})' },
+  'cruise.label.slow': { cs: '✗ příliš pomalu: stupeň {pick}, správně {level} ({why})', en: '✗ too slow: level {pick}, correct {level} ({why})' },
+  'legend.cruise.lanes': { cs: 'Pruh = stupeň rychlosti tempomatu: 1 vlevo nejpomaleji, 7 vpravo nejrychleji; modrý obrys = volba modelu.', en: 'A lane is a cruise control speed level: 1 on the left is the slowest, 7 on the right the fastest; a blue outline = the pick of the model.' },
+  'legend.cruise.table': { cs: 'Výchozí stupeň podle vzdálenosti překážky: pod 20 m 1, 20–39 m 2, 40–59 m 3, 60–99 m 4, 100–149 m 5, 150–219 m 6, od 220 m 7.', en: 'Starting level by the distance to the obstacle: under 20 m 1, 20–39 m 2, 40–59 m 3, 60–99 m 4, 100–149 m 5, 150–219 m 6, from 220 m 7.' },
+  'legend.cruise.penalty': { cs: 'Pak srážky: mokro −1, náledí −2, slabá mlha −1, hustá mlha −2.', en: 'Then the reductions: wet road −1, icy road −2, light fog −1, dense fog −2.' },
+  'legend.cruise.out': { cs: 'Po průjezdu: správný stupeň zeleně, pod řadou výpočet.', en: 'After the car passes: the right level in green, the working below the row.' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -2606,15 +2625,58 @@ const bet = {
 // jméno třídy v TEXTS (komentář nad řádkem: test čte řádek až po „};“ na jeho konci)
 const CRUISE_CLASS_NAME = { table: 'cruise.class.table', road: 'cruise.class.road', fog: 'cruise.class.fog', both: 'cruise.class.both' };
 
-// Políčka stupňů jedné řady: v každém pruhu obdélník s číslicí stupně; po průjezdu má správný stupeň zelený podklad. globalAlpha nastaví volající.
+// jméno povrchu, mlhy a srážky v TEXTS (komentáře nad řádky: test čte každý řádek celý)
+const CRUISE_ROAD_NAME = { dry: 'cruise.road.dry', wet: 'cruise.road.wet', icy: 'cruise.road.icy' };
+const CRUISE_FOG_NAME = { none: 'cruise.fog.none', light: 'cruise.fog.light', dense: 'cruise.fog.dense' };
+const CRUISE_WHY = { wet: 'cruise.why.wet', icy: 'cruise.why.icy', light: 'cruise.why.light', dense: 'cruise.why.dense' };
+
+function cruiseWhy(task) {                                 // výpočet správného stupně slovy: pásmo podle vzdálenosti a srážky; tentýž jako cruiseLevel
+  const parts = [t('cruise.why.band', { m: task.m, level: bandLevel(task.m) })];
+  for (const k of [task.road, task.fog]) if (CRUISE_WHY[k]) parts.push(t(CRUISE_WHY[k]));
+  return parts.join(', ');
+}
+function cruiseLabel(r) {                                  // slovy, co se stalo; správně s výpočtem, jinak příliš rychle nebo pomalu
+  const why = cruiseWhy(r);
+  if (r.result === 'ok') return { text: t('cruise.label.ok', { level: r.answer, why }), color: RESULT.ok.color };
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 7)) return { text: t('label.invalid'), color: RESULT.late.color };
+  return { text: t(r.chosen + 1 > r.answer ? 'cruise.label.fast' : 'cruise.label.slow', { pick: r.chosen + 1, level: r.answer, why }), color: RESULT.bad.color };
+}
+
+// Řada tempomatu odspodu: povrch na silnici, políčka stupňů (správný po průjezdu zeleně), závoj mlhy, číslice se sloupečky rychlosti,
+// cedule nad políčky a modrý obrys volby před průjezdem. Číslice i cedule jsou nad závojem, mlha je nezakrývá. globalAlpha nastaví volající.
 function drawCruise(r, y) {
-  const hw = LW * 0.42;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '700 15px "Segoe UI", sans-serif';
-  for (let lane = 0; lane < CRUISE_TOP; lane++) {
+  const n = 7, hw = LW * 0.42;
+  if (r.road === 'wet') {                                  // mokro: modrý průsvitný podklad a šikmé čáry
+    ctx.fillStyle = 'rgba(56,139,253,.22)'; ctx.fillRect(0, y - 24, W, 48);
+    ctx.strokeStyle = 'rgba(88,166,255,.5)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = -10; x < W; x += 14) { ctx.moveTo(x, y + 24); ctx.lineTo(x + 10, y - 24); }
+    ctx.stroke();
+  } else if (r.road === 'icy') {                           // náledí: světle modrý podklad a ❄ u okrajů (dole, nahoře vlevo je trojský kůň)
+    ctx.fillStyle = 'rgba(190,230,255,.28)'; ctx.fillRect(0, y - 24, W, 48);
+    ctx.font = '14px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#d6efff';
+    ctx.fillText('❄', 9, y + 15); ctx.fillText('❄', W - 9, y + 15);
+  }
+  for (let lane = 0; lane < n; lane++) {
     const x = (lane + 0.5) * LW;
     ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
     ctx.beginPath(); ctx.roundRect(x - hw, y - 17, 2 * hw, 34, 6); ctx.fill();
-    ctx.fillStyle = '#e6edf3'; ctx.fillText(String(lane + 1), x, y - 4);
+  }
+  if (r.fog === 'light' || r.fog === 'dense') {            // závoj mlhy přes řadu i ceduli
+    ctx.fillStyle = r.fog === 'dense' ? 'rgba(170,180,190,.38)' : 'rgba(170,180,190,.2)'; ctx.fillRect(0, y - 46, W, 70);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '700 15px "Segoe UI", sans-serif';
+  for (let lane = 0; lane < n; lane++) {
+    const x = (lane + 0.5) * LW;
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(String(lane + 1), x, y - 7);
+    ctx.fillStyle = '#8b9aa8';                             // sloupečky rychlosti: počet = stupeň
+    for (let k = 0; k <= lane; k++) ctx.fillRect(x + (k - lane / 2) * 4 - 1, y + 3, 2, 9);
+  }
+  ctx.fillStyle = 'rgba(11,16,22,.9)'; ctx.fillRect(0, y - 46, W, 20);      // cedule
+  ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#f2cc0c';
+  ctx.fillText([t('cruise.board', { m: r.m }), t(CRUISE_ROAD_NAME[r.road]), t(CRUISE_FOG_NAME[r.fog])].join(' · '), W / 2, y - 36, W - 8);
+  if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < n) {      // volba modelu před průjezdem
+    ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 17, 2 * hw, 34); ctx.lineWidth = 1;
   }
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
@@ -2623,7 +2685,9 @@ const cruise = {
   __proto__: rowBase,
   id: 'cruise',                                            // pruhy jsou stupně 1–7, silnice má vždy 7, volič je zamčený jako u závory
   get about() { return t('scenario.cruise.about'); },
-  panels: ['confPanel'], get extraTitle() { return t('scenario.cruise.extraTitle'); },
+  panels: ['confPanel', 'legend'],
+  legend: [[null, 'legend.cruise.lanes'], [null, 'legend.cruise.table'], [null, 'legend.cruise.penalty'], ['#3fb950', 'legend.cruise.out']],
+  get extraTitle() { return t('scenario.cruise.extraTitle'); },
   get extraTip() { return t('scenario.cruise.extraTip'); },
   get matchTip() { return t('scenario.cruise.tip.match'); },
   fixedLanes: 7, lanes: () => 7,
@@ -2650,19 +2714,20 @@ const cruise = {
     if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, sum: cruiseSummary(g.cases, g.levels) };
     return g.summary.sum;
   },
-  drawItems(g) {                                           // políčka stupňů; ceduli, povrch, mlhu a obrys volby doplní další úkol
+  drawItems(g) {                                           // cedule, povrch, mlha a políčka stupňů; po průjezdu štítek s výpočtem
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
       drawCruise(r, y);
       ctx.globalAlpha = 1;
+      if (r.result !== null) { const lab = cruiseLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
       this.drawRing(r, y, Math.min(LW * 0.26, 15));
     }
   },
   describeLast(task, res) {                                // stav slovy, jak ho dostal model (i s pokynem), volba a správný stupeň
     const name = i => i >= 0 ? t('cruise.level', { n: i + 1 }) : t('answer.invalid');
     const state = Object.entries(task.state).map(([k, v]) => `${k} ${v}`).join(', ');
-    return t('last.cruise', { state, pick: name(res.move), truth: name(task.truth) }) +
+    return t('last.cruise', { state, pick: name(res.move), truth: name(task.truth), why: cruiseWhy(task) }) +
       (res.probs ? '\n' + t('last.probs', { list: levelKeys().map((k, i) => `${i + 1}: ${pctOf(res.probs[k] ?? 0, 1)}`).join(', ') }) : '');
   },
   quality(g, s, inGame) {                                  // za první dlaždici MAE ve stupních z rozboru (i pozdní odpovědi)

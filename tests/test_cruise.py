@@ -437,6 +437,67 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka pá
         case = {"m": 97, "road": "icy", "fog": "none", "answer": 2, "cls": "road", "place": "middle"}
         self.assertEqual(run_page_js(code), {"cases": [case] * 4, "levels": [2, 7, None, 1]})
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_why_names_the_band_and_the_penalties(self):           # výpočet ve štítku je tentýž, jakým se počítá správná odpověď
+        from test_parity import run_js
+        consts = re.search(r"\nconst CRUISE_WHY = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + consts + page_function("cruiseWhy") + "return arg.map(([m, road, fog]) => cruiseWhy({ m, road, fog })); })()"
+        hand = [[97, "icy", "none"], [130, "wet", "dense"], [19, "dry", "none"], [150, "icy", "dense"], [220, "dry", "light"]]
+        self.assertEqual(run_js(code, hand), ["97 m → stupeň 4, náledí −2", "130 m → stupeň 5, mokro −1, hustá mlha −2", "19 m → stupeň 1",
+                                              "150 m → stupeň 6, náledí −2, hustá mlha −2", "220 m → stupeň 7, slabá mlha −1"])
+        self.assertEqual(run_js(code, hand[:1], "en"), ["97 m → level 4, icy road −2"])
+        tasks = [[m, road, fog, answer] for m, road, fog, answer, *_ in bench.cruise_cases(300, seed=3)]
+        for (m, road, fog, answer), why in zip(tasks, run_js(code, tasks)):
+            band = int(re.match(r"\d+ m → stupeň (\d)", why).group(1))
+            self.assertEqual(band - sum(int(k) for k in re.findall(r"−(\d)", why)), answer, why)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):                        # štítek: správně s výpočtem, příliš rychle / pomalu, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "CRUISE_WHY"))
+        code = "(() => {" + consts + page_function("cruiseWhy") + page_function("cruiseLabel") + (
+            "const r = (result, chosen) => ({ m: 97, road: 'icy', fog: 'none', answer: 2, truth: 1, result, chosen });"
+            "return [r('ok', 1), r('bad', 3), r('bad', 0), r('bad', -1), r('late', undefined)].map(cruiseLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ stupeň 2: 97 m → stupeň 4, náledí −2", "✗ příliš rychle: stupeň 4, správně 2 (97 m → stupeň 4, náledí −2)",
+                                                   "✗ příliš pomalu: stupeň 1, správně 2 (97 m → stupeň 4, náledí −2)", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ too fast: level 4, correct 2 (97 m → level 4, icy road −2)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_row_shows_the_board_the_levels_and_the_pick(self):    # cedule přes t(), číslice 1–7, obrys jen u zvoleného stupně neprojeté řady
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("CRUISE_ROAD_NAME", "CRUISE_FOG_NAME"))
+        code = "(() => { const texts = [], strokes = [], W = 480, LW = W / 7, H = 600;" + consts + page_function("drawCruise") + (
+            "const ctx = new Proxy({ fillText(s) { texts.push(String(s)); }, strokeRect(x) { strokes.push(Math.round(x)); } },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const row = extra => ({ m: 97, road: 'icy', fog: 'none', truth: 1, result: null, chosen: undefined, ...extra });"
+            "drawCruise(row({ chosen: 3 }), 300); const a = texts.splice(0), sa = strokes.splice(0);"
+            "drawCruise(row({ result: 'ok', chosen: 1, road: 'dry', fog: 'dense', m: 230 }), 300);"
+            "return { a, sa, b: texts, sb: strokes }; })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([s for s in cs["a"] if s in list("1234567")], list("1234567"))
+        self.assertEqual([s for s in cs["a"] + cs["b"] if re.search(r"[^\W\d_]", s)],
+                         ["⚠ překážka za 97 m · náledí · bez mlhy", "⚠ překážka za 230 m · sucho · hustá mlha"])     # jiný text s písmeny kresba nepíše
+        self.assertIn("⚠ obstacle 97 m ahead · icy road · no fog", en["a"])
+        self.assertEqual((len(cs["sa"]), cs["sb"]), (1, []))                                  # po průjezdu obrys zmizí
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_legend_numbers_match_the_bands(self):                  # legenda opakuje tabulku zadání: hranice z CRUISE_BANDS, srážky z CRUISE_ROAD a CRUISE_FOG
+        from test_parity import run_js
+        b = bench.CRUISE_BANDS
+        want = [b[0], 1] + [x for k in range(len(b) - 1) for x in (b[k], b[k + 1] - 1, k + 2)] + [b[-1], bench.CRUISE_TOP]
+        for lang in ("cs", "en"):
+            table, penalty = run_js("[t('legend.cruise.table'), t('legend.cruise.penalty')]", None, lang)
+            self.assertEqual([int(x) for x in re.findall(r"\d+", table)], want, lang)
+            self.assertEqual([int(x) for x in re.findall(r"\d+", penalty)], [bench.CRUISE_ROAD["wet"], bench.CRUISE_ROAD["icy"],
+                                                                             bench.CRUISE_FOG["light"], bench.CRUISE_FOG["dense"]], lang)
+        body = cruise_body()
+        self.assertIn("  panels: ['confPanel', 'legend'],", body)
+        self.assertIn("  legend: [[null, 'legend.cruise.lanes'], [null, 'legend.cruise.table'], [null, 'legend.cruise.penalty'], ['#3fb950', 'legend.cruise.out']],", body)
+
 
 if __name__ == "__main__":
     unittest.main()
