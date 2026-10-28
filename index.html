@@ -830,6 +830,17 @@ const TEXTS = {
   'hint.gap.clear': { cs: 'jasné', en: 'clear' },
   'hint.line': { cs: 'nápověda: pomoc {help} pb, škoda {hurt} pb, tah {pull} pb; konfliktní: chyby na nápovědu {hint}, jiné {other}, neplatné {invalid}; převráceno {flipped}/{pairs}', en: 'hint: help {help} pp, harm {hurt} pp, pull {pull} pp; incongruent: errors on the hint {hint}, other {other}, invalid {invalid}; flipped {flipped}/{pairs}' },
   'hint.byGap': { cs: 'konfliktní podle rozdílu: {list}', en: 'incongruent by gap: {list}' },
+  'hint.sign': { cs: 'většina jela tudy', en: 'most drove here' },
+  'hint.label.okNone': { cs: '✓ brána {n} ({value}): největší číslo, bez nápovědy', en: '✓ gate {n} ({value}): the largest number, no hint' },
+  'hint.label.okWith': { cs: '✓ brána {n} ({value}): největší číslo, nápověda ukazovala sem', en: '✓ gate {n} ({value}): the largest number, the hint pointed here' },
+  'hint.label.okAgainst': { cs: '✓ brána {n} ({value}): největší číslo; nápovědu na bránu {h} nenásledoval', en: '✓ gate {n} ({value}): the largest number; did not follow the hint to gate {h}' },
+  'hint.label.follow': { cs: '✗ následoval nápovědu: brána {pick} ({pickValue}), největší je brána {n} ({value})', en: '✗ followed the hint: gate {pick} ({pickValue}), the largest is gate {n} ({value})' },
+  'hint.label.ignored': { cs: '✗ brána {pick} ({pickValue}), nápovědu nenásledoval; největší je brána {n} ({value})', en: '✗ gate {pick} ({pickValue}), did not follow the hint; the largest is gate {n} ({value})' },
+  'hint.label.bad': { cs: '✗ brána {pick} ({pickValue}), největší je brána {n} ({value}); bez nápovědy', en: '✗ gate {pick} ({pickValue}), the largest is gate {n} ({value}); no hint' },
+  'legend.hint.gates': { cs: 'brány s čísly; model volí bránu s největším číslem', en: 'gates with numbers; the model picks the gate with the largest number' },
+  'legend.hint.sign': { cs: 'fialová cedule „většina jela tudy“ = pole most_popular; s úlohou nesouvisí', en: 'purple sign "most drove here" = the most_popular field; it has nothing to do with the task' },
+  'legend.hint.trio': { cs: 'stejná čísla jedou třikrát po sobě: bez cedule, s cedulí u největšího čísla, s cedulí u jiné brány', en: 'the same numbers come three times in a row: without the sign, with the sign at the largest number, with the sign at another gate' },
+  'legend.hint.out': { cs: 'modrý obrys = volba; po průjezdu největší číslo zeleně a štítek řekne, jestli model šel za cedulí', en: 'blue outline = the pick; after the car passes, the largest number turns green and the label says whether the model followed the sign' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -2997,12 +3008,36 @@ const timetable = {
 // jméno podmínky a třídy rozdílu v TEXTS (komentář nad řádky: test čte řádek až po „};“ na jeho konci)
 const HINT_COND_NAME = { none: 'hint.cond.none', congruent: 'hint.cond.congruent', incongruent: 'hint.cond.incongruent' };
 const HINT_GAP_NAME = { tight: 'hint.gap.tight', medium: 'hint.gap.medium', clear: 'hint.gap.clear' };
+const HINT_COLOR = '#a371f7';                              // cedule nápovědy na silnici a v legendě
+
+// Štítek projeté řady: výsledek slovem a jestli model šel za nápovědou (zelená správně, červená chyba, šedá neplatná a nestihl).
+function hintLabel(r) {
+  const n = r.truth + 1, value = r.values[r.truth];
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.values.length)) return { text: t('label.invalid'), color: RESULT.late.color };
+  if (r.result === 'ok') {
+    const key = r.hint === null ? 'hint.label.okNone' : r.hint === r.truth ? 'hint.label.okWith' : 'hint.label.okAgainst';
+    return { text: t(key, { n, value, h: r.hint === null ? '' : r.hint + 1 }), color: RESULT.ok.color };
+  }
+  const key = r.hint === null ? 'hint.label.bad' : r.chosen === r.hint ? 'hint.label.follow' : 'hint.label.ignored';
+  return { text: t(key, { pick: r.chosen + 1, pickValue: r.values[r.chosen], n, value }), color: RESULT.bad.color };
+}
+
+// Cedule nápovědy nad bránou x (střed), šířka w, nad řadou y: fialový štítek s textem a šipka dolů na bránu.
+function drawHintSign(x, y, w) {
+  ctx.fillStyle = HINT_COLOR;
+  ctx.beginPath(); ctx.roundRect(x - w / 2, y - 40, w, 17, 4); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 6, y - 23); ctx.lineTo(x + 6, y - 23); ctx.lineTo(x, y - 16); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.font = '600 10px "Segoe UI", sans-serif';
+  ctx.fillText(t('hint.sign'), x, y - 31, w - 4);
+}
 
 const hint = {
   __proto__: rowBase,
   id: 'hint', lanesFree: true, noInject: true,
   get about() { return t('scenario.hint.about'); },
-  panels: ['confPanel'], get extraTitle() { return t('scenario.hint.extraTitle'); },
+  panels: ['confPanel', 'legend'], get extraTitle() { return t('scenario.hint.extraTitle'); },
+  legend: [[null, 'legend.hint.gates'], [HINT_COLOR, 'legend.hint.sign'], [null, 'legend.hint.trio'], [null, 'legend.hint.out']],
   get extraTip() { return t('scenario.hint.extraTip'); },
   get matchTip() { return t('scenario.hint.tip.match'); },
   lanes: () => +$('lanes').value,
@@ -3028,7 +3063,30 @@ const hint = {
     if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, ...hintSummary(g.cases, g.choices, gateKeys(LANES)) };
     return g.summary;
   },
-  drawItems(g) { for (const r of g.rows) this.drawRing(r, CAR_Y - r.y * CELL, 12); },
+  // Brány s čísly jako u číselných duelů, nad bránou s nápovědou fialová cedule; před průjezdem modrý obrys volby, po něm zelená brána a štítek.
+  drawItems(g) {
+    const hw = LW * 0.42;
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';     // v každé řadě znovu: štítek předchozí řady zarovnání vrací
+      r.values.forEach((v, lane) => {
+        const x = (lane + 0.5) * LW;
+        ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
+        ctx.beginPath(); ctx.roundRect(x - hw, y - 15, 2 * hw, 30, 6); ctx.fill();
+        ctx.fillStyle = '#e6edf3'; ctx.font = `600 ${Math.round(Math.min(17, LW * 0.24))}px "Segoe UI", sans-serif`;
+        ctx.fillText(String(v), x, y + 1);
+      });
+      if (r.hint !== null) drawHintSign((r.hint + 0.5) * LW, y, 2 * hw);
+      ctx.globalAlpha = 1;
+      if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES) {
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 15, 2 * hw, 30);
+      }
+      this.drawRing(r, y, Math.min(hw, 17));
+      if (r.result !== null) { const lab = hintLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
+    }
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
   describeLast(task, res) {                                // čísla, kde visela cedule (model ji dostal jako most_popular), volba, třída rozdílu
     const name = i => i >= 0 ? t('last.gate', { n: i + 1, value: task.values[i] }) : t('answer.invalid');
     const where = task.hint === null ? t(HINT_COND_NAME.none) : t('last.hintAt', { n: task.hint + 1, cond: t(HINT_COND_NAME[task.cond]) });

@@ -381,6 +381,34 @@ class Page(unittest.TestCase):              # scénář ve stránce; čísla, tr
         self.assertEqual(none.split("\n")[1:3], ["nápověda: bez nápovědy", "zvoleno:  neplatná odpověď  (správně: brána 2 (30))"])
         self.assertEqual(run_js(code, None, "en")[0].split("\n")[1], "hint:       sign at gate 3 (incongruent)")
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_say_whether_the_model_followed_the_hint(self):     # štítek: výsledek a jak to bylo s nápovědou, neplatná, nestihl
+        from test_parity import run_js
+        code = "(() => {" + re.search(r"\nconst RESULT = [^\n]*\n", page_source()).group(0) + page_function("hintLabel") + (
+            "const r = (cond, hint, result, chosen) => ({ values: [10, 30, 20], truth: 1, cond, hint, result, chosen });"
+            "return [r('none', null, 'ok', 1), r('congruent', 1, 'ok', 1), r('incongruent', 2, 'ok', 1), r('incongruent', 2, 'bad', 2),"
+            " r('incongruent', 2, 'bad', 0), r('congruent', 1, 'bad', 0), r('none', null, 'bad', 0), r('none', null, 'bad', -1),"
+            " r('congruent', 1, 'late', undefined)].map(hintLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], [
+            "✓ brána 2 (30): největší číslo, bez nápovědy", "✓ brána 2 (30): největší číslo, nápověda ukazovala sem",
+            "✓ brána 2 (30): největší číslo; nápovědu na bránu 3 nenásledoval", "✗ následoval nápovědu: brána 3 (20), největší je brána 2 (30)",
+            "✗ brána 1 (10), nápovědu nenásledoval; největší je brána 2 (30)", "✗ brána 1 (10), nápovědu nenásledoval; největší je brána 2 (30)",
+            "✗ brána 1 (10), největší je brána 2 (30); bez nápovědy", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[3]["text"], "✗ followed the hint: gate 3 (20), the largest is gate 2 (30)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950"] * 3 + ["#f85149"] * 4 + ["#8b9aa8"] * 2)
+
+    def test_drawing_writes_only_through_t_and_shows_sign_pick_and_legend(self):
+        for literal in ("fillText('", 'fillText("', "fillText(`"):
+            self.assertNotIn(literal, page_function("drawHintSign"))                              # cedule jen přes t(), čísla přes String(…)
+            self.assertNotIn(literal, hint_body())
+        self.assertIn("t('hint.sign')", page_function("drawHintSign"))
+        body = hint_body()
+        for part in ("drawHintSign((r.hint + 0.5) * LW, y, 2 * hw)", "hintLabel(r)", "drawRowLabel(", "strokeRect(", "panels: ['confPanel', 'legend']",
+                     "[null, 'legend.hint.gates']", "[HINT_COLOR, 'legend.hint.sign']", "[null, 'legend.hint.trio']", "[null, 'legend.hint.out']"):
+            self.assertIn(part, body)
+        self.assertEqual(page_source().count("const HINT_COLOR = '#a371f7';"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
