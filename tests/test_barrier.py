@@ -553,7 +553,7 @@ def page_function(name):
 
 
 # Registr scénářů s řadami v selectScenario: jediný zápis, testy ostatních scénářů ho importují (S3, T3, J3 ho prodlouží).
-REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule, queue, queueWeighted, bet, cruise, timetable }[v];"
+REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule, queue, queueWeighted, bet, cruise, timetable, hint }[v];"
 
 
 class Page(unittest.TestCase):                                         # scénář ve stránce; pravidla, generátor a výpočty hlídá tests/test_parity.py (Barrier)
