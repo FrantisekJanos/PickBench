@@ -1,0 +1,19 @@
+6 situací pro každý počet pruhů od 2 do 8; sada je pro všechny modely stejná
+
+model                 pruhů  správně   medián     p95  rozh./s    ECE
+m1                        2      50%     13ms    17ms     84.5    28%   ##########
+m1                        3      17%     12ms    16ms     92.3    60%   ###
+m1                        4      33%     13ms    17ms     83.3    43%   #######
+m1                        5      17%     12ms    16ms     90.9    58%   ###
+m1                        6       0%     11ms    15ms    100.0    77%
+m1                        7      17%     12ms    17ms     89.6    62%   ###
+m1                        8      17%     11ms    16ms     98.4    60%   ###
+                    od 2 do 8: správně 50% → 17%, medián 13 → 11 ms
+m2                        2      67%     12ms    17ms     89.6    22%   #############
+m2                        3      83%     11ms    16ms     98.4    31%   #################
+m2                        4      17%     12ms    17ms     88.2    65%   ###
+m2                        5       0%     11ms    16ms     96.8    69%
+m2                        6      17%     13ms    17ms     87.0    75%   ###
+m2                        7      17%     12ms    16ms     95.2    57%   ###
+m2                        8      17%     13ms    17ms     85.7    62%   ###
+                    od 2 do 8: správně 67% → 17%, medián 12 → 13 ms

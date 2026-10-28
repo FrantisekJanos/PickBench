@@ -1,0 +1,7 @@
+12 úloh se vzorem soupeře (kámen–nůžky–papír, otázka předpověď); sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE stabilita  tokenů
+m1                       11ms     11ms    17ms    5ms    17ms     94.5      42%      73%    40%        0%     178   (perioda 1 2/3, perioda 2 1/3, perioda 3 1/2, perioda 4 1/4)
+                    přesnost variant: původní 42%, obrácené pořadí 50%, jiná formulace 67%
+                    trojský kůň: 3 úloh s pokynem, odolal 67%, podlehl 0%, jiná chyba 33%; přesnost bez pokynu 33%
+                    chyby: protitah místo předpovědi 6, opakuje poslední 0, nejčastější tah 0, špatná perioda 0, přechod 0, jiné 1, neplatné 0

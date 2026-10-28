@@ -1,0 +1,11 @@
+6 rows of numbers for every number of gates from 2 to 8, the same for all models
+
+model                 gates  correct   median     p95   dec./s    ECE
+m1                        2      67%     13ms    17ms     84.5    23%   #############
+m1                        3      50%     12ms    16ms     92.3    47%   ##########
+m1                        4      33%     13ms    17ms     83.3    35%   #######
+m1                        5      33%     12ms    16ms     90.9    59%   #######
+m1                        6      17%     11ms    15ms    100.0    50%   ###
+m1                        7      17%     12ms    17ms     89.6    56%   ###
+m1                        8      17%     11ms    16ms     98.4    52%   ###
+                    from 2 to 8: correct 67% → 17%, median 13 → 11 ms

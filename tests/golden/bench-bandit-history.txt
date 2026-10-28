@@ -1,0 +1,6 @@
+12 úloh u mýta (bandita, deník průjezdů), 5 bran; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      73%    57%     451   (průzkum 1/7, nejvyšší podíl 1/2, shoda podílů 0/3)
+                    chyby: bez průzkumu 0, shoda: víc průjezdů 1, zbytečný průzkum 1, nejvíc výher 2, nejméně proher 0, nejnižší podíl 3, jiné 3, neplatné 0
+                    ztráta jednoho kroku 36.2 p. b. (pravidlo 20.4, hladová volba 5.1, náhoda 28.2)

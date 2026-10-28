@@ -1,6 +1,6 @@
 Srovnání rozhodovacích modelů na stejné sadě úloh (bez hry).
 
-Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -13,8 +13,12 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
+          python bench.py [N] --emails datasets/<soubor>.json [--by-length] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<soubor>.json [--by-length] [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
@@ -29,6 +33,10 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -120,7 +128,38 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --dicts, --lists:  jen s --diff: podoba stavu, úlohy jsou v obou stejné. dicts = before a after jako objekty
             {"lane_1": hodnota, …}; lists = before a after jako seznamy hodnot zleva doprava, pruh je poloha v seznamu.
             Bez volby platí lists.
+--pattern:  vzor soupeře (kámen–nůžky–papír): stav nese tahy soupeře (nejstarší první); po krátké rozehrávce soupeř
+            opakuje pevný cyklus 1 až 4 tahů aspoň 8 tahů, takže další tah je vždy jediný. Model volí tah, který porazí
+            další tah soupeře (counter), nebo tah soupeře přímo (predict). N úloh (výchozí 100), rovnoměrně podle periody
+            (1 až 4; perioda 1 je kontrolní: soupeř hraje pořád totéž). Za řádkem modelu přesnost podle periody, pod ním
+            u counter výsledek (výhra, remíza, prohra, neplatné) a chyby: opakuje poslední tah, nejčastější tah, špatná
+            perioda, přechod, jiné, neplatné; v counter se chyba čte přes tah, který zvolený tah porazí. Náhoda dá třetinu,
+            u periody 2 levná zkratka „jiný tah než poslední“ polovinu. S --lanes se nekombinuje.
+--counter, --predict:  jen s --pattern: podoba otázky, úlohy jsou v obou stejné. counter = vlastní tah, který porazí
+            další tah soupeře; predict = další tah soupeře, řádek chyb navíc počítá protitah místo předpovědi.
+            Bez volby platí predict.
+--tictactoe:  tah na výhru (piškvorky 3×3): model hraje za značku you (X nebo O) a volí jedno z devíti polí podle pravidel
+            v zadání, v tomto pořadí: vyhraj, jinak zablokuj soupeře, jinak udělej vidličku (dvě hrozby naráz). Správné pole
+            je vždy jediné. N úloh (výchozí 100), rovnoměrně ve čtyřech třídách: výhra, blok, výhra před blokem (vyhrát jde
+            i zablokovat, správně je vyhrát), vidlička; X i O asi napůl. Za řádkem modelu přesnost podle třídy, pod ním podle
+            značky a počtu volných polí a chyby: blok místo výhry, přehlédnutá výhra, přehlédnutý blok, vidlička soupeře,
+            jen jedna hrozba, obsazené pole, jiné, neplatné. Pole na nejvíc linkách bez soupeřovy značky trefí vidličku asi
+            ve třech čtvrtinách úloh; i to je uvažování o linkách, jen neúplné. S --lanes se nekombinuje.
+--board, --cells:  jen s --tictactoe: podoba stavu, úlohy jsou v obou stejné. --board = tři řádky desky jako řetězce
+            („.“ volné pole); --cells = každé pole jménem rNcM. Bez volby platí --cells.
+--bandit:   mýtné brány (bandita): každá z K bran (4 nebo 5, výchozí 4) vyplácí odměnu s vlastní skrytou šancí a stav
+            nese, kolikrát už auto každou branou projelo a kolikrát vyhrálo. Model volí další bránu podle pravidla v zadání:
+            bránu s méně než 3 průjezdy vyzkoušet, jinak nejvyšší podíl výher, při shodě podílů tu s méně průjezdy; správná
+            brána je vždy jediná. Měří se uplatnění pravidla proti lákadlu „vezmi nejlepší podíl“, ne jestli model zkoumá sám.
+            N úloh (výchozí 100), rovnoměrně ve třech třídách: průzkum, nejvyšší podíl, shoda podílů. Za řádkem modelu přesnost
+            podle třídy, pod ním chyby (bez průzkumu, při shodě víc průjezdů, zbytečný průzkum, nejvíc výher, nejméně proher,
+            nejnižší podíl, jiné, neplatné) a ztráta jednoho kroku proti skrytým šancím (pravidlo, hladová volba, náhoda);
+            průzkum v jednom kroku vždy stojí, ztráta proto není míra kvality. Jen --lanes 4 nebo 5.
+--totals, --history:  jen s --bandit: podoba stavu, úlohy jsou v obou stejné. totals = u každé brány počet průjezdů
+            a výher; history = deník všech průjezdů (brána, výhra nebo prohra) od nejstaršího. Bez volby platí totals.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
+--by-length:  jen s --emails a --public: pod řádkem modelu přesnost podle délky textu ve slovech (u e-mailu předmět a tělo);
+            texty celé sady se seřadí podle délky a rozdělí na třetiny (krátké, střední, dlouhé).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
 --inject:   trojský kůň: čtvrtina úloh má ve stavu schovaný pokyn mířící na konkrétní špatnou odpověď;
@@ -130,6 +169,12 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             Když server už zahřívací dotaz odmítne (HTTP 400), řádek řekne „nevešlo se“ a důvod doslova od serveru;
             Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
 --deadline-ms L:  přibude sloupec goodput = podíl rozhodnutí správných a zároveň do L ms.
+--sweep-lanes:  průchod 2 až 8 pruhů (s --numbers bran): N úloh (výchozí 100) pro každý počet, tytéž jako s --lanes K;
+            pro každý model řádek na každý počet (správně, medián, p95, rozh./s, ECE a pruh # za každých 5 % správně)
+            a pod nimi trend od 2 do 8. Jen překážky a --numbers; nekombinuje se s --lanes, --mirror, --inject, --deadline-ms ani --defer.
+--defer T:  pod řádkem modelu řádek prahu jistoty T (víc než 0 a nejvýš 1, třeba 0.8): pokrytí = podíl úloh s jistotou aspoň T
+            (ty by rozhodl model), přesnost nad prahem, kolik úloh předat člověku nebo pravidlům (odpověď bez jistoty se předává)
+            a Brierovo skóre = průměr (jistota − správně)² přes odpovědi s jistotou, 0 = dokonalé.
 --lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
 U --emails se pod řádkem modelu vypíše macro-F1 (průměr F1 přes kategorie) a počet neplatných odpovědí.
 

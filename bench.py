@@ -1,6 +1,6 @@
 """Srovnání rozhodovacích modelů na stejné sadě úloh (bez hry).
 
-Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -13,8 +13,12 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
+          python bench.py [N] --emails datasets/<soubor>.json [--by-length] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<soubor>.json [--by-length] [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
@@ -29,6 +33,10 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -120,7 +128,38 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --dicts, --lists:  jen s --diff: podoba stavu, úlohy jsou v obou stejné. dicts = before a after jako objekty
             {"lane_1": hodnota, …}; lists = before a after jako seznamy hodnot zleva doprava, pruh je poloha v seznamu.
             Bez volby platí lists.
+--pattern:  vzor soupeře (kámen–nůžky–papír): stav nese tahy soupeře (nejstarší první); po krátké rozehrávce soupeř
+            opakuje pevný cyklus 1 až 4 tahů aspoň 8 tahů, takže další tah je vždy jediný. Model volí tah, který porazí
+            další tah soupeře (counter), nebo tah soupeře přímo (predict). N úloh (výchozí 100), rovnoměrně podle periody
+            (1 až 4; perioda 1 je kontrolní: soupeř hraje pořád totéž). Za řádkem modelu přesnost podle periody, pod ním
+            u counter výsledek (výhra, remíza, prohra, neplatné) a chyby: opakuje poslední tah, nejčastější tah, špatná
+            perioda, přechod, jiné, neplatné; v counter se chyba čte přes tah, který zvolený tah porazí. Náhoda dá třetinu,
+            u periody 2 levná zkratka „jiný tah než poslední“ polovinu. S --lanes se nekombinuje.
+--counter, --predict:  jen s --pattern: podoba otázky, úlohy jsou v obou stejné. counter = vlastní tah, který porazí
+            další tah soupeře; predict = další tah soupeře, řádek chyb navíc počítá protitah místo předpovědi.
+            Bez volby platí predict.
+--tictactoe:  tah na výhru (piškvorky 3×3): model hraje za značku you (X nebo O) a volí jedno z devíti polí podle pravidel
+            v zadání, v tomto pořadí: vyhraj, jinak zablokuj soupeře, jinak udělej vidličku (dvě hrozby naráz). Správné pole
+            je vždy jediné. N úloh (výchozí 100), rovnoměrně ve čtyřech třídách: výhra, blok, výhra před blokem (vyhrát jde
+            i zablokovat, správně je vyhrát), vidlička; X i O asi napůl. Za řádkem modelu přesnost podle třídy, pod ním podle
+            značky a počtu volných polí a chyby: blok místo výhry, přehlédnutá výhra, přehlédnutý blok, vidlička soupeře,
+            jen jedna hrozba, obsazené pole, jiné, neplatné. Pole na nejvíc linkách bez soupeřovy značky trefí vidličku asi
+            ve třech čtvrtinách úloh; i to je uvažování o linkách, jen neúplné. S --lanes se nekombinuje.
+--board, --cells:  jen s --tictactoe: podoba stavu, úlohy jsou v obou stejné. --board = tři řádky desky jako řetězce
+            („.“ volné pole); --cells = každé pole jménem rNcM. Bez volby platí --cells.
+--bandit:   mýtné brány (bandita): každá z K bran (4 nebo 5, výchozí 4) vyplácí odměnu s vlastní skrytou šancí a stav
+            nese, kolikrát už auto každou branou projelo a kolikrát vyhrálo. Model volí další bránu podle pravidla v zadání:
+            bránu s méně než 3 průjezdy vyzkoušet, jinak nejvyšší podíl výher, při shodě podílů tu s méně průjezdy; správná
+            brána je vždy jediná. Měří se uplatnění pravidla proti lákadlu „vezmi nejlepší podíl“, ne jestli model zkoumá sám.
+            N úloh (výchozí 100), rovnoměrně ve třech třídách: průzkum, nejvyšší podíl, shoda podílů. Za řádkem modelu přesnost
+            podle třídy, pod ním chyby (bez průzkumu, při shodě víc průjezdů, zbytečný průzkum, nejvíc výher, nejméně proher,
+            nejnižší podíl, jiné, neplatné) a ztráta jednoho kroku proti skrytým šancím (pravidlo, hladová volba, náhoda);
+            průzkum v jednom kroku vždy stojí, ztráta proto není míra kvality. Jen --lanes 4 nebo 5.
+--totals, --history:  jen s --bandit: podoba stavu, úlohy jsou v obou stejné. totals = u každé brány počet průjezdů
+            a výher; history = deník všech průjezdů (brána, výhra nebo prohra) od nejstaršího. Bez volby platí totals.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
+--by-length:  jen s --emails a --public: pod řádkem modelu přesnost podle délky textu ve slovech (u e-mailu předmět a tělo);
+            texty celé sady se seřadí podle délky a rozdělí na třetiny (krátké, střední, dlouhé).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
 --inject:   trojský kůň: čtvrtina úloh má ve stavu schovaný pokyn mířící na konkrétní špatnou odpověď;
@@ -130,6 +169,12 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             Když server už zahřívací dotaz odmítne (HTTP 400), řádek řekne „nevešlo se“ a důvod doslova od serveru;
             Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
 --deadline-ms L:  přibude sloupec goodput = podíl rozhodnutí správných a zároveň do L ms.
+--sweep-lanes:  průchod 2 až 8 pruhů (s --numbers bran): N úloh (výchozí 100) pro každý počet, tytéž jako s --lanes K;
+            pro každý model řádek na každý počet (správně, medián, p95, rozh./s, ECE a pruh # za každých 5 % správně)
+            a pod nimi trend od 2 do 8. Jen překážky a --numbers; nekombinuje se s --lanes, --mirror, --inject, --deadline-ms ani --defer.
+--defer T:  pod řádkem modelu řádek prahu jistoty T (víc než 0 a nejvýš 1, třeba 0.8): pokrytí = podíl úloh s jistotou aspoň T
+            (ty by rozhodl model), přesnost nad prahem, kolik úloh předat člověku nebo pravidlům (odpověď bez jistoty se předává)
+            a Brierovo skóre = průměr (jistota − správně)² přes odpovědi s jistotou, 0 = dokonalé.
 --lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
 U --emails se pod řádkem modelu vypíše macro-F1 (průměr F1 přes kategorie) a počet neplatných odpovědí.
 
@@ -147,7 +192,7 @@ Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu)
 """
 USAGE_EN = """Compares decision models on the same set of tasks (without the game).
 
-Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -160,8 +205,12 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
+          python bench.py [N] --emails datasets/<file>.json [--by-length] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<file>.json [--by-length] [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
@@ -176,6 +225,10 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -267,7 +320,38 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --dicts, --lists:  only with --diff: the form of the state; the tasks are the same in both. dicts = before and after as
             objects {"lane_1": value, ...}; lists = before and after as lists of values from left to right, the lane is the position in the list.
             Without the option: lists.
+--pattern:  opponent's pattern (rock-paper-scissors): the state holds the opponent's moves (oldest first); after a short
+            opening the opponent repeats a fixed cycle of 1 to 4 moves for at least 8 moves, so the next move is unique.
+            The model picks the move that beats the opponent's next move (counter) or that next move itself (predict).
+            N tasks (default 100), spread evenly by period (1 to 4; period 1 is the control: always the same move). After
+            the model row, the accuracy by period; below it, for counter, the outcome (win, draw, loss, invalid) and the
+            errors: repeats the last move, most frequent move, wrong period, transition, other, invalid (for counter read
+            from the move the chosen move beats). Chance gives a third, "any move but the last" half at period 2. Not with --lanes.
+--counter, --predict:  only with --pattern: the form of the question; the tasks are the same in both. counter = your own
+            move that beats the opponent's next move; predict = the opponent's next move, and the error line also counts a
+            counter move given instead of the prediction. Without the option: predict.
+--tictactoe:  winning move (3×3 tic-tac-toe): the model plays the mark you (X or O) and picks one of nine cells by the
+            rules in the prompt, in this order: win, otherwise block the opponent, otherwise make a fork (two threats at
+            once). The correct cell is always the only one. N tasks (default 100), spread evenly over four classes: win,
+            block, win before block (both are possible, winning is correct), fork; X and O about half each. After the model
+            row, the accuracy by class; below it by mark and by free cells, and the errors: block instead of win, win missed,
+            block missed, opponent's fork, single threat only, occupied cell, other, invalid. The cell on the most lines
+            without an opponent's mark finds the fork in about three quarters of the tasks: partial reasoning. Not with --lanes.
+--board, --cells:  only with --tictactoe: the form of the state; the tasks are the same in both. --board = the three rows
+            of the board as strings ("." for a free cell); --cells = every cell by its name rNcM. Without the option: --cells.
+--bandit:   toll gates (bandit): each of K gates (4 or 5, default 4) pays a prize with its own hidden chance, and the state
+            says how many times the car has gone through each gate and how many of those drives won. The model picks the next
+            gate by the rule in the prompt: try a gate with fewer than 3 drives, otherwise take the highest share of wins, on a
+            tied share the gate with fewer drives; the right gate is always unique. It measures applying the rule against the
+            pull of "take the best share", not exploring on its own. N tasks (default 100), spread evenly over three classes:
+            explore, best share, tied share. After the model row, the accuracy by class; below it the errors (no exploration,
+            more drives in a tie, needless exploration, most wins, fewest losses, lowest share, other, invalid) and the one-step
+            loss against the hidden chances (rule, greedy pick, random); exploring always costs in one step, so it is no measure of quality. Only --lanes 4 or 5.
+--totals, --history:  only with --bandit: the form of the state; the tasks are the same in both. totals = the drives and
+            wins of every gate; history = a log of all drives (gate, and win or loss), oldest first. Without the option: totals.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
+--by-length:  with --emails and --public only: below the model row the accuracy by text length in words (for an e-mail the subject and the body);
+            the texts of the whole dataset are sorted by length and split into thirds (short, medium, long).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
 --inject:   Trojan horse: a quarter of the tasks carry a hidden instruction in the state, aimed at one specific wrong answer;
@@ -277,6 +361,12 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
             Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
 --deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--sweep-lanes:  a sweep over 2 to 8 lanes (gates with --numbers): N tasks (default 100) for every number, the same as with --lanes K;
+            for every model a row for every number (correct, median, p95, dec./s, ECE and a bar with one # for every 5% correct)
+            and below them the trend from 2 to 8. Obstacles and --numbers only; cannot be combined with --lanes, --mirror, --inject, --deadline-ms or --defer.
+--defer T:  below the model row, a line for the confidence threshold T (above 0 and at most 1, such as 0.8): coverage = the share of tasks
+            with a confidence of at least T (the model would decide them), accuracy above the threshold, how many tasks to hand over to a
+            person or the rules (an answer without a confidence is handed over) and the Brier score = the mean (confidence − correct)², 0 = perfect.
 --lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
 With --emails, the line below the model row gives macro-F1 (the mean of F1 over the categories) and the number of invalid answers.
 
@@ -294,6 +384,7 @@ The game must not run in the browser during the measurement (the requests would 
 """
 import argparse
 import contextlib
+import functools
 import itertools
 import json
 import math
@@ -304,6 +395,7 @@ import sys
 import time
 import urllib.request
 from collections import Counter
+from fractions import Fraction
 
 import i18n
 import metrics
@@ -442,6 +534,31 @@ def email_cases(ds, n=None, seed=1):
     order = list(ds["emails"])
     random.Random(seed).shuffle(order)
     return [order[i % len(order)] for i in range(n or len(order))]
+
+
+def email_words(e):
+    """Délka e-mailu ve slovech: předmět a tělo, jak je model čte."""
+    return len(e["subject"].split()) + len(e["body"].split())
+
+
+def length_tally(items, oks, lengths):
+    """Přesnost podle třídy délky. items = úlohy v pořadí měření (tytéž slovníky jako v sadě), oks = správně?, lengths = délky
+    celé sady v jejím pořadí (třídy metrics.length_classes). Úloha se na třídu mapuje podle identity položky."""
+    sizes = metrics.length_classes([length for _, length in lengths])
+    cls_of = {id(item): cls for (item, _), cls in zip(lengths, sizes["classes"])}
+    tally = {cls: [0, 0] for cls in metrics.LENGTH_CLASSES}
+    for item, ok in zip(items, oks):
+        tally[cls_of[id(item)]][0] += bool(ok)
+        tally[cls_of[id(item)]][1] += 1
+    return tally, sizes["ranges"]
+
+
+def length_line(r):
+    """Řádek --by-length: třída, rozsah slov („—“ u prázdné třídy) a správně/celkem."""
+    span = lambda cls: "—" if r["length_ranges"][cls] is None else f"{r['length_ranges'][cls][0]}–{r['length_ranges'][cls][1]}"
+    b = r["by_length"]
+    return i18n.t("bench.byLength", short=span("short"), short_ok=b["short"][0], short_n=b["short"][1], medium=span("medium"),
+                  medium_ok=b["medium"][0], medium_n=b["medium"][1], long=span("long"), long_ok=b["long"][0], long_n=b["long"][1])
 
 
 def email_question(ds):
@@ -2198,6 +2315,791 @@ def diff_summary(cases, choices, keys):
     return {"by_class": by_class, "by_mode": by_mode, "errors": errors}
 
 
+# ---------- scénář: vzor soupeře ----------
+# Úloha je n-tice (historie, další tah soupeře, třída, tvar, délka cyklické části, délka rozehrávky); historie je n-tice
+# tahů, nejstarší první. Soupeř odehraje rozehrávku a pak opakuje cyklus s periodou p (třída "p1" … "p4").
+PATTERN_MOVES = ("rock", "paper", "scissors")        # pořadí možností otázky
+PATTERN_BEATS = {"rock": "paper", "paper": "scissors", "scissors": "rock"}    # PATTERN_BEATS[x] = tah, který porazí x
+PATTERN_BEATEN = {v: k for k, v in PATTERN_BEATS.items()}                     # PATTERN_BEATEN[x] = tah, který x porazí
+PATTERN_CLASSES = ("p1", "p2", "p3", "p4")           # perioda cyklu 1–4; p1 je kontrolní třída
+PATTERN_FORMS = ("counter", "predict")
+PATTERN_FORM = "predict"                             # výchozí podoba otázky; rozhodl pokus nanečisto 2026-10-27 (counter: p1 pod 80 %)
+PATTERN_RUN = (8, 10)                                # délka cyklické části historie (od–do)
+PATTERN_WARMUP = (1, 3)                              # počet tahů rozehrávky (od–do); poslední z nich z cyklu vybočuje
+PATTERN_CHECK = 8                                    # řešitel čte periodu z posledních tolika tahů (zadání: „at least its last 8“)
+# Tvar cyklu čtený od dalšího tahu: písmeno A = další tah soupeře, tvar = posledních p tahů historie. Trojice vah patří
+# délkám cyklické části 8, 9, 10. Celá čísla z lineárního programu (pokus, oddíl „Hledání vah“), opsaná z prototypu doslova.
+PATTERN_WEIGHTS = {
+    "p1": {"A": (1, 1, 1)},
+    "p2": {"AB": (1, 1, 1)},
+    "p3": {"AAB": (2, 2, 13), "ABB": (41, 2, 2), "ABC": (14, 2, 2), "ABA": (2, 12, 2)},
+    "p4": {"AAAB": (1, 14, 1), "AABB": (1, 1, 1), "AABC": (1, 1, 1), "ABBB": (1, 1, 1), "ABBC": (1, 1, 1),
+           "ABCC": (10, 1, 25), "AABA": (1, 1, 1), "ABAA": (3, 1, 1), "ABAC": (1, 1, 1), "ABBA": (11, 1, 1),
+           "ABCA": (1, 1, 1), "ABCB": (5, 1, 7)},
+}
+
+
+def pattern_has_period(seq, q):
+    """Má posloupnost periodu q (každý tah je stejný jako tah o q dřív)?"""
+    return all(seq[i] == seq[i - q] for i in range(q, len(seq)))
+
+
+def pattern_solve(history):
+    """Ideální hráč: (perioda, další tah soupeře). Perioda je nejmenší q z 1–4, které mají posledních PATTERN_CHECK tahů;
+    další tah je history[-q]. Každá perioda 1–4, kterou posledních PATTERN_CHECK tahů má, musí dát stejný tah (věta
+    Fine–Wilf to zaručuje). Kratší historie, historie bez periody do 4 nebo s periodami, které se neshodnou = RuntimeError."""
+    if len(history) < PATTERN_CHECK:
+        raise RuntimeError(f"pattern_solve: history of {len(history)} moves is shorter than {PATTERN_CHECK}")
+    tail = history[-PATTERN_CHECK:]
+    periods = [q for q in range(1, 5) if pattern_has_period(tail, q)]
+    if not periods or len({history[-q] for q in periods}) != 1:
+        raise RuntimeError(f"pattern_solve: ambiguous history {list(history)}")
+    return periods[0], history[-periods[0]]
+
+
+def pattern_case(rng, cls):
+    """Úloha třídy cls: (historie, další tah, třída, tvar, délka cyklické části, délka rozehrávky). Staví přímo, bez zamítání.
+
+    Dvojice (tvar, délka cyklické části) podle PATTERN_WEIGHTS, písmena tvaru na tahy náhodnou permutací, rozehrávka
+    z PATTERN_WARMUP náhodných tahů, z nichž poslední není tah, který by cyklus na tom místě měl (cyklická část je tím
+    přesně tak dlouhá, jak se vylosovalo). Pořadí losování je stejné jako v prototypu. Porušená záruka = RuntimeError,
+    nic se neopravuje potichu."""
+    if cls not in PATTERN_CLASSES:
+        raise RuntimeError(f"pattern_case: unknown class {cls}")
+    p = int(cls[1])
+    combos = [(shape, run) for shape in PATTERN_WEIGHTS[cls] for run in range(PATTERN_RUN[0], PATTERN_RUN[1] + 1)]
+    weights = [w for ws in PATTERN_WEIGHTS[cls].values() for w in ws]
+    shape, run = rng.choices(combos, weights=weights)[0]
+    letters = dict(zip("ABC", rng.sample(PATTERN_MOVES, 3)))
+    cycle = [letters[ch] for ch in shape]            # cycle[0] = další tah; posledních p tahů historie = cycle
+    warm = rng.randint(*PATTERN_WARMUP)
+    body = [cycle[(i - run) % p] for i in range(run)]
+    would_be = cycle[(-1 - run) % p]                 # tah, který by cyklus měl hned před cyklickou částí
+    opening = [rng.choice(PATTERN_MOVES) for _ in range(warm - 1)] + [rng.choice([m for m in PATTERN_MOVES if m != would_be])]
+    history = tuple(opening + body)
+    period, nxt = pattern_solve(history)
+    if (period, nxt) != (p, cycle[0]) or list(history[-p:]) != cycle or pattern_has_period(history[-run - 1:], p):
+        raise RuntimeError(f"pattern_case: {list(history)} does not keep period {p} with next move {cycle[0]}")
+    return history, nxt, cls, shape, run, warm
+
+
+def pattern_cases(n, seed=1):
+    rng = random.Random(seed)
+    return [pattern_case(rng, rng.choice(PATTERN_CLASSES)) for _ in range(n)]
+
+
+PATTERN_KEYS = {"counter": "throw", "predict": "opponent_throw"}               # klíč otázky podle podoby
+PATTERN_INS = {
+    "counter": ("You play rock-paper-scissors against an opponent. Rock beats scissors, scissors beat paper, and paper beats rock. "
+                "opponent_moves lists the opponent's moves so far, oldest first. The opponent opened with a few moves of its own "
+                "and then settled into a fixed cycle of 1 to 4 moves, which it has repeated for at least its last 8 moves. "
+                "Work out the opponent's next move and choose the move that beats it."),
+    "predict": ("You play rock-paper-scissors against an opponent. "
+                "opponent_moves lists the opponent's moves so far, oldest first. The opponent opened with a few moves of its own "
+                "and then settled into a fixed cycle of 1 to 4 moves, which it has repeated for at least its last 8 moves. "
+                "Work out the opponent's next move and choose it."),
+}
+PATTERN_LABELS = {"counter": "Play {move}", "predict": "The opponent plays {move}"}
+
+
+def pattern_form(form):
+    """Podoba otázky: None = výchozí PATTERN_FORM, neznámá podoba = ValueError."""
+    form = form or PATTERN_FORM
+    if form not in PATTERN_FORMS:
+        raise ValueError(f"unknown pattern form: {form}")
+    return form
+
+
+def pattern_state(case):
+    """Stav pro model, v obou podobách stejný: jen tahy soupeře, nejstarší první. Hranice rozehrávky se neoznačuje."""
+    return {"opponent_moves": list(case[0])}
+
+
+def pattern_question(form=None):
+    """Otázka choice: counter → klíč throw (vlastní tah, který porazí další tah soupeře), predict → opponent_throw."""
+    form = pattern_form(form)
+    return {PATTERN_KEYS[form]: {"type": "choice", "instructions": PATTERN_INS[form],
+                                 "criteria": {m: PATTERN_LABELS[form].format(move=m) for m in PATTERN_MOVES}}}
+
+
+def pattern_answer(case, form=None):
+    """Správná odpověď: counter = tah, který porazí další tah soupeře; predict = další tah soupeře."""
+    return PATTERN_BEATS[case[1]] if pattern_form(form) == "counter" else case[1]
+
+
+def pattern_most(seq):
+    """Nejčastější tahy posloupnosti v pořadí PATTERN_MOVES (při shodě všechny)."""
+    counts = Counter(seq)
+    return [m for m in PATTERN_MOVES if counts[m] == max(counts.values())]
+
+
+def pattern_follow(history):
+    """Přechod: nejčastější tahy po dřívějších výskytech posledního tahu (řetězec prvního řádu); bez výskytu prázdné."""
+    after = [history[j + 1] for j in range(len(history) - 1) if history[j] == history[-1]]
+    return pattern_most(after) if after else []
+
+
+def pattern_error_kind(case, choice, form=None):
+    """Druh odpovědi: None = správně. V counter se chyba čte přes implikovanou předpověď y = tah, který zvolený tah porazí
+    (model, který předpověděl y, hraje to, co y porazí); v predict je y volba sama. Pořadí: invalid (není řetězec
+    z PATTERN_MOVES); (jen predict) counter_given = protitah místo předpovědi; last = y je poslední tah soupeře;
+    frequent = y je mezi nejčastějšími tahy; period = y je tah o k zpět pro jinou periodu k z 2–4 (k není p ani jeho
+    násobek); transition = y je přechod (pattern_follow); other."""
+    form = pattern_form(form)
+    history, nxt, cls = case[:3]
+    p = int(cls[1])
+    if not (isinstance(choice, str) and choice in PATTERN_MOVES):
+        return "invalid"
+    if choice == pattern_answer(case, form):
+        return None
+    if form == "predict" and choice == PATTERN_BEATS[nxt]:
+        return "counter_given"
+    y = PATTERN_BEATEN[choice] if form == "counter" else choice
+    if y == history[-1]:
+        return "last"
+    if y in pattern_most(history):
+        return "frequent"
+    if any(k % p and history[-k] == y for k in range(2, 5)):
+        return "period"
+    if y in pattern_follow(history):
+        return "transition"
+    return "other"
+
+
+def pattern_errors(cases, choices, form=None):
+    """Počty druhů chyb v pořadí výpisu; správná odpověď se nepočítá nikam. counter_given jen v podobě predict."""
+    form = pattern_form(form)
+    counts = dict.fromkeys((("counter_given",) if form == "predict" else ()) + ("last", "frequent", "period", "transition", "other", "invalid"), 0)
+    for case, choice in zip(cases, choices):
+        kind = pattern_error_kind(case, choice, form)
+        if kind:
+            counts[kind] += 1
+    return counts
+
+
+def pattern_outcome(case, choice):
+    """Podoba counter: výsledek zvoleného tahu proti skutečnému dalšímu tahu soupeře (win, draw, loss, invalid)."""
+    if not (isinstance(choice, str) and choice in PATTERN_MOVES):
+        return "invalid"
+    return "win" if choice == PATTERN_BEATS[case[1]] else "draw" if choice == case[1] else "loss"
+
+
+def pattern_summary(cases, choices, form=None):
+    """Přesnost podle periody ({třída: [správně, celkem]}), rozbor chyb a v podobě counter výsledek (výhry, remízy,
+    prohry, neplatné)."""
+    form = pattern_form(form)
+    keys = list(PATTERN_MOVES)
+    out = {"by_period": class_tally(PATTERN_CLASSES, [(keys.index(pattern_answer(c, form)), c[2]) for c in cases], choices, keys),
+           "errors": pattern_errors(cases, choices, form)}
+    if form == "counter":
+        outcome = dict.fromkeys(("win", "draw", "loss", "invalid"), 0)
+        for case, choice in zip(cases, choices):
+            outcome[pattern_outcome(case, choice)] += 1
+        out["outcome"] = outcome
+    return out
+
+
+# ---------- scénář: tah na výhru (piškvorky 3×3) ----------
+# Deska je řetězec devíti znaků v pořadí čtení (r1c1 … r3c3): "X", "O", "." volné pole; X začíná. Úloha je n-tice
+# (deska, značka na tahu, index pole odpovědi 0–8, třída).
+TICTACTOE_CELLS = tuple(f"r{r}c{c}" for r in (1, 2, 3) for c in (1, 2, 3))     # klíče otázky, index 0–8 v pořadí čtení
+TICTACTOE_LINES = ((0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6))
+TICTACTOE_CLASSES = ("win", "block", "win_over_block", "fork")   # podle prvního pravidla, které platí
+TICTACTOE_EMPTY = "."
+TICTACTOE_CORNERS, TICTACTOE_EDGES, TICTACTOE_CENTER = (0, 2, 6, 8), (1, 3, 5, 7), 4
+TICTACTOE_FORMS = ("rows", "cells")
+TICTACTOE_FORM = "cells"                             # výchozí podoba stavu; rozhodl pokus nanečisto 2026-10-28 (v rows modely volí obsazená pole)
+TICTACTOE_FEW = 3                                    # „málo volných polí“: nejvýš tolik (řádek pod modelem: 2–3 a 4–6)
+TICTACTOE_TRIES = 1000                               # mez losů na jednu úlohu (zamítání podle zkratek)
+# Vyvážení (konstanty z prohledávání nad přesným modelem generátoru v pokusu, opsané z prototypu):
+# úloha se přijme s pravděpodobností ∏ (1 − h·(1 − a)), h = očekávaná trefa zkratky na úloze, a = koeficient pro třídu.
+TICTACTOE_BALANCE = {
+    "win": {"fewest_opp": 0.25, "center_corner": 0.45, "corner": 0.35, "edge": 0.75, "own_neighbors": 0.3,
+            "opp_neighbors": 0.65, "neighbors": 0.7},
+    "block": {"edge": 0.75, "opp_neighbors": 0.12},
+    "win_over_block": {"fewest_opp": 0.4, "center_corner": 0.8, "edge": 0.22, "own_neighbors": 0.3, "opp_neighbors": 0.8,
+                       "neighbors": 0.8},
+    "fork": {"fewest_opp": 0.2, "edge": 0.2, "own_neighbors": 0.6},
+}
+TICTACTOE_CELL_WEIGHT = {                            # váha typu pole odpovědi při losování pole (roh = 1)
+    "win": {"corner": 1, "edge": 3.3, "center": 3.4},
+    "block": {"corner": 1, "edge": 2.6, "center": 5.5},
+    "win_over_block": {"corner": 1, "edge": 2, "center": 2.35},
+    "fork": {"corner": 1, "edge": 0.6, "center": 2.65},
+}
+TICTACTOE_SIDE_X = {"win": 0.28, "block": 0.48, "win_over_block": 0.54, "fork": 0.47}    # podíl X před zamítáním; po něm asi 1 : 1
+TICTACTOE_NEIGH = tuple(tuple(j for j in range(9) if j != i and abs(j // 3 - i // 3) <= 1 and abs(j % 3 - i % 3) <= 1)
+                        for i in range(9))           # sousedé pole v osmi směrech
+
+
+def tictactoe_winner(b):
+    """Značka, která má trojici, nebo None."""
+    for x, y, z in TICTACTOE_LINES:
+        if b[x] != TICTACTOE_EMPTY and b[x] == b[y] == b[z]:
+            return b[x]
+    return None
+
+
+def tictactoe_to_move(b):
+    return "X" if b.count("X") == b.count("O") else "O"
+
+
+def tictactoe_other(m):
+    return "O" if m == "X" else "X"
+
+
+def tictactoe_free(b):
+    return [i for i in range(9) if b[i] == TICTACTOE_EMPTY]
+
+
+def tictactoe_wins(b, m):
+    """Volná pole, kterými m hned vyhraje (vzestupně)."""
+    return sorted({line[k] for line in TICTACTOE_LINES for k in range(3)
+                   if b[line[k]] == TICTACTOE_EMPTY and all(b[line[j]] == m for j in range(3) if j != k)})
+
+
+def tictactoe_threats(b, i, m):
+    """Počet různých vítězných polí, která m má po tahu na i."""
+    return len(tictactoe_wins(b[:i] + m + b[i + 1:], m))
+
+
+def tictactoe_forks(b, m):
+    """Volná pole, po kterých má m dvě různé vítězné hrozby."""
+    return [i for i in tictactoe_free(b) if tictactoe_threats(b, i, m) >= 2]
+
+
+@functools.lru_cache(maxsize=None)
+def tictactoe_value(b):
+    """Minimax z pohledu hráče na tahu: 1 výhra, 0 remíza, −1 prohra (b je nerozhodnutá pozice)."""
+    m, best = tictactoe_to_move(b), None
+    for i in tictactoe_free(b):
+        nb = b[:i] + m + b[i + 1:]
+        v = 1 if tictactoe_winner(nb) else -tictactoe_value(nb)
+        best = v if best is None else max(best, v)
+        if best == 1:
+            break
+    return 0 if best is None else best
+
+
+def tictactoe_move_value(b, i):
+    m = tictactoe_to_move(b)
+    nb = b[:i] + m + b[i + 1:]
+    return 1 if tictactoe_winner(nb) else -tictactoe_value(nb)
+
+
+def tictactoe_solve(b):
+    """Tah podle pravidel v zadání (výhra, jinak blok, jinak vidlička): (třída, index pole), nebo None, když první
+    platné pravidlo nedává právě jedno pole. win_over_block: jediná výhra a jediný blok, na různých polích."""
+    m = tictactoe_to_move(b)
+    own, opp = tictactoe_wins(b, m), tictactoe_wins(b, tictactoe_other(m))
+    if own:
+        if len(own) != 1 or len(opp) > 1 or own[0] in opp:
+            return None
+        return ("win_over_block" if opp else "win"), own[0]
+    if opp:
+        return ("block", opp[0]) if len(opp) == 1 else None
+    forks = tictactoe_forks(b, m)
+    return ("fork", forks[0]) if len(forks) == 1 else None
+
+
+def tictactoe_strict(b, cls, answer):
+    """Záruky nad rámec pravidel: u block každý jiný volný tah prohrává hned, u fork je vidlička jediný tah, který vyhrává
+    silou (minimax)."""
+    free = [i for i in tictactoe_free(b) if i != answer]
+    if cls == "fork":
+        return tictactoe_move_value(b, answer) == 1 and all(tictactoe_move_value(b, i) < 1 for i in free)
+    if cls == "block":
+        m = tictactoe_to_move(b)
+        return all(tictactoe_wins(b[:i] + m + b[i + 1:], tictactoe_other(m)) for i in free)
+    return True
+
+
+def tictactoe_positions():
+    """Všechny platné nerozhodnuté pozice s aspoň dvěma volnými poli dosažitelné hrou od prázdné desky, seřazené."""
+    seen, stack = set(), [TICTACTOE_EMPTY * 9]
+    while stack:
+        b = stack.pop()
+        if b in seen:
+            continue
+        seen.add(b)
+        if tictactoe_winner(b) or TICTACTOE_EMPTY not in b:
+            continue
+        m = tictactoe_to_move(b)
+        stack.extend(b[:i] + m + b[i + 1:] for i in tictactoe_free(b))
+    return sorted(b for b in seen if not tictactoe_winner(b) and b.count(TICTACTOE_EMPTY) >= 2)
+
+
+@functools.lru_cache(maxsize=None)
+def tictactoe_pools():
+    """Koše {třída: {index pole odpovědi: (pozice, …)}} z pozic s jednoznačnou odpovědí a se zárukami (jednou za modul)."""
+    out = {c: {} for c in TICTACTOE_CLASSES}
+    for b in tictactoe_positions():
+        s = tictactoe_solve(b)
+        if s and tictactoe_strict(b, *s):
+            out[s[0]].setdefault(s[1], []).append(b)
+    return {c: {i: tuple(p[i]) for i in sorted(p)} for c, p in out.items()}
+
+
+def tictactoe_cell_type(i):
+    return "center" if i == TICTACTOE_CENTER else "corner" if i in TICTACTOE_CORNERS else "edge"
+
+
+def _tictactoe_top(b, score):
+    free = tictactoe_free(b)
+    top = max(score(i) for i in free)
+    return [i for i in free if score(i) == top]
+
+
+def _tictactoe_count(b, i, marks):
+    return sum(b[j] in marks for j in TICTACTOE_NEIGH[i])
+
+
+# levné zkratky, podle kterých generátor zamítá: deska a značka na tahu → pole, mezi kterými volí (remíza = 1 / počet)
+TICTACTOE_SHORTCUTS = {
+    "center_corner": lambda b, m: next(g for g in ([i for i in grp if b[i] == TICTACTOE_EMPTY] for grp in
+                                                   ((TICTACTOE_CENTER,), TICTACTOE_CORNERS, TICTACTOE_EDGES)) if g),
+    "corner": lambda b, m: [i for i in TICTACTOE_CORNERS if b[i] == TICTACTOE_EMPTY] or tictactoe_free(b),
+    "edge": lambda b, m: [i for i in TICTACTOE_EDGES if b[i] == TICTACTOE_EMPTY] or tictactoe_free(b),
+    "neighbors": lambda b, m: _tictactoe_top(b, lambda i: _tictactoe_count(b, i, "XO")),
+    "own_neighbors": lambda b, m: _tictactoe_top(b, lambda i: _tictactoe_count(b, i, m)),
+    "opp_neighbors": lambda b, m: _tictactoe_top(b, lambda i: _tictactoe_count(b, i, tictactoe_other(m))),
+    "fewest_opp": lambda b, m: _tictactoe_top(b, lambda i: -_tictactoe_count(b, i, tictactoe_other(m))),
+}
+
+
+def tictactoe_hit(case, name):
+    """Očekávaná trefa zkratky na úloze."""
+    b, m, answer, _ = case
+    picks = TICTACTOE_SHORTCUTS[name](b, m)
+    return (answer in picks) / len(picks)
+
+
+def tictactoe_case(rng, cls):
+    """Jeden los úlohy třídy cls: značka na tahu (X s pravděpodobností TICTACTOE_SIDE_X), pole odpovědi mezi poli, pro
+    která pozice s touto značkou existuje, s vahou typu pole, pak pozice rovnoměrně z koše. Kontrola: řešitel dá třídu
+    i pole a platí záruky; porušení = RuntimeError."""
+    if cls not in TICTACTOE_CLASSES:
+        raise RuntimeError(f"tictactoe_case: unknown class {cls}")
+    pool = tictactoe_pools()[cls]
+    side = "X" if rng.random() < TICTACTOE_SIDE_X[cls] else "O"
+    cells = [i for i in pool if any(tictactoe_to_move(b) == side for b in pool[i])]
+    cell = rng.choices(cells, [TICTACTOE_CELL_WEIGHT[cls][tictactoe_cell_type(i)] for i in cells])[0]
+    b = rng.choice([b for b in pool[cell] if tictactoe_to_move(b) == side])
+    if tictactoe_solve(b) != (cls, cell) or not tictactoe_strict(b, cls, cell) or tictactoe_to_move(b) != side:
+        raise RuntimeError(f"tictactoe_case: broken guarantee {b} {cls} {cell}")
+    return (b, side, cell, cls)
+
+
+def tictactoe_accept(rng, case):
+    """Zamítání podle levných zkratek (TICTACTOE_BALANCE); bere z rng právě jedno číslo."""
+    q = 1.0
+    for name, a in TICTACTOE_BALANCE[case[3]].items():
+        q *= 1 - tictactoe_hit(case, name) * (1 - a)
+    return rng.random() < q
+
+
+def tictactoe_cases(n, seed=1):
+    """n úloh ze semínka; třída rovnoměrně na každou úlohu, pak losy do přijetí (nejvýš TICTACTOE_TRIES)."""
+    rng = random.Random(seed)
+    out = []
+    for _ in range(n):
+        cls = rng.choice(TICTACTOE_CLASSES)
+        for _try in range(TICTACTOE_TRIES):
+            case = tictactoe_case(rng, cls)
+            if tictactoe_accept(rng, case):
+                break
+        else:
+            raise RuntimeError(f"tictactoe_cases: no {cls} task after {TICTACTOE_TRIES} tries")
+        out.append(case)
+    return out
+
+
+def tictactoe_form(form):
+    """Podoba stavu: None = výchozí TICTACTOE_FORM, neznámá podoba = ValueError."""
+    form = form or TICTACTOE_FORM
+    if form not in TICTACTOE_FORMS:
+        raise ValueError(f"unknown tictactoe form: {form}")
+    return form
+
+
+def tictactoe_state(case, form=None):
+    """Stav pro model. rows: tři řetězce po třech znacích, řádky shora, '.' volné pole; cells: všech devět polí jménem
+    v pořadí čtení, prázdný řetězec = volné. Úloha je v obou podobách stejná."""
+    b, you = case[0], case[1]
+    if tictactoe_form(form) == "rows":
+        return {"you": you, "board": [b[0:3], b[3:6], b[6:9]]}
+    return {"you": you, "cells": {k: ("" if b[i] == TICTACTOE_EMPTY else b[i]) for i, k in enumerate(TICTACTOE_CELLS)}}
+
+
+TICTACTOE_RULES = ("Three of one mark in a row, a column or a diagonal win. Pick an empty cell by these rules, in this order: "
+                   "1. If a move wins at once, take it. 2. Otherwise, if the opponent could win on their next move, take that "
+                   "cell to block it. 3. Otherwise, take the cell after which you have two different ways to win on your next move.")
+
+
+def tictactoe_question(form=None):
+    """Otázka choice s devíti poli v pořadí čtení (nabídka i s obsazenými poli, stejná pro všechny úlohy)."""
+    if tictactoe_form(form) == "rows":
+        key, text = "cell", "board lists the rows from the top; in each row the first character is column 1, '.' marks an empty cell."
+    else:
+        key, text = "cell_cells", ("cells gives the mark in each cell, rNcM is row N from the top and column M from the left, "
+                                   "and an empty string is an empty cell.")
+    instructions = f"You play tic-tac-toe on a 3x3 board and it is your move; you is your mark, X or O. {text} {TICTACTOE_RULES}"
+    criteria = {k: f"Row {k[1]}, column {k[3]}" for k in TICTACTOE_CELLS}
+    return {key: {"type": "choice", "instructions": instructions, "criteria": criteria}}
+
+
+def tictactoe_error(case, choice):
+    """Druh chyby jedné volby (None = správně). Pořadí: invalid (není klíč z TICTACTOE_CELLS), occupied (obsazené pole),
+    block_not_win (výhra i blok, zvolen blok), missed_block (jen blok, zvoleno jiné pole), missed_win (výhra přehlédnutá),
+    wrong_side (vidlička soupeře), single_threat (tah s jedinou hrozbou), other."""
+    if not (isinstance(choice, str) and choice in TICTACTOE_CELLS):
+        return "invalid"
+    b, m, answer, _ = case
+    i = TICTACTOE_CELLS.index(choice)
+    if i == answer:
+        return None
+    if b[i] != TICTACTOE_EMPTY:
+        return "occupied"
+    own, opp = tictactoe_wins(b, m), tictactoe_wins(b, tictactoe_other(m))
+    if own and i in opp:
+        return "block_not_win"
+    if opp and not own:
+        return "missed_block"
+    if own:
+        return "missed_win"
+    if i in tictactoe_forks(b, tictactoe_other(m)):
+        return "wrong_side"
+    if tictactoe_threats(b, i, m) >= 1:
+        return "single_threat"
+    return "other"
+
+
+TICTACTOE_ERRORS = ("block_not_win", "missed_win", "missed_block", "wrong_side", "single_threat", "occupied", "other", "invalid")
+
+
+def tictactoe_errors(cases, choices):
+    """Počty druhů chyb (tictactoe_error) v pořadí TICTACTOE_ERRORS; správná volba se nepočítá nikam."""
+    counts = dict.fromkeys(TICTACTOE_ERRORS, 0)
+    for case, choice in zip(cases, choices):
+        kind = tictactoe_error(case, choice)
+        if kind:
+            counts[kind] += 1
+    return counts
+
+
+def tictactoe_summary(cases, choices):
+    """Přesnost podle třídy, značky na tahu a počtu volných polí ({třída: [správně, celkem]}) a rozbor chyb."""
+    keys = list(TICTACTOE_CELLS)
+    free = lambda b: "few" if b.count(TICTACTOE_EMPTY) <= TICTACTOE_FEW else "many"
+    return {"by_class": class_tally(TICTACTOE_CLASSES, [(a, cls) for _, _, a, cls in cases], choices, keys),
+            "by_side": class_tally(("X", "O"), [(a, m) for _, m, a, _ in cases], choices, keys),
+            "by_free": class_tally(("few", "many"), [(a, free(b)) for b, _, a, _ in cases], choices, keys),
+            "errors": tictactoe_errors(cases, choices)}
+
+
+# ---------- scénář: mýtné brány ----------
+# Brána je (výhry, průjezdy, skrytá šance v %), souhrn je [(výhry, průjezdy)]. Úloha je (brány, správná brána, třída, deník);
+# deník = n-tice (brána, výhra?) všech průjezdů od nejstaršího. Losuje se vždy, takže obě podoby stavu mají stejné úlohy.
+# Podíly výher se porovnávají přesně (Fraction), ne v plovoucí čárce; stránka totéž v celých číslech (křížové násobení).
+BANDIT_GATES = (4, 5)                                # podporovaný počet bran, výchozí první; K = 3 vyvážit nejde, K >= 6 natáhne deník
+BANDIT_EXPLORE = 3                                   # bránu s méně průjezdy model volí hned (pravidlo 1); rozhodnuto po pokusu
+BANDIT_SPLIT = ((3, 6), (9, 16))                     # průjezdy vyzkoušené brány: půl na půl „málo“, nebo „hodně“
+BANDIT_TOTAL = 10                                    # průjezdů celkem nejvýš tolik na bránu v průměru (délka deníku)
+BANDIT_MARGIN = Fraction(1, 10)                      # nejvyšší podíl je aspoň o 0,1 nad dalším (v tie společný podíl dvojice)
+BANDIT_CHANCES = tuple(range(10, 95, 5))             # skryté šance 10–90 % po 5
+BANDIT_CLASSES = ("explore", "exploit", "tie")       # rozhodlo pravidlo 1, 2, 3
+BANDIT_FRESH = ((0, 0), (0, 1), (0, 2), (1, 2), (1, 1), (2, 2))   # (výhry, průjezdy) brány k průzkumu, rovnoměrně
+BANDIT_FORMS = ("totals", "history")
+BANDIT_FORM = "totals"                               # výchozí podoba stavu; rozhodla hlavní session po pokusu (Volby po pokusu)
+BANDIT_TRIES = 20000                                 # mez pokusů na úlohu (vzor zkratek) i na pořadí deníku
+# Hlídané zkratky podle třídy. Vzor úlohy má pro každou zkratku písmeno: H = trefí jen správnou bránu, T = správná je ve shodě
+# s jinou, M = netrefí. Vzor se losuje podle vah BANDIT_PATTERNS a úloha se přijme, jen když ho má (vzor lookahead_case).
+BANDIT_WATCH = {
+    "explore": ("greedy", "lowest_rate", "fewest_losses", "most_wins", "exclusion"),
+    "exploit": ("most_wins", "most_tries", "fewest_tries", "fewest_losses", "exclusion"),
+    "tie": ("fewest_tries", "fewest_losses", "lowest_rate_tried", "exclusion"),
+}
+# Váhy vzorů z prototypu (--search K 0.3, semínko 1, strop jednoho vzoru 30 %): každá hlídaná zkratka trefí co nejblíž 1/K.
+BANDIT_PATTERNS = {
+    4: {
+        "explore": {"MHMMM": 12, "TMTMT": 12, "MTMMM": 17, "MMMMT": 12, "HMHMT": 2, "MMMMH": 10, "MHMMT": 4, "TMTMM": 27, "MTMMT": 2, "HMHTM": 3},
+        "exploit": {"HHMMM": 22, "MMHHM": 20, "HMMMM": 1, "MMMMH": 25, "HTMMT": 1, "TMMMT": 8, "MMMTM": 20, "MMMTT": 1, "HTMMM": 1},
+        "tie": {"HHMM": 15, "MHMM": 3, "MMMT": 30, "MMMH": 20, "THMM": 2, "MTMM": 30},
+    },
+    5: {
+        "explore": {"TMTMM": 26, "TMTMT": 6, "HMHMM": 1, "MHMMM": 5, "MMMMT": 29, "HMHMT": 2, "MTMMT": 1, "MTMMM": 28, "HMHTT": 1},
+        "exploit": {"MMHHM": 15, "MMMTT": 6, "HHMMM": 6, "MMMTM": 13, "TMMMM": 21, "HHMMT": 8, "MMMMT": 30},
+        "tie": {"HHMM": 6, "MHMM": 1, "MTMT": 20, "MTMM": 30, "MMMH": 10, "MMMT": 30, "THMM": 3},
+    },
+}
+
+
+def bandit_share(wins, drives):
+    """Podíl výher; brána bez průjezdu má 0 (jen pro zkratky, pravidlo ji volí dřív)."""
+    return Fraction(wins, drives) if drives else Fraction(0)
+
+
+def bandit_best(values, best=max):
+    """Množina indexů s nejlepší hodnotou (při shodě všechny)."""
+    top = best(values)
+    return {i for i, v in enumerate(values) if v == top}
+
+
+def bandit_answer(totals):
+    """Správná brána podle pravidla v zadání; totals = [(výhry, průjezdy)]. Vrací (index, třída), nebo None, když pravidlo
+    jedinou bránu nedá (dvě brány pod BANDIT_EXPLORE, shoda nejvyššího podílu se stejným počtem průjezdů)."""
+    fresh = [i for i, (_, n) in enumerate(totals) if n < BANDIT_EXPLORE]
+    if len(fresh) > 1:
+        return None
+    if fresh:
+        return fresh[0], "explore"
+    top = bandit_best([bandit_share(w, n) for w, n in totals])
+    if len(top) == 1:
+        return next(iter(top)), "exploit"
+    drives = [totals[i][1] for i in top]
+    if drives.count(min(drives)) > 1:
+        return None
+    return min(top, key=lambda i: totals[i][1]), "tie"
+
+
+def bandit_check(totals):
+    """Nezávislé čtení zadání (hlídá bandit_answer): seřadí brány podle (vyzkoušená?, −podíl, průjezdy), první musí být
+    jediná. Vrací index, nebo None (zadání slibuje nejvýš jednu bránu k průzkumu)."""
+    if sum(n < BANDIT_EXPLORE for _, n in totals) > 1:
+        return None
+    key = lambda i: (totals[i][1] >= BANDIT_EXPLORE, -bandit_share(*totals[i]), totals[i][1])
+    order = sorted(range(len(totals)), key=key)
+    return None if key(order[0]) == key(order[1]) else order[0]
+
+
+def bandit_tie_more(totals):
+    """Částečné uvažování: průzkum i podíl správně, při shodě nejvyššího podílu brána s víc průjezdy."""
+    top = bandit_best([bandit_share(w, n) if n >= BANDIT_EXPLORE else Fraction(-1) for w, n in totals])
+    return {max(top, key=lambda i: totals[i][1])} if len(top) > 1 else top
+
+
+def bandit_exclusion(totals):
+    """Vyloučení: brány, které netrefí žádná levná zkratka kromě fewest_tries; když žádná nezbude, všechny."""
+    flagged = set().union(*(BANDIT_SHORTCUTS[name](totals) for name in ("most_wins", "most_tries", "fewest_losses", "lowest_rate")))
+    return (set(range(len(totals))) - flagged) or set(range(len(totals)))
+
+
+# Zkratky a částečné strategie nad souhrnem: vrací množinu bran, mezi kterými by se zkratka rozhodla (při shodě všechny).
+BANDIT_SHORTCUTS = {
+    "most_wins": lambda t: bandit_best([w for w, _ in t]),
+    "most_tries": lambda t: bandit_best([n for _, n in t]),
+    "fewest_tries": lambda t: bandit_best([n for _, n in t], min),
+    "fewest_losses": lambda t: bandit_best([n - w for w, n in t], min),
+    "lowest_rate": lambda t: bandit_best([bandit_share(w, n) for w, n in t], min),
+    "lowest_rate_tried": lambda t: bandit_best([bandit_share(w, n) if n >= BANDIT_EXPLORE else Fraction(2) for w, n in t], min),
+    "greedy": lambda t: bandit_best([bandit_share(w, n) for w, n in t]),                    # pravidlo 1 vynechá, 0/0 = 0
+    "greedy_tried": lambda t: bandit_best([bandit_share(w, n) if n >= BANDIT_EXPLORE else Fraction(-1) for w, n in t]),
+    "tie_more": bandit_tie_more,
+    "exclusion": bandit_exclusion,
+}
+
+
+def bandit_pattern(cls, totals, answer):
+    """Vzor úlohy: písmeno H / T / M pro každou hlídanou zkratku třídy (BANDIT_WATCH)."""
+    out = ""
+    for name in BANDIT_WATCH[cls]:
+        picks = BANDIT_SHORTCUTS[name](totals)
+        out += "H" if picks == {answer} else "T" if answer in picks else "M"
+    return out
+
+
+def bandit_tried(rng):
+    """Vyzkoušená brána: šance, průjezdy z „málo“ nebo „hodně“, výhry binomicky."""
+    chance = rng.choice(BANDIT_CHANCES)
+    drives = rng.randint(*rng.choice(BANDIT_SPLIT))
+    return sum(rng.random() < chance / 100 for _ in range(drives)), drives, chance
+
+
+def bandit_tie_multiples(b):
+    """Násobky m, pro které má brána s podílem a/b (zkrácený zlomek) b·m průjezdů v rozsahu vyzkoušené brány."""
+    return [m for m in range(1, 11) if BANDIT_EXPLORE <= b * m <= BANDIT_SPLIT[1][1]]
+
+
+# Společné podíly dvojice ve shodě: zkrácené zlomky a/b pod 1, které jdou zapsat aspoň dvěma počty průjezdů (2/4 a 4/8 …), vzestupně.
+BANDIT_TIE_SHARES = tuple(sorted({(f.numerator, f.denominator) for b in range(1, BANDIT_SPLIT[1][1] + 1) for a in range(1, b)
+                                  for f in (Fraction(a, b),) if len(bandit_tie_multiples(f.denominator)) >= 2},
+                                 key=lambda ab: Fraction(*ab)))
+
+
+def bandit_tie_pair(rng):
+    """Dvě brány se stejným podílem a různým počtem průjezdů. Skrytá šance každé z nich je ta z BANDIT_CHANCES, která je
+    nejblíž podílu posunutému o náhodnou odchylku ±0,15 (jedna odchylka na bránu)."""
+    a, b = rng.choice(BANDIT_TIE_SHARES)
+    m1, m2 = sorted(rng.sample(bandit_tie_multiples(b), 2))
+
+    def near():
+        target = a / b + rng.uniform(-0.15, 0.15)
+        return min(BANDIT_CHANCES, key=lambda c: abs(c / 100 - target))
+    first = near()
+    return [(a * m1, b * m1, first), (a * m2, b * m2, near())]
+
+
+def bandit_raw(rng, k, cls):
+    """Jeden pokus o úlohu třídy cls: (brány, správná), nebo None, když nesplní třídu, mez průjezdů, odstup nebo kontrolu."""
+    if cls == "explore":
+        wins, drives = rng.choice(BANDIT_FRESH)
+        gates = [(wins, drives, rng.choice(BANDIT_CHANCES))] + [bandit_tried(rng) for _ in range(k - 1)]
+    elif cls == "tie":
+        gates = bandit_tie_pair(rng) + [bandit_tried(rng) for _ in range(k - 2)]
+    else:
+        gates = [bandit_tried(rng) for _ in range(k)]
+    rng.shuffle(gates)
+    if sum(n for _, n, _ in gates) > BANDIT_TOTAL * k:
+        return None
+    totals = [(w, n) for w, n, _ in gates]
+    got = bandit_answer(totals)
+    if got is None or got[1] != cls or bandit_check(totals) != got[0]:
+        return None
+    shares = sorted((bandit_share(w, n) for w, n in totals if n >= BANDIT_EXPLORE), reverse=True)
+    top = 2 if cls == "tie" else 1
+    if cls != "explore" and len(shares) > top and shares[top - 1] - shares[top] < BANDIT_MARGIN:
+        return None
+    if cls == "tie" and shares[0] == 1:              # shoda podílu 1 (3/3 a 7/7) by vznikala hlavně náhodou z ostatních bran
+        return None
+    return tuple(gates), got[0]
+
+
+def bandit_case(rng, k, cls, patterns=None):
+    """Vrací (brány, správná, třída). Vzor zkratek se losuje podle vah (patterns = {vzor: váha}, výchozí BANDIT_PATTERNS[k][cls])
+    a pokusy se opakují, dokud úloha vzor nemá; po BANDIT_TRIES pokusech RuntimeError. Nic se neopravuje potichu."""
+    if k not in BANDIT_GATES or cls not in BANDIT_CLASSES:
+        raise RuntimeError(f"bandit_case: unsupported task for {k} gates and class {cls}")
+    patterns = BANDIT_PATTERNS[k][cls] if patterns is None else patterns
+    want = rng.choices(list(patterns), weights=list(patterns.values()))[0]
+    for _ in range(BANDIT_TRIES):
+        got = bandit_raw(rng, k, cls)
+        if got is not None and bandit_pattern(cls, [(w, n) for w, n, _ in got[0]], got[1]) == want:
+            return got[0], got[1], cls
+    raise RuntimeError(f"bandit_case: no {cls} task ({want}) for {k} gates after {BANDIT_TRIES} tries")
+
+
+def bandit_log(rng, gates, answer):
+    """Deník: všechny průjezdy souhrnu v náhodném pořadí (nejstarší první) jako n-tice (brána, výhra?). Předem se losuje,
+    jestli má správnou bránu trefit zkratka „poslední výhra“ a „poslední průjezd“ (každá s pravděpodobností 1/K), a pořadí
+    se míchá, dokud to nesedí (nejvýš BANDIT_TRIES, pak RuntimeError)."""
+    drives = [(i, True) for i, (w, _, _) in enumerate(gates) for _ in range(w)]
+    drives += [(i, False) for i, (w, n, _) in enumerate(gates) for _ in range(n - w)]
+    q = 1 / len(gates)
+    only = all(w == 0 for i, (w, _, _) in enumerate(gates) if i != answer) and gates[answer][0] > 0
+    want_win = only or (rng.random() < q and gates[answer][0] > 0)       # vyhrává jen správná: poslední výhra je vždy její
+    want_last = rng.random() < q and gates[answer][1] > 0
+    if want_last and gates[answer][0] == gates[answer][1]:   # samé výhry: poslední průjezd je zároveň poslední výhra
+        want_win = True
+    for _ in range(BANDIT_TRIES):
+        rng.shuffle(drives)
+        wins = [i for i, ok in drives if ok]
+        if (bool(wins) and wins[-1] == answer) == want_win and (drives[-1][0] == answer) == want_last:
+            return tuple(drives)
+    raise RuntimeError("bandit_log: no order fits")
+
+
+def bandit_cases(n, k=4, seed=1):
+    """n úloh ze semínka: třída rovnoměrně na každou úlohu, pak úloha a deník (obě podoby stavu tak mají stejné úlohy)."""
+    rng = random.Random(seed)
+    tasks = []
+    for _ in range(n):
+        gates, answer, cls = bandit_case(rng, k, rng.choice(BANDIT_CLASSES))
+        tasks.append((gates, answer, cls, bandit_log(rng, gates, answer)))
+    return tasks
+
+
+def bandit_form(form):
+    """Podoba stavu: None = výchozí BANDIT_FORM, neznámá podoba = ValueError."""
+    form = form or BANDIT_FORM
+    if form not in BANDIT_FORMS:
+        raise ValueError(f"unknown bandit form: {form}")
+    return form
+
+
+def bandit_state(case, form=None):
+    """Stav pro model. totals: gate_N → průjezdy a výhry; history: seznam bran a deník všech průjezdů od nejstaršího
+    (brána bez průjezdu v deníku chybí, proto je seznam bran zvlášť)."""
+    gates, log = case[0], case[3]
+    if bandit_form(form) == "totals":
+        return {f"gate_{i + 1}": {"drives": n, "wins": w} for i, (w, n, _) in enumerate(gates)}
+    return {"gates": gate_keys(len(gates)),
+            "log": [{"gate": f"gate_{i + 1}", "result": "win" if won else "loss"} for i, won in log]}
+
+
+BANDIT_INS = {                                       # zadání pro model podle podoby stavu; jde do modelu, proto anglicky a mimo i18n
+    "totals": ("Each toll gate pays a prize with its own hidden chance. For every gate, drives is how many times a car has "
+               "gone through it and wins is how many of those drives won the prize. Choose the next gate by these rules, "
+               "in order: 1. If a gate has fewer than 3 drives, choose it (there is at most one such gate). "
+               "2. Otherwise choose the gate with the highest share of wins, wins divided by drives. "
+               "3. If two gates share the highest share, choose the one with fewer drives."),
+    "history": ("Each toll gate pays a prize with its own hidden chance. gates lists all gates; log lists every earlier drive, "
+                "oldest first: the gate the car went through and whether it won the prize. Choose the next gate by these rules, "
+                "in order: 1. If a gate has fewer than 3 drives in log, choose it (there is at most one such gate). "
+                "2. Otherwise choose the gate with the highest share of wins, its wins divided by its drives. "
+                "3. If two gates share the highest share, choose the one with fewer drives."),
+}
+
+
+def bandit_question(k, form=None):
+    """Otázka choice podle podoby stavu: totals → klíč toll, history → klíč toll_log (vzor gate / gate_labeled)."""
+    form = bandit_form(form)
+    return {"toll" if form == "totals" else "toll_log": {"type": "choice", "instructions": BANDIT_INS[form],
+                                                         "criteria": position_criteria(gate_keys(k), "Gate")}}
+
+
+BANDIT_ERRORS = ("no_explore", "tie_more", "over_explore", "most_wins", "fewest_losses", "lowest_rate", "other", "invalid")
+
+
+def bandit_error_kind(case, pick):
+    """Druh chyby, nebo None u správné volby; pick = index zvolené brány, nebo None (neplatná odpověď). Pořadí rozhoduje,
+    kam patří volba, která sedí na víc druhů: no_explore (explore: nejvyšší podíl mezi vyzkoušenými), tie_more (tie: brána
+    ze shody s víc průjezdy), over_explore (exploit, tie: nejméně průjezdů), pak levné zkratky most_wins, fewest_losses,
+    lowest_rate, nakonec other."""
+    gates, answer, cls = case[:3]
+    if pick is None:
+        return "invalid"
+    if pick == answer:
+        return None
+    totals = [(w, n) for w, n, _ in gates]
+    if cls == "explore" and pick in BANDIT_SHORTCUTS["greedy_tried"](totals):
+        return "no_explore"
+    if cls == "tie" and pick in BANDIT_SHORTCUTS["tie_more"](totals):
+        return "tie_more"
+    if cls != "explore" and pick in BANDIT_SHORTCUTS["fewest_tries"](totals):
+        return "over_explore"
+    for name in ("most_wins", "fewest_losses", "lowest_rate"):
+        if pick in BANDIT_SHORTCUTS[name](totals):
+            return name
+    return "other"
+
+
+def bandit_loss(gates, i):
+    """Ztráta jednoho kroku: nejvyšší skrytá šance minus šance zvolené brány, v procentních bodech."""
+    return max(c for _, _, c in gates) - gates[i][2]
+
+
+def bandit_summary(cases, choices, keys):
+    """Přesnost podle třídy, druhy chyb a ztráta jednoho kroku. loss = průměr přes úlohy v p. b.: model (neplatná odpověď
+    = největší ztráta v úloze), pravidlo (správné odpovědi), hladová volba (nejvyšší podíl, 0/0 = 0; shoda = průměr) a náhoda.
+    Ztráta není míra kvality: průzkum v jednom kroku vždy stojí, jeho užitek přijde až v dalších krocích, které tu nejsou."""
+    errors = dict.fromkeys(BANDIT_ERRORS, 0)
+    loss = dict.fromkeys(("model", "rule", "greedy", "random"), 0.0)
+    for case, choice in zip(cases, choices):
+        gates, answer = case[:2]
+        pick = keys.index(choice) if isinstance(choice, str) and choice in keys else None
+        kind = bandit_error_kind(case, pick)
+        if kind:
+            errors[kind] += 1
+        every = [bandit_loss(gates, i) for i in range(len(gates))]
+        greedy = BANDIT_SHORTCUTS["greedy"]([(w, n) for w, n, _ in gates])
+        loss["model"] += every[pick] if pick is not None else max(every)
+        loss["rule"] += every[answer]
+        loss["greedy"] += sum(every[i] for i in greedy) / len(greedy)
+        loss["random"] += sum(every) / len(every)
+    return {"by_class": class_tally(BANDIT_CLASSES, [(answer, cls) for _, answer, cls, _ in cases], choices, keys),
+            "errors": errors, "loss": {name: total / len(cases) for name, total in loss.items()}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2218,6 +3120,12 @@ ALT = {                                              # jinak formulované zadán
     "depot": "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
     "changed": "Two photos show the same row of lanes, before first and after second, with one value per lane. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
     "changed_list": "Two photos show the same row of lanes, before first and after second; each one lists the lane values from left to right, so its first item belongs to lane 1. In after, the value of exactly one lane differs from its value in before. Pick that lane.",
+    "throw": "In this game of rock-paper-scissors, paper wins over rock, rock wins over scissors and scissors win over paper. opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick the move that wins against it.",
+    "opponent_throw": "In this game of rock-paper-scissors, opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick that move.",
+    "cell": "It is your turn in a game of tic-tac-toe and your mark is the one in you. board shows the three rows from top to bottom, each written left to right, with '.' for a free cell. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.",
+    "cell_cells": "It is your turn in a game of tic-tac-toe and your mark is the one in you. cells names every cell as rNcM, row N counted from the top and column M from the left, and gives its mark; an empty string means the cell is free. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.",
+    "toll": "Every toll gate has its own unknown chance of paying a prize. drives tells how often a car has passed a gate and wins how often that paid. Pick the next gate: a gate passed fewer than 3 times comes first, and there is never more than one; if there is none, take the gate with the most wins per drive; when two gates are level on that, take the one passed fewer times.",
+    "toll_log": "Every toll gate has its own unknown chance of paying a prize. gates names all gates and log holds every earlier drive from the oldest: which gate the car passed and whether that paid. Pick the next gate: a gate that appears fewer than 3 times in log comes first, and there is never more than one; if there is none, take the gate with the most wins per drive; when two gates are level on that, take the one passed fewer times.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)
@@ -2376,7 +3284,7 @@ def measure(model, items, question, mirror=False, targets=None, deadline=None):
         "other": share(inj_n - resisted - fooled, inj_n), "clean_acc": share(clean_ok, clean_n)}
     return {"model": model, "avg": statistics.mean(lat), "p50": lat[n // 2], "p95": lat[int(n * 0.95)],
             "min": lat[0], "max": lat[-1], "acc": hits[0] / n, "conf": statistics.mean(conf) if conf else float("nan"),
-            "ece": ece(pairs), "tokens": tokens,
+            "ece": ece(pairs), "brier": metrics.brier(pairs), "cal": pairs, "tasks": n, "tokens": tokens,
             "stab": agree / n if mirror else None, "variant_acc": [h / n for h in hits], "inject": inject,
             "deadline": deadline, "goodput": metrics.goodput(timed, deadline)}, choices
 
@@ -2451,7 +3359,7 @@ def measure_noul(model, items, question, mirror=False, targets=None, deadline=No
         "other": share(inj_n - resisted - fooled, inj_n), "clean_acc": share(clean_ok, clean_n)}
     return {"model": model, "avg": statistics.mean(lat), "p50": lat[n // 2], "p95": lat[int(n * 0.95)],
             "min": lat[0], "max": lat[-1], "acc": hits[0] / n, "conf": statistics.mean(conf) if conf else float("nan"),
-            "ece": ece(pairs), "tokens": tokens,
+            "ece": ece(pairs), "brier": metrics.brier(pairs), "cal": pairs, "tasks": n, "tokens": tokens,
             "stab": agree / n if mirror else None, "variant_acc": [h / n for h in hits], "inject": inject,
             "deadline": deadline, "goodput": metrics.goodput(timed, deadline)}, probs
 
@@ -2498,7 +3406,7 @@ def measure_score(model, items, question, mirror=False, targets=None, deadline=N
         "other": share(inj_n - resisted - fooled, inj_n), "clean_acc": share(clean_ok, clean_n)}
     return {"model": model, "avg": statistics.mean(lat), "p50": lat[n // 2], "p95": lat[int(n * 0.95)],
             "min": lat[0], "max": lat[-1], "acc": hits[0] / n, "conf": statistics.mean(conf) if conf else float("nan"),
-            "ece": ece(pairs), "tokens": tokens,
+            "ece": ece(pairs), "brier": metrics.brier(pairs), "cal": pairs, "tasks": n, "tokens": tokens,
             "stab": agree / n if mirror else None, "variant_acc": [h / n for h in hits], "inject": inject,
             "deadline": deadline, "goodput": metrics.goodput(timed, deadline)}, levels
 
@@ -2545,7 +3453,7 @@ def refusal_reason(e, limit=300):
     return (text if len(text) <= limit else text[:limit - 1] + "…") or None
 
 
-def run_public(model, ds, cases, deadline=None):
+def run_public(model, ds, cases, deadline=None, by_length=False):
     """Veřejná sada. Odmítne-li server už zahřívací dotaz stavem 400, sada se pro model neměří: {"fit": False}
     s doslovným důvodem od serveru v "reason" (None, když ho přečíst nejde). Proč server odmítl, kód nehádá;
     Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
@@ -2587,15 +3495,19 @@ def run_public(model, ds, cases, deadline=None):
     quality = metrics.classification(pairs, ds["oos"])
     return {"model": model, "fit": True, "n": len(pairs), "avg": statistics.mean(lat), "p50": lat[n // 2], "p90": lat[int(n * 0.9)],
             "p95": lat[int(n * 0.95)], "min": lat[0], "max": lat[-1], "acc": quality["acc"],
-            "conf": statistics.mean(conf) if conf else float("nan"), "ece": ece(cal), "tokens": tokens,
+            "conf": statistics.mean(conf) if conf else float("nan"), "ece": ece(cal), "brier": metrics.brier(cal), "cal": cal, "tasks": len(pairs), "tokens": tokens,
             "stab": None, "variant_acc": None, "inject": None, "deadline": deadline, "goodput": metrics.goodput(timed, deadline),
-            "quality": quality, "refused": refused}
+            "quality": quality, "refused": refused,
+            **(dict(zip(("by_length", "length_ranges"), length_tally(cases, [pick == label for label, pick in pairs],
+                                                                     [(it, len(it["text"].split())) for it in ds["items"]])))
+               if by_length else {})}
 
 
-def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
+def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None, warm=True):
     keys, question = lane_keys(lanes), lane_question(lanes)
     state = lambda lane, dists: {"car_is_in": keys[lane], **{k: describe(d) for k, d in zip(keys, dists)}}
-    ask(model, state(lanes // 2, [99] * lanes), question)        # zahřátí = načtení modelu, nepočítá se
+    if warm:                                         # --sweep-lanes zahřívá jen u prvního počtu pruhů
+        ask(model, state(lanes // 2, [99] * lanes), question)    # zahřátí = načtení modelu, nepočítá se
     truths = [{keys[i] for i in oracle(lane, dists)} for lane, dists in cases]
     targets = inject_plan(truths, keys) if inject else None
     notes = targets or [None] * len(cases)
@@ -2606,7 +3518,7 @@ def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
     return r
 
 
-def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None):
+def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None, by_length=False):
     question = email_question(ds)
     state = lambda e: {"subject": e["subject"], "body": e["body"]}
     ask(model, state(ds["emails"][0]), question)                 # zahřátí, nepočítá se
@@ -2616,6 +3528,9 @@ def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None):
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r["quality"] = metrics.classification([(e["category"], c if isinstance(c, str) and c in ds["index"] else None)
                                            for e, c in zip(cases, choices)])
+    if by_length:                                    # --by-length: úlohy jsou tytéž slovníky jako v sadě (length_tally)
+        r["by_length"], r["length_ranges"] = length_tally(cases, [c == e["category"] for e, c in zip(cases, choices)],
+                                                          [(e, email_words(e)) for e in ds["emails"]])
     r["confusions"] = Counter()
     for e, choice in zip(cases, choices):
         if choice != e["category"]:
@@ -2624,10 +3539,11 @@ def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None):
     return r
 
 
-def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
+def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None, warm=True):
     keys, question = gate_keys(lanes), number_question(lanes)
     state = lambda values: dict(zip(keys, values))
-    ask(model, state(cases[0][0]), question)                     # zahřátí, nepočítá se
+    if warm:                                         # --sweep-lanes zahřívá jen u prvního počtu bran
+        ask(model, state(cases[0][0]), question)                 # zahřátí, nepočítá se
     targets = inject_plan([{keys[top]} for _, top, _ in cases], keys) if inject else None
     notes = targets or [None] * len(cases)
     items = [(with_note(state(values), note), {keys[top]}, "") for (values, top, _), note in zip(cases, notes)]
@@ -2806,6 +3722,73 @@ def run_diff(model, cases, lanes=DIFF_LANES, mirror=False, inject=False, deadlin
     return r
 
 
+def run_pattern(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(PATTERN_MOVES), pattern_question(form)
+    ask(model, pattern_state(cases[0]), question)                # zahřátí, nepočítá se
+    targets = inject_plan([{pattern_answer(case, form)} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(pattern_state(case), note), {pattern_answer(case, form)}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(pattern_summary(cases, choices, form))              # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_tictactoe(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys, question = list(TICTACTOE_CELLS), tictactoe_question(form)
+    ask(model, tictactoe_state(cases[0], form), question)        # zahřátí, nepočítá se
+    # trojský kůň míří jen na volná špatná pole: obsazená pole jdou do inject_plan mezi „správné“, aby je nelosoval
+    taken = [{keys[a]} | {keys[i] for i in range(9) if b[i] != TICTACTOE_EMPTY} for b, _, a, _ in cases]
+    targets = inject_plan(taken, keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(tictactoe_state(case, form), note), {keys[case[2]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(tictactoe_summary(cases, choices))                  # z původní varianty zadání, jako přesnost
+    return r
+
+
+def run_bandit(model, cases, mirror=False, inject=False, deadline=None, form=None):
+    keys = gate_keys(len(cases[0][0]))
+    question = bandit_question(len(keys), form)
+    ask(model, bandit_state(cases[0], form), question)           # zahřátí, nepočítá se
+    targets = inject_plan([{keys[case[1]]} for case in cases], keys) if inject else None
+    notes = targets or [None] * len(cases)
+    items = [(with_note(bandit_state(case, form), note), {keys[case[1]]}, "") for case, note in zip(cases, notes)]
+    r, choices = measure(model, items, question, mirror, targets, deadline)
+    r.update(bandit_summary(cases, choices, keys))               # z původní varianty zadání, jako přesnost
+    return r
+
+
+# ---------- průchod počtem pruhů (--sweep-lanes) ----------
+SWEEP_LANES = range(2, 9)                            # počty pruhů (bran) průchodu
+SWEEP_BAR = 20                                       # znaků # za 100 % správně: jeden znak za každých 5 %
+
+
+def run_sweep(model, n, numbers=False):
+    """Pro každý počet pruhů (s numbers bran) 2–8 vlastní sada n úloh, stejná jako bench.py n --lanes K. Vrací [(K, souhrn)].
+    Zahřívací dotaz (nepočítá se) jen jednou, u prvního počtu: u hostovaného modelu stojí každý dotaz peníze i strop dotazů."""
+    if numbers:
+        return [(k, run_numbers(model, number_cases(n, k), k, warm=k == SWEEP_LANES[0])) for k in SWEEP_LANES]
+    return [(k, run_lanes(model, make_cases(n, k), k, warm=k == SWEEP_LANES[0])) for k in SWEEP_LANES]
+
+
+def sweep_header(numbers=False):
+    """Záhlaví tabulky průchodu; šířky sloupců jsou v obou jazycích stejné, slova jsou ze záhlaví hlavní tabulky."""
+    cols = [(i18n.t("bench.col.model"), "<20"), (i18n.t("bench.col.gates") if numbers else i18n.t("bench.col.lanes"), ">7"),
+            (i18n.t("bench.col.acc"), ">9"), (i18n.t("bench.col.p50"), ">9"), (i18n.t("bench.col.p95"), ">8"),
+            (i18n.t("bench.col.rate"), ">9"), (i18n.t("bench.col.ece"), ">7")]
+    return "".join(format(text, width) for text, width in cols)
+
+
+def print_sweep(model, rows):
+    """Řádek na každý počet pruhů (v obou jazycích stejný; # = 5 % správně) a pod nimi trend od prvního k poslednímu počtu."""
+    for k, r in rows:
+        bar = "#" * round(r["acc"] * SWEEP_BAR)
+        print(f"{model:<20}{k:>7}{pct(r['acc']):>9}{r['p50']:>7.0f}ms{r['p95']:>6.0f}ms{1000 / r['avg']:>9.1f}{pct(r['ece']):>7}   {bar}".rstrip(), flush=True)
+    (k0, first), (k1, last) = rows[0], rows[-1]
+    print(" " * 20 + i18n.t("bench.sweep.trend", first=k0, last=k1, acc_first=pct(first["acc"]), acc_last=pct(last["acc"]),
+                            p50_first=f"{first['p50']:.0f}", p50_last=f"{last['p50']:.0f}"), flush=True)
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
@@ -2865,11 +3848,23 @@ def parse_args(argv):
     p.add_argument("--diff", action="store_true")
     p.add_argument("--dicts", action="store_true")
     p.add_argument("--lists", action="store_true")
+    p.add_argument("--pattern", action="store_true")
+    p.add_argument("--counter", action="store_true")
+    p.add_argument("--predict", action="store_true")
+    p.add_argument("--tictactoe", action="store_true")
+    p.add_argument("--board", action="store_true")
+    p.add_argument("--cells", action="store_true")
+    p.add_argument("--bandit", action="store_true")             # mýtné brány: výchozí 4 brány dosadí níže
+    p.add_argument("--totals", action="store_true")
+    p.add_argument("--history", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
     p.add_argument("--inject", action="store_true")
     p.add_argument("--deadline-ms", type=float)
+    p.add_argument("--defer", type=float)                        # práh jistoty 0–1: řádek pokrytí, přesnosti nad prahem a Brierova skóre
+    p.add_argument("--sweep-lanes", action="store_true")         # průchod 2–8 pruhů (s --numbers bran)
+    p.add_argument("--by-length", action="store_true")           # --emails, --public: přesnost podle délky textu
     p.add_argument("rest", nargs="*")
     a = p.parse_intermixed_args(argv)                # volby smí stát mezi N a modely
     a.n = int(a.rest.pop(0)) if a.rest and a.rest[0].isdigit() else None
@@ -2879,6 +3874,8 @@ def parse_args(argv):
         a.lanes = 4 if a.memory or a.lookahead or a.queue or a.bet else 3      # paměťová stopa a sázka: 4 brány, dva kroky dopředu a fronta: 4 pruhy
     if a.diff and not a.lanes_given:
         a.lanes = DIFF_LANES                         # co se změnilo: výchozí počet pruhů (rozhodl pokus nanečisto)
+    if a.bandit and not a.lanes_given:
+        a.lanes = BANDIT_GATES[0]                    # mýtné brány: výchozí 4 brány
     return a
 
 
@@ -2904,7 +3901,7 @@ def header(mirror=False, deadline=None):
     return "".join(format(text, width) for text, width in cols)
 
 
-def print_row(r, note):
+def print_row(r, note, defer=None):
     stab = f"{pct(r['stab']):>10}" if r["stab"] is not None else ""
     good = f"{pct(r['goodput']):>9}" if r["deadline"] is not None else ""
     pad = " " * 20
@@ -2923,6 +3920,11 @@ def print_row(r, note):
         j = r["inject"]
         print(pad + i18n.t("bench.trojan", n=j["n"], resisted=pct(j["resisted"]), fooled=pct(j["fooled"]), other=pct(j["other"]),
                            clean=pct(j["clean_acc"])), flush=True)
+    if defer is not None:                            # --defer: pokrytí a přesnost nad prahem jistoty, Brierovo skóre
+        c = metrics.coverage(r["cal"], r["tasks"], defer)
+        whole = abs(defer * 100 - round(defer * 100)) < 1e-9     # celé procento jako pct, jinak na desetinu: práh, jak se použil
+        print(pad + i18n.t("bench.defer", threshold=pct(defer) if whole else f"{defer * 100:.1f}%", coverage=pct(c["coverage"]), covered=c["covered"], n=c["n"], acc=pct(c["acc"]),
+                           handed=c["handed"], brier="—" if r["brier"] is None else f"{r['brier']:.3f}"), flush=True)
 
 
 def sign_names():
@@ -3093,7 +4095,48 @@ def print_diff(r):
     print(" " * 20 + i18n.t("bench.diff.line", plain=plain, repeat=repeat, **r["errors"]), flush=True)
 
 
-def print_public(r, worst=5):
+def pattern_note(r):
+    """Poznámka za řádkem modelu: přesnost podle periody cyklu soupeře."""
+    return class_note(r["by_period"], {cls: i18n.t("bench.pattern.period", p=cls[1]) for cls in PATTERN_CLASSES})
+
+
+def print_pattern(r):
+    """Řádky pod řádkem modelu: v podobě counter výsledek (výhry, remízy, prohry, neplatné), pak druhy chyb."""
+    if "outcome" in r:
+        print(" " * 20 + i18n.t("bench.pattern.outcome", **r["outcome"]), flush=True)
+    if "counter_given" in r["errors"]:
+        print(" " * 20 + i18n.t("bench.pattern.errorsPredict", **r["errors"]), flush=True)
+    else:
+        print(" " * 20 + i18n.t("bench.pattern.errors", **r["errors"]), flush=True)
+
+
+def tictactoe_note(r):
+    """Poznámka za řádkem modelu: přesnost tahu na výhru podle třídy."""
+    return class_note(r["by_class"], {"win": i18n.t("bench.tictactoe.win"), "block": i18n.t("bench.tictactoe.block"),
+                                      "win_over_block": i18n.t("bench.tictactoe.winOverBlock"), "fork": i18n.t("bench.tictactoe.fork")})
+
+
+def print_tictactoe(r):
+    """Dva řádky pod řádkem modelu: přesnost podle značky na tahu a počtu volných polí (správně/celkem), pak druhy chyb."""
+    frac = lambda counts: f"{counts[0]}/{counts[1]}"
+    print(" " * 20 + i18n.t("bench.tictactoe.line", x=frac(r["by_side"]["X"]), o=frac(r["by_side"]["O"]),
+                            few=frac(r["by_free"]["few"]), many=frac(r["by_free"]["many"])), flush=True)
+    print(" " * 20 + i18n.t("bench.tictactoe.errors", **r["errors"]), flush=True)
+
+
+def bandit_note(r):
+    """Poznámka za řádkem modelu: přesnost mýtných bran podle třídy."""
+    return class_note(r["by_class"], {"explore": i18n.t("bench.bandit.explore"), "exploit": i18n.t("bench.bandit.exploit"),
+                                      "tie": i18n.t("bench.bandit.tie")})
+
+
+def print_bandit(r):
+    """Dva řádky pod řádkem modelu: druhy chyb, pak ztráta jednoho kroku se srovnáním (p. b., na desetinu)."""
+    print(" " * 20 + i18n.t("bench.bandit.errors", **r["errors"]), flush=True)
+    print(" " * 20 + i18n.t("bench.bandit.loss", **{name: f"{value:.1f}" for name, value in r["loss"].items()}), flush=True)
+
+
+def print_public(r, worst=5, defer=None, by_length=False):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
         if r.get("reason"):                          # důvod doslova od serveru; bez něj jen stav
@@ -3102,7 +4145,7 @@ def print_public(r, worst=5):
             text = i18n.t("bench.didNotFit", labels=r["labels"])
         print(f"{r['model']:<20}{text}", flush=True)
         return
-    print_row(r, "")
+    print_row(r, "", defer)
     q, pad = r["quality"], " " * 20
     if q["oos"]:
         o = q["oos"]
@@ -3111,6 +4154,8 @@ def print_public(r, worst=5):
     print(pad + i18n.t("bench.worst", list=classes), flush=True)
     confusions = ", ".join(f"{t}→{p if p is not None else '?'} {k}×" for t, p, k in q["confusions"][:worst])
     print(pad + i18n.t("bench.confusions", list=confusions or i18n.t("bench.none")), flush=True)
+    if by_length:
+        print(pad + length_line(r), flush=True)
 
 
 def main(argv):
@@ -3119,11 +4164,17 @@ def main(argv):
                  args.bet, args.cruise, args.timetable)
     scenarios += (args.hint,)                        # rušivá nápověda
     scenarios += (args.diff,)                        # co se změnilo
+    scenarios += (args.pattern,)                     # vzor soupeře
+    scenarios += (args.tictactoe,)                   # tah na výhru
+    scenarios += (args.bandit,)                      # mýtné brány
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
-            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score)):
+            or (args.sorted and args.shuffled) or (args.as_choice and args.as_score) or (args.counter and args.predict)
+            or (args.board and args.cells)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.dicts and args.lists:
+        sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
+    if args.totals and args.history:                 # mýtné brány: dvě podoby stavu naráz
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -3141,6 +4192,10 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesRule"))
     if args.weighted and not args.queue:
         sys.exit(i18n.t("bench.err.weightedQueue"))
+    if (args.totals or args.history) and not args.bandit:
+        sys.exit(i18n.t("bench.err.formBandit"))
+    if args.bandit and args.lanes not in BANDIT_GATES:
+        sys.exit(i18n.t("bench.err.lanesBandit"))
     if (args.dicts or args.lists) and not args.diff:
         sys.exit(i18n.t("bench.err.formDiff"))
     if args.hint and args.inject:
@@ -3149,6 +4204,14 @@ def main(argv):
         sys.exit(i18n.t("bench.err.formTimetable"))
     if args.timetable and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesTimetable"))
+    if (args.counter or args.predict) and not args.pattern:
+        sys.exit(i18n.t("bench.err.formPattern"))
+    if args.pattern and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesPattern"))
+    if (args.board or args.cells) and not args.tictactoe:
+        sys.exit(i18n.t("bench.err.formTictactoe"))
+    if args.tictactoe and args.lanes_given:
+        sys.exit(i18n.t("bench.err.lanesTictactoe"))
     if args.cruise and args.lanes_given:
         sys.exit(i18n.t("bench.err.lanesCruise"))
     if (args.as_choice or args.as_score) and not args.cruise:
@@ -3157,12 +4220,31 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
         sys.exit(i18n.t("bench.err.deadline"))
+    if args.defer is not None and not 0 < args.defer <= 1:       # i NaN
+        sys.exit(i18n.t("bench.err.defer"))
+    if args.by_length and not (args.emails or args.public):
+        sys.exit(i18n.t("bench.err.byLength"))
+    if args.sweep_lanes and sum(map(bool, scenarios)) > bool(args.numbers):      # jen překážky a číselné duely
+        sys.exit(i18n.t("bench.err.sweepScenario"))
+    if args.sweep_lanes and (args.lanes_given or args.mirror or args.inject or args.deadline_ms is not None or args.defer is not None):
+        sys.exit(i18n.t("bench.err.sweepCombo"))
     if args.max_usd is not None or args.max_hosted is not None:
         if (args.max_usd is not None and not 0 <= args.max_usd < float("inf")) or (args.max_hosted is not None and args.max_hosted < 0):
             sys.exit(i18n.t("bench.err.limits"))
         providers.BUDGET = providers.Budget(args.max_usd, args.max_hosted)       # strop útraty tohoto spuštění
     head = header(args.mirror, args.deadline_ms)
-    if args.public:
+    row = lambda r, note: print_row(r, note, args.defer)        # řádek modelu, s --defer i s řádkem prahu jistoty
+    if args.sweep_lanes:
+        n = args.n or 100
+        if args.numbers:
+            print(i18n.t("bench.intro.sweepNumbers", n=n) + "\n")
+        else:
+            print(i18n.t("bench.intro.sweepLanes", n=n) + "\n")
+        print(sweep_header(args.numbers))
+        for m in args.models:
+            with hosted_model(m):
+                print_sweep(m, run_sweep(m, n, args.numbers))
+    elif args.public:
         try:
             ds = load_public(args.public)
         except (ValueError, OSError) as e:           # JSONDecodeError je ValueError
@@ -3178,7 +4260,7 @@ def main(argv):
         print(head)
         for m in args.models:
             with hosted_model(m):
-                print_public(run_public(m, ds, cases, args.deadline_ms))
+                print_public(run_public(m, ds, cases, args.deadline_ms, args.by_length), defer=args.defer, by_length=args.by_length)
     elif args.emails:
         try:
             ds = load_dataset(args.emails)
@@ -3190,9 +4272,11 @@ def main(argv):
         print(head)
         for m in args.models:
             with hosted_model(m):
-                r = run_emails(m, ds, cases, args.mirror, args.inject, args.deadline_ms)
+                r = run_emails(m, ds, cases, args.mirror, args.inject, args.deadline_ms, args.by_length)
                 top = ", ".join(f"{label[t]}→{label[c]} {n}×" for (t, c), n in r["confusions"].most_common(5))
-                print_row(r, i18n.t("bench.note.confusions", list=top or i18n.t("bench.none")))
+                row(r, i18n.t("bench.note.confusions", list=top or i18n.t("bench.none")))
+                if args.by_length:
+                    print(" " * 20 + length_line(r), flush=True)
     elif args.numbers:
         cases = number_cases(args.n or 100, args.lanes)
         names = {"tight": i18n.t("bench.gap.tight"), "medium": i18n.t("bench.gap.medium"), "clear": i18n.t("bench.gap.clear")}
@@ -3201,7 +4285,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_numbers(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, class_note(r["by_gap"], names))
+                row(r, class_note(r["by_gap"], names))
     elif args.signs:
         cases = sign_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.signs", n=len(cases), lanes=args.lanes) + "\n")
@@ -3209,7 +4293,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_signs(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.pairs)
-                print_row(r, sign_note(r))
+                row(r, sign_note(r))
                 print_pairs(r)
     elif args.memory:
         cases = memory_cases(args.n or 100, args.lanes)  # úlohy jsou v obou podobách stejné, --count mění jen zápis stavu
@@ -3221,7 +4305,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_memory(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.count)
-                print_row(r, memory_note(r))
+                row(r, memory_note(r))
                 print_memory(r)
     elif args.barrier:
         cases = barrier_cases(args.n or 100)
@@ -3231,7 +4315,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_barrier(m, cases, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, barrier_note(r))
+                row(r, barrier_note(r))
                 print_barrier(r)
     elif args.lookahead:
         form = "blocked" if args.blocked else "rows" if args.rows else LOOKAHEAD_FORM
@@ -3241,7 +4325,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_lookahead(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, lookahead_note(r))
+                row(r, lookahead_note(r))
                 print_lookahead(r)
     elif args.rule:
         form = "labeled" if args.labeled else "matched_by" if args.matched_by else RULE_FORM
@@ -3251,7 +4335,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_rule(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, rule_note(r))
+                row(r, rule_note(r))
                 print_rule(r)
     elif args.queue:
         cases = queue_cases(args.n or 100, args.lanes, args.weighted)     # vážené fronty jsou jiné úlohy: třída plyne z vážené délky
@@ -3263,7 +4347,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_queue(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.weighted)
-                print_row(r, queue_note(r))
+                row(r, queue_note(r))
                 print_queue(r)
     elif args.hint:
         cases = hint_cases(args.n or 100, args.lanes)            # N = počet řad, každá jde do modelu třikrát
@@ -3272,7 +4356,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_hint(m, cases, args.lanes, args.mirror, args.deadline_ms)
-                print_row(r, hint_note(r))
+                row(r, hint_note(r))
                 print_hint(r)
     elif args.diff:
         form = "dicts" if args.dicts else "lists" if args.lists else DIFF_FORM
@@ -3285,7 +4369,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_diff(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, diff_note(r))
+                row(r, diff_note(r))
                 print_diff(r)
     elif args.bet:
         cases = bet_cases(args.n or 100, args.lanes)
@@ -3294,7 +4378,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_bet(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, bet_note(r))
+                row(r, bet_note(r))
                 print_bet(r)
     elif args.cruise:
         form = "score" if args.as_score else "choice" if args.as_choice else CRUISE_FORM
@@ -3304,7 +4388,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, cruise_note(r))
+                row(r, cruise_note(r))
                 print_cruise(r)
     elif args.timetable:
         form = "shuffled" if args.shuffled else "sorted" if args.sorted else TIMETABLE_FORM
@@ -3318,8 +4402,47 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_timetable(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, timetable_note(r))
+                row(r, timetable_note(r))
                 print_timetable(r)
+    elif args.pattern:
+        form = "predict" if args.predict else "counter" if args.counter else PATTERN_FORM
+        cases = pattern_cases(args.n or 100)             # úlohy jsou v obou podobách stejné, podoba mění jen otázku
+        if form == "predict":
+            print(i18n.t("bench.intro.patternPredict", n=len(cases)) + "\n")
+        else:
+            print(i18n.t("bench.intro.pattern", n=len(cases)) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_pattern(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                row(r, pattern_note(r))
+                print_pattern(r)
+    elif args.tictactoe:
+        form = "cells" if args.cells else "rows" if args.board else TICTACTOE_FORM
+        cases = tictactoe_cases(args.n or 100)           # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        if form == "cells":
+            print(i18n.t("bench.intro.tictactoeCells", n=len(cases)) + "\n")
+        else:
+            print(i18n.t("bench.intro.tictactoe", n=len(cases)) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_tictactoe(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                row(r, tictactoe_note(r))
+                print_tictactoe(r)
+    elif args.bandit:
+        form = "history" if args.history else "totals" if args.totals else BANDIT_FORM
+        cases = bandit_cases(args.n or 100, args.lanes)  # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        if form == "history":
+            print(i18n.t("bench.intro.banditHistory", n=len(cases), lanes=args.lanes) + "\n")
+        else:
+            print(i18n.t("bench.intro.bandit", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_bandit(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                row(r, bandit_note(r))
+                print_bandit(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")
@@ -3327,7 +4450,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_lanes(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, i18n.t("bench.note.wrongClear", n=r["wrong_clear"]))
+                row(r, i18n.t("bench.note.wrongClear", n=r["wrong_clear"]))
 
 
 if __name__ == "__main__":

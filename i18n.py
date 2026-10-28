@@ -135,6 +135,21 @@ TEXTS = {
     # Rušivá nápověda: {n} = počet řad čísel (každá jde do modelu třikrát), {lanes} = počet bran (2–8).
     "bench.intro.hint": {"cs": "{n} {n|řada|řady|řad} čísel, každá třikrát (bez nápovědy, nápověda na správnou a na špatnou bránu), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
                          "en": "{n} {n|row|rows} of numbers, each asked three times (no hint, hint on the right gate, hint on a wrong gate), {lanes} gates, the same for all models"},
+    # Vzor soupeře: úvodní věta jmenuje podobu otázky (protitah / předpověď).
+    "bench.intro.pattern": {"cs": "{n} {n|úloha|úlohy|úloh} se vzorem soupeře (kámen–nůžky–papír, otázka protitah); sada je pro všechny modely stejná",
+                            "en": "{n} {n|task|tasks} against an opponent's pattern (rock-paper-scissors, counter question), the same for all models"},
+    "bench.intro.patternPredict": {"cs": "{n} {n|úloha|úlohy|úloh} se vzorem soupeře (kámen–nůžky–papír, otázka předpověď); sada je pro všechny modely stejná",
+                                   "en": "{n} {n|task|tasks} against an opponent's pattern (rock-paper-scissors, prediction question), the same for all models"},
+    # Tah na výhru: úvodní věta jmenuje podobu stavu.
+    "bench.intro.tictactoe": {"cs": "{n} {n|úloha|úlohy|úloh} s piškvorkami 3×3 (tah na výhru, deska po řádcích); sada je pro všechny modely stejná",
+                              "en": "{n} {n|task|tasks} of 3×3 tic-tac-toe (winning move, board as rows), the same for all models"},
+    "bench.intro.tictactoeCells": {"cs": "{n} {n|úloha|úlohy|úloh} s piškvorkami 3×3 (tah na výhru, pole jménem); sada je pro všechny modely stejná",
+                                   "en": "{n} {n|task|tasks} of 3×3 tic-tac-toe (winning move, cells by name), the same for all models"},
+    # Mýtné brány: úvodní věta jmenuje podobu stavu (souhrn průjezdů, nebo deník průjezdů).
+    "bench.intro.bandit": {"cs": "{n} {n|úloha|úlohy|úloh} u mýta (bandita, souhrn průjezdů), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
+                           "en": "{n} {n|task|tasks} at a toll (bandit, drive totals), {lanes} gates, the same for all models"},
+    "bench.intro.banditHistory": {"cs": "{n} {n|úloha|úlohy|úloh} u mýta (bandita, deník průjezdů), {lanes} {lanes|brána|brány|bran}; sada je pro všechny modely stejná",
+                                  "en": "{n} {n|task|tasks} at a toll (bandit, drive log), {lanes} gates, the same for all models"},
     "bench.intro.emails": {"cs": "{n} {n|e-mail|e-maily|e-mailů} ze sady „{name}“ ({categories} {categories|kategorie|kategorie|kategorií}); sada je pro všechny modely stejná",
                            "en": "{n} {n|e-mail|e-mails} from the dataset \"{name}\" ({categories} categories), the same for all models"},
     "bench.intro.public": {"cs": "{n} {n|úloha|úlohy|úloh} ze sady „{name}“ ({labels} {labels|štítek|štítky|štítků}); sada je pro všechny modely stejná",
@@ -237,6 +252,38 @@ TEXTS = {
     "bench.diff.wordnew": {"cs": "jiné slovo", "en": "other word"},
     "bench.diff.line": {"cs": "řady bez opakování {plain}, s opakováním {repeat}; chyby: stejná hodnota v jiném pruhu {twin}, sousední pruh {neighbor}, jiné {other}, neplatné {invalid}",
                         "en": "rows without repeats {plain}, with repeats {repeat}; errors: same value in another lane {twin}, next lane {neighbor}, other {other}, invalid {invalid}"},
+    # Vzor soupeře (--pattern): perioda v poznámce za řádkem modelu ({p} = 1 až 4), pod ním výsledek (jen podoba counter)
+    # a řádek chyb (počty); v podobě predict má řádek chyb navíc protitah místo předpovědi.
+    "bench.pattern.period": {"cs": "perioda {p}", "en": "period {p}"},
+    "bench.pattern.outcome": {"cs": "výsledek: výhra {win}, remíza {draw}, prohra {loss}, neplatné {invalid}",
+                              "en": "outcome: win {win}, draw {draw}, loss {loss}, invalid {invalid}"},
+    "bench.pattern.errors": {"cs": "chyby: opakuje poslední {last}, nejčastější tah {frequent}, špatná perioda {period}, přechod {transition}, jiné {other}, neplatné {invalid}",
+                             "en": "errors: repeats the last move {last}, most frequent move {frequent}, wrong period {period}, transition {transition}, other {other}, invalid {invalid}"},
+    "bench.pattern.errorsPredict": {"cs": "chyby: protitah místo předpovědi {counter_given}, opakuje poslední {last}, nejčastější tah {frequent}, špatná perioda {period}, přechod {transition}, jiné {other}, neplatné {invalid}",
+                                    "en": "errors: counter instead of prediction {counter_given}, repeats the last move {last}, most frequent move {frequent}, wrong period {period}, transition {transition}, other {other}, invalid {invalid}"},
+    # Tah na výhru (--tictactoe): třídy v poznámce za řádkem modelu, pod ním přesnost podle značky na tahu a počtu volných
+    # polí (hotové zlomky „správně/celkem“) a řádek chyb (počty).
+    "bench.tictactoe.win": {"cs": "výhra", "en": "win"},
+    "bench.tictactoe.block": {"cs": "blok", "en": "block"},
+    "bench.tictactoe.winOverBlock": {"cs": "výhra před blokem", "en": "win before block"},
+    "bench.tictactoe.fork": {"cs": "vidlička", "en": "fork"},
+    "bench.tictactoe.line": {"cs": "hraje X {x}, hraje O {o}; volná pole 2–3 {few}, 4–6 {many}",
+                             "en": "plays X {x}, plays O {o}; free cells 2–3 {few}, 4–6 {many}"},
+    "bench.tictactoe.errors": {"cs": "chyby: blok místo výhry {block_not_win}, přehlédnutá výhra {missed_win}, přehlédnutý blok {missed_block}, "
+                                     "vidlička soupeře {wrong_side}, jen jedna hrozba {single_threat}, obsazené pole {occupied}, jiné {other}, neplatné {invalid}",
+                               "en": "errors: block instead of win {block_not_win}, win missed {missed_win}, block missed {missed_block}, "
+                                     "opponent's fork {wrong_side}, single threat only {single_threat}, occupied cell {occupied}, other {other}, invalid {invalid}"},
+    # Mýtné brány (--bandit): třídy v poznámce za řádkem modelu, pod ním řádek chyb (počty) a ztráta jednoho kroku
+    # ({model}, {rule}, {greedy}, {random} = hotová čísla na desetinu, procentní body).
+    "bench.bandit.explore": {"cs": "průzkum", "en": "explore"},
+    "bench.bandit.exploit": {"cs": "nejvyšší podíl", "en": "best share"},
+    "bench.bandit.tie": {"cs": "shoda podílů", "en": "tied share"},
+    "bench.bandit.errors": {"cs": "chyby: bez průzkumu {no_explore}, shoda: víc průjezdů {tie_more}, zbytečný průzkum {over_explore}, "
+                                  "nejvíc výher {most_wins}, nejméně proher {fewest_losses}, nejnižší podíl {lowest_rate}, jiné {other}, neplatné {invalid}",
+                            "en": "errors: no exploration {no_explore}, tie: more drives {tie_more}, needless exploration {over_explore}, "
+                                  "most wins {most_wins}, fewest losses {fewest_losses}, lowest share {lowest_rate}, other {other}, invalid {invalid}"},
+    "bench.bandit.loss": {"cs": "ztráta jednoho kroku {model} p. b. (pravidlo {rule}, hladová volba {greedy}, náhoda {random})",
+                          "en": "one-step loss {model} pp (rule {rule}, greedy pick {greedy}, random {random})"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
@@ -281,12 +328,47 @@ TEXTS = {
     "bench.err.formTimetable": {"cs": "Volby --sorted a --shuffled jdou jen s --timetable.",
                                 "en": "The --sorted and --shuffled options work only with --timetable."},
     "bench.err.lanesTimetable": {"cs": "Volba --lanes se s --timetable nekombinuje.", "en": "The --lanes option cannot be combined with --timetable."},
+    "bench.err.formPattern": {"cs": "Volby --counter a --predict jdou jen s --pattern.",
+                              "en": "The --counter and --predict options work only with --pattern."},
+    "bench.err.lanesPattern": {"cs": "Volba --lanes se s --pattern nekombinuje.", "en": "The --lanes option cannot be combined with --pattern."},
+    "bench.err.formTictactoe": {"cs": "Volby --board a --cells jdou jen s --tictactoe.",
+                                "en": "The --board and --cells options work only with --tictactoe."},
+    "bench.err.lanesTictactoe": {"cs": "Volba --lanes se s --tictactoe nekombinuje.", "en": "The --lanes option cannot be combined with --tictactoe."},
+    "bench.err.formBandit": {"cs": "Volby --totals a --history jdou jen s --bandit.", "en": "The --totals and --history options work only with --bandit."},
+    "bench.err.lanesBandit": {"cs": "Scénář Mýtné brány umí jen 4 nebo 5 bran (--lanes 4 nebo 5).",
+                              "en": "The toll gate scenario supports only 4 or 5 gates (--lanes 4 or 5)."},
     "bench.err.pairsCombo": {"cs": "Volby --mirror a --inject se s --pairs nekombinují.",
                              "en": "The --mirror and --inject options cannot be combined with --pairs."},
     "bench.err.deadline": {"cs": "--deadline-ms musí být kladné číslo (limit v milisekundách).",
                            "en": "--deadline-ms must be a positive number (the deadline in milliseconds)."},
     "bench.err.limits": {"cs": "--max-usd a --max-hosted musí být nezáporná čísla.", "en": "--max-usd and --max-hosted must be non-negative numbers."},
     "bench.err.allRefused": {"cs": "server odmítl všechny dotazy (HTTP 400)", "en": "the server refused all requests (HTTP 400)"},
+    "bench.err.defer": {"cs": "--defer chce práh jistoty větší než 0 a nejvýš 1, třeba 0.8.",
+                        "en": "--defer needs a confidence threshold above 0 and at most 1, such as 0.8."},
+    "bench.err.sweepScenario": {"cs": "Volba --sweep-lanes jde jen s překážkami (bez volby scénáře) nebo s --numbers.",
+                                "en": "The --sweep-lanes option works only with obstacles (no scenario option) or with --numbers."},
+    "bench.err.sweepCombo": {"cs": "Volba --sweep-lanes se nekombinuje s --lanes, --mirror, --inject, --deadline-ms ani --defer.",
+                             "en": "The --sweep-lanes option cannot be combined with --lanes, --mirror, --inject, --deadline-ms or --defer."},
+    # --sweep-lanes: úvod ({n} úloh na každý počet), sloupec počtu pruhů a bran, trend od {first} do {last} (procenta hotová, medián v ms).
+    "bench.intro.sweepLanes": {"cs": "{n} {n|situace|situace|situací} pro každý počet pruhů od 2 do 8; sada je pro všechny modely stejná",
+                               "en": "{n} {n|situation|situations} for every number of lanes from 2 to 8, the same for all models"},
+    "bench.intro.sweepNumbers": {"cs": "{n} {n|řada|řady|řad} čísel pro každý počet bran od 2 do 8; sada je pro všechny modely stejná",
+                                 "en": "{n} {n|row|rows} of numbers for every number of gates from 2 to 8, the same for all models"},
+    "bench.err.byLength": {"cs": "Volba --by-length jde jen s --emails nebo --public.", "en": "The --by-length option works only with --emails or --public."},
+    # --by-length: {short}, {medium}, {long} = rozsah slov třídy („18–24“, u prázdné třídy „—“), {…_ok}/{…_n} = správně / celkem.
+    "bench.byLength": {"cs": "přesnost podle délky textu: krátké {short} slov {short_ok}/{short_n}, střední {medium} slov {medium_ok}/{medium_n}, "
+                             "dlouhé {long} slov {long_ok}/{long_n}",
+                       "en": "accuracy by text length: short {short} words {short_ok}/{short_n}, medium {medium} words {medium_ok}/{medium_n}, "
+                             "long {long} words {long_ok}/{long_n}"},
+    "bench.col.lanes": {"cs": "pruhů", "en": "lanes"},
+    "bench.col.gates": {"cs": "bran", "en": "gates"},
+    "bench.sweep.trend": {"cs": "od {first} do {last}: správně {acc_first} → {acc_last}, medián {p50_first} → {p50_last} ms",
+                          "en": "from {first} to {last}: correct {acc_first} → {acc_last}, median {p50_first} → {p50_last} ms"},
+    # --defer: řádek pod modelem; procenta přicházejí hotová, {covered}/{n} úloh nad prahem, {handed} pod prahem, {brier} = „0.142“ nebo „—“.
+    "bench.defer": {"cs": "práh jistoty {threshold}: pokrytí {coverage} ({covered}/{n}), přesnost nad prahem {acc}, "
+                          "předat člověku nebo pravidlům {handed}; Brier {brier}",
+                    "en": "confidence threshold {threshold}: coverage {coverage} ({covered}/{n}), accuracy above the threshold {acc}, "
+                          "hand over to a person or the rules {handed}; Brier {brier}"},
     # hwbench.py. Záhlaví sedmi tabulek a CSV: buňka = klíč. Šířku sloupce určuje délka záhlaví (hwbench.line), anglické slovo proto
     # smí být delší; dec./s je tatáž zkratka jako v bench.py. Slova jsou tatáž jako v panelu Hardware a ve výsledcích stránky.
     "hw.col.model": {"cs": "model", "en": "model"},

@@ -31,6 +31,12 @@ sys.path.insert(0, str(ROOT))
 BENCH = {                                            # jméno zlatého souboru → argumenty bench.py
     "bench-lanes": ["12", "m1", "m2"],
     "bench-lanes-volby": ["12", "--lanes", "4", "--mirror", "--inject", "--deadline-ms", "9", "m1"],
+    "bench-defer": ["12", "--defer", "0.8", "m1", "m2"],
+    "bench-defer-barrier": ["24", "--barrier", "--defer", "0.7", "m1"],
+    "bench-sweep": ["6", "--sweep-lanes", "m1", "m2"],
+    "bench-sweep-numbers": ["6", "--sweep-lanes", "--numbers", "m1"],
+    "bench-emails-length": ["20", "--emails", str(ROOT / "datasets" / "cz-firemni-emaily.json"), "--by-length", "m1"],
+    "bench-public-length": ["--public", str(ROOT / "tests" / "public-mini.json"), "--by-length", "m1"],
     "bench-numbers": ["10", "--numbers", "m1"],
     "bench-emails": ["20", "--emails", str(ROOT / "datasets" / "cz-firemni-emaily.json"), "m1"],
     "bench-public": ["--public", str(ROOT / "tests" / "public-mini.json"), "m1"],
@@ -59,6 +65,15 @@ BENCH = {                                            # jméno zlatého souboru �
     "bench-timetable-shuffled": ["12", "--timetable", "--shuffled", "m1"],
     "bench-diff": ["12", "--diff", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],            # bez --lanes a bez podoby: výchozí 8 pruhů, seznamy
     "bench-diff-lists": ["12", "--diff", "--lists", "--lanes", "6", "m1"],
+    "bench-pattern": ["12", "--pattern", "--deadline-ms", "9", "m1", "m2"],      # bez podoby: výchozí
+    "bench-pattern-counter": ["12", "--pattern", "--counter", "m1"],
+    "bench-pattern-mirror": ["12", "--pattern", "--mirror", "--inject", "m1"],
+    "bench-tictactoe": ["24", "--tictactoe", "m1"],                    # bez podoby: výchozí; 24 úloh: objeví se všechny čtyři třídy
+    "bench-tictactoe-mirror": ["24", "--tictactoe", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],
+    "bench-tictactoe-board": ["12", "--tictactoe", "--board", "m1"],
+    "bench-bandit": ["12", "--bandit", "m1"],                                                           # bez podoby a bez --lanes: výchozí
+    "bench-bandit-mirror": ["12", "--bandit", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],
+    "bench-bandit-history": ["12", "--bandit", "--history", "--lanes", "5", "m1"],
 }
 HWBENCH = {                                          # jméno zlatého souboru → argumenty hwbench.py
     "hwbench-latency": ["latency", "--n", "20", "m1"],
@@ -261,7 +276,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-hint", "bench-hint-mirror", "bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-cruise-score", "bench-timetable", "bench-timetable-shuffled", "bench-diff", "bench-diff-lists", "hwbench-latency", "hwbench-questions", "hwbench-context", "hwbench-cache", "hwbench-repeat"):
+        for name in ("bench-hint", "bench-hint-mirror", "bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-cruise-score", "bench-timetable", "bench-timetable-shuffled", "bench-diff", "bench-diff-lists", "bench-pattern", "bench-pattern-counter", "bench-pattern-mirror", "bench-tictactoe", "bench-tictactoe-mirror", "bench-tictactoe-board", "bench-bandit", "bench-bandit-mirror", "bench-bandit-history", "bench-defer", "bench-defer-barrier", "bench-sweep", "bench-sweep-numbers", "bench-emails-length", "bench-public-length", "hwbench-latency", "hwbench-questions", "hwbench-context", "hwbench-cache", "hwbench-repeat"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)

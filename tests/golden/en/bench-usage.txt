@@ -1,6 +1,6 @@
 Compares decision models on the same set of tasks (without the game).
 
-Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -13,8 +13,12 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --timetable [--sorted | --shuffled] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --hint [--lanes K] [--mirror] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
+          python bench.py [N] --emails datasets/<file>.json [--by-length] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<file>.json [--by-length] [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
@@ -29,6 +33,10 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --timetable tev1
           python bench.py 100 --hint tev1
           python bench.py 100 --diff tev1
+          python bench.py 100 --pattern tev1
+          python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -120,7 +128,38 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --dicts, --lists:  only with --diff: the form of the state; the tasks are the same in both. dicts = before and after as
             objects {"lane_1": value, ...}; lists = before and after as lists of values from left to right, the lane is the position in the list.
             Without the option: lists.
+--pattern:  opponent's pattern (rock-paper-scissors): the state holds the opponent's moves (oldest first); after a short
+            opening the opponent repeats a fixed cycle of 1 to 4 moves for at least 8 moves, so the next move is unique.
+            The model picks the move that beats the opponent's next move (counter) or that next move itself (predict).
+            N tasks (default 100), spread evenly by period (1 to 4; period 1 is the control: always the same move). After
+            the model row, the accuracy by period; below it, for counter, the outcome (win, draw, loss, invalid) and the
+            errors: repeats the last move, most frequent move, wrong period, transition, other, invalid (for counter read
+            from the move the chosen move beats). Chance gives a third, "any move but the last" half at period 2. Not with --lanes.
+--counter, --predict:  only with --pattern: the form of the question; the tasks are the same in both. counter = your own
+            move that beats the opponent's next move; predict = the opponent's next move, and the error line also counts a
+            counter move given instead of the prediction. Without the option: predict.
+--tictactoe:  winning move (3×3 tic-tac-toe): the model plays the mark you (X or O) and picks one of nine cells by the
+            rules in the prompt, in this order: win, otherwise block the opponent, otherwise make a fork (two threats at
+            once). The correct cell is always the only one. N tasks (default 100), spread evenly over four classes: win,
+            block, win before block (both are possible, winning is correct), fork; X and O about half each. After the model
+            row, the accuracy by class; below it by mark and by free cells, and the errors: block instead of win, win missed,
+            block missed, opponent's fork, single threat only, occupied cell, other, invalid. The cell on the most lines
+            without an opponent's mark finds the fork in about three quarters of the tasks: partial reasoning. Not with --lanes.
+--board, --cells:  only with --tictactoe: the form of the state; the tasks are the same in both. --board = the three rows
+            of the board as strings ("." for a free cell); --cells = every cell by its name rNcM. Without the option: --cells.
+--bandit:   toll gates (bandit): each of K gates (4 or 5, default 4) pays a prize with its own hidden chance, and the state
+            says how many times the car has gone through each gate and how many of those drives won. The model picks the next
+            gate by the rule in the prompt: try a gate with fewer than 3 drives, otherwise take the highest share of wins, on a
+            tied share the gate with fewer drives; the right gate is always unique. It measures applying the rule against the
+            pull of "take the best share", not exploring on its own. N tasks (default 100), spread evenly over three classes:
+            explore, best share, tied share. After the model row, the accuracy by class; below it the errors (no exploration,
+            more drives in a tie, needless exploration, most wins, fewest losses, lowest share, other, invalid) and the one-step
+            loss against the hidden chances (rule, greedy pick, random); exploring always costs in one step, so it is no measure of quality. Only --lanes 4 or 5.
+--totals, --history:  only with --bandit: the form of the state; the tasks are the same in both. totals = the drives and
+            wins of every gate; history = a log of all drives (gate, and win or loss), oldest first. Without the option: totals.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
+--by-length:  with --emails and --public only: below the model row the accuracy by text length in words (for an e-mail the subject and the body);
+            the texts of the whole dataset are sorted by length and split into thirds (short, medium, long).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
 --inject:   Trojan horse: a quarter of the tasks carry a hidden instruction in the state, aimed at one specific wrong answer;
@@ -130,6 +169,12 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
             Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
 --deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--sweep-lanes:  a sweep over 2 to 8 lanes (gates with --numbers): N tasks (default 100) for every number, the same as with --lanes K;
+            for every model a row for every number (correct, median, p95, dec./s, ECE and a bar with one # for every 5% correct)
+            and below them the trend from 2 to 8. Obstacles and --numbers only; cannot be combined with --lanes, --mirror, --inject, --deadline-ms or --defer.
+--defer T:  below the model row, a line for the confidence threshold T (above 0 and at most 1, such as 0.8): coverage = the share of tasks
+            with a confidence of at least T (the model would decide them), accuracy above the threshold, how many tasks to hand over to a
+            person or the rules (an answer without a confidence is handed over) and the Brier score = the mean (confidence − correct)², 0 = perfect.
 --lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
 With --emails, the line below the model row gives macro-F1 (the mean of F1 over the categories) and the number of invalid answers.
 
