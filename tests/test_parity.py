@@ -3,6 +3,7 @@
 Blok mezi značkami „sdíleno s Pythonem“ se z index.html vytáhne a pustí v node nad stejnými daty jako Python.
 Před něj jde blok textů (značky „texty“): věty chyb validátoru bere sdílený blok z něj funkcí t(), v jazyce stránky.
 Bez programu node se testy přeskočí."""
+import bisect
 import itertools
 import json
 import math
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -1620,6 +1622,284 @@ class Timetable(unittest.TestCase):
         self.assertEqual((warm["rule"], warm["truth"]), ("decoy", bench.TIMETABLE_DEPOTS.index(warm["answer"])))
         longest = max(len(json.dumps(bench.timetable_state(c, "sorted"))) for c in bench.timetable_cases(300, seed=2))
         self.assertGreaterEqual(len(json.dumps(bench.timetable_state(case, "sorted"))), longest)      # horní odhad délky dotazu ve stepEstimate
+
+
+TICTACTOE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "tictactoeRow(rand)")
+assert TICTACTOE_ROWS_JS != ROWS_JS
+TICTACTOE_PAGE = {}
+
+
+def tictactoe_page(n, seed=1):
+    """Úlohy generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (deska, značka, pole odpovědi, třída)."""
+    if (n, seed) not in TICTACTOE_PAGE:
+        raw = run_js(TICTACTOE_ROWS_JS, {"seed": seed, "n": n})
+        TICTACTOE_PAGE[n, seed] = raw, [(r["board"], r["you"], r["answer"], r["cls"]) for r in raw]
+    return TICTACTOE_PAGE[n, seed]
+
+
+def tictactoe_js(case):
+    return {"board": case[0], "you": case[1], "answer": case[2], "cls": case[3]}
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Tictactoe(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ cells: TICTACTOE_CELLS, lines: TICTACTOE_LINES, classes: TICTACTOE_CLASSES, empty: TICTACTOE_EMPTY, few: TICTACTOE_FEW,"
+                    " tries: TICTACTOE_TRIES, balance: TICTACTOE_BALANCE, weight: TICTACTOE_CELL_WEIGHT, side: TICTACTOE_SIDE_X,"
+                    " neigh: TICTACTOE_NEIGH })", None)
+        self.assertEqual((js["cells"], js["lines"], js["classes"]), (list(bench.TICTACTOE_CELLS), [list(x) for x in bench.TICTACTOE_LINES], list(bench.TICTACTOE_CLASSES)))
+        self.assertEqual((js["empty"], js["few"], js["tries"]), (bench.TICTACTOE_EMPTY, bench.TICTACTOE_FEW, bench.TICTACTOE_TRIES))
+        for name, py in (("balance", bench.TICTACTOE_BALANCE), ("weight", bench.TICTACTOE_CELL_WEIGHT), ("side", bench.TICTACTOE_SIDE_X)):
+            self.assertEqual(json.dumps(js[name]), json.dumps(py), name)                         # i pořadí klíčů
+        self.assertEqual(js["neigh"], [list(x) for x in bench.TICTACTOE_NEIGH])
+        cases = bench.tictactoe_cases(300, seed=3)
+        states = run_js("arg.map(c => tictactoeState(c))", [tictactoe_js(c) for c in cases])
+        for case, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.tictactoe_state(case, "cells")), case)      # bajtově, i pořadí klíčů
+        self.assertEqual(json.dumps(run_js("tictactoeQuestion()", None)), json.dumps(bench.tictactoe_question("cells")))
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  cell_cells: '([^'\\]*)',$", alt, re.M), [bench.ALT["cell_cells"]])
+        self.assertNotIn("\n  cell: ", "\n" + alt)                 # podoba --board je jen v bench.py
+
+    def test_rules_and_pools_match_bench(self):
+        import bench
+        positions = bench.tictactoe_positions()
+        js = run_js("({ positions: tictactoePositions(), pools: tictactoePools(), solved: tictactoePositions().map(b => [tictactoeSolve(b),"
+                    " tictactoeValue(b), tictactoeWins(b, 'X'), tictactoeWins(b, 'O'), tictactoeForks(b, 'X'), tictactoeForks(b, 'O')]) })", None)
+        self.assertEqual(js["positions"], positions)
+        pools = bench.tictactoe_pools()
+        self.assertEqual(js["pools"], {c: [list(pools[c].get(i, ())) for i in range(9)] for c in bench.TICTACTOE_CLASSES})
+        for b, (solved, value, wx, wo, fx, fo) in zip(positions, js["solved"]):
+            s = bench.tictactoe_solve(b)
+            self.assertEqual((solved, value), (list(s) if s else None, bench.tictactoe_value(b)), b)
+            self.assertEqual((wx, wo, fx, fo), (bench.tictactoe_wins(b, "X"), bench.tictactoe_wins(b, "O"), bench.tictactoe_forks(b, "X"), bench.tictactoe_forks(b, "O")), b)
+
+    def test_shortcuts_match_bench(self):
+        import bench
+        self.assertEqual(run_js("[TICTACTOE_ERRORS, Object.keys(TICTACTOE_SHORTCUTS)]", None), [list(bench.TICTACTOE_ERRORS), list(bench.TICTACTOE_SHORTCUTS)])
+        cases = bench.tictactoe_cases(300, seed=5)
+        got = run_js("arg.map(c => Object.keys(TICTACTOE_SHORTCUTS).map(name => [TICTACTOE_SHORTCUTS[name](c.board, c.you), tictactoeHit(c, name)]))",
+                     [tictactoe_js(c) for c in cases])
+        for case, per in zip(cases, got):
+            for name, (picks, hit) in zip(bench.TICTACTOE_SHORTCUTS, per):
+                self.assertEqual(picks, bench.TICTACTOE_SHORTCUTS[name](case[0], case[1]), (case, name))
+                self.assertEqual(hit, bench.tictactoe_hit(case, name), (case, name))
+
+    def test_weighted_pick_is_random_choices(self):                # stejné číslo z rand dá stejný prvek jako random.choices (bisect_right nad kumulativními váhami)
+        draws = [random.Random(k).random() for k in range(200)] + [0.0, 0.999999]
+        weights = [1, 3.3, 1, 3.3, 3.4, 3.3, 1, 3.3, 1]
+        got = run_js("arg.draws.map(x => tictactoePickWeighted(() => x, [...Array(9).keys()], arg.weights))", {"draws": draws, "weights": weights})
+        cum = list(itertools.accumulate(weights))
+        self.assertEqual(got, [bisect.bisect(cum, x * cum[-1], 0, 8) for x in draws])
+
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        raw, cases = tictactoe_page(900)
+        pools = bench.tictactoe_pools()
+        for r, (b, you, answer, cls) in zip(raw, cases):
+            with self.subTest(case=(b, you, answer, cls)):
+                self.assertEqual(list(r), ["board", "you", "answer", "cls", "truth"])
+                self.assertIn(b, pools[cls][answer])
+                self.assertEqual((you, r["truth"]), (bench.tictactoe_to_move(b), answer))
+
+    def test_classes_sides_and_shortcuts_are_balanced(self):       # meze jako tests/test_tictactoe.py, na generátoru stránky
+        import bench
+        _, cases = tictactoe_page(900)
+        counts = Counter(c[3] for c in cases)
+        for cls in bench.TICTACTOE_CLASSES:
+            sub = [c for c in cases if c[3] == cls]
+            with self.subTest(cls=cls):
+                self.assertTrue(0.2 <= counts[cls] / len(cases) <= 0.3, counts)
+                self.assertTrue(0.38 <= sum(c[1] == "X" for c in sub) / len(sub) <= 0.62)
+                for name in bench.TICTACTOE_SHORTCUTS:
+                    self.assertLessEqual(sum(bench.tictactoe_hit(c, name) for c in sub) / len(sub), 0.42, name)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(TICTACTOE_ROWS_JS, {"seed": 7, "n": 30})
+        self.assertEqual(run_js(TICTACTOE_ROWS_JS, {"seed": 7, "n": 30}), first)
+        self.assertNotEqual(run_js(TICTACTOE_ROWS_JS, {"seed": 8, "n": 30}), first)
+
+    def test_unknown_class_raises(self):
+        self.assertEqual(run_js("(() => { try { tictactoeCase(Math.random, 'draw'); return null; } catch (e) { return e.message; } })()", None),
+                         "tictactoeCase: unknown class draw")
+
+    def test_errors_and_summary_match_bench(self):
+        import bench
+        cases = bench.tictactoe_cases(300, seed=4)
+        rng = random.Random(2)
+        choices = [rng.choice([*bench.TICTACTOE_CELLS, bench.TICTACTOE_CELLS[c[2]], None, "R1C1", 4, ["r1c1"]]) for c in cases]
+        got = run_js("tictactoeSummary(arg.cases, arg.choices)", {"cases": [tictactoe_js(c) for c in cases], "choices": choices})
+        self.assertEqual(json.dumps(got), json.dumps(bench.tictactoe_summary(cases, choices)))      # i pořadí klíčů
+        self.assertTrue(all(got["errors"][k] > 0 for k in ("occupied", "missed_win", "missed_block", "invalid")), got["errors"])
+
+    def test_warm_task_is_fixed_and_has_the_longest_state(self):
+        import bench
+        warm = run_js("[tictactoeWarm(), tictactoeWarm()]", None)
+        self.assertEqual(warm[0], warm[1])
+        case = (warm[0]["board"], warm[0]["you"], warm[0]["answer"], warm[0]["cls"])
+        self.assertIn(case[0], bench.tictactoe_pools()[case[3]][case[2]])
+        self.assertEqual((case[1], warm[0]["truth"]), (bench.tictactoe_to_move(case[0]), case[2]))
+        longest = max(len(json.dumps(bench.tictactoe_state((b, bench.tictactoe_to_move(b), i, c), "cells")))
+                      for c, p in bench.tictactoe_pools().items() for i, bs in p.items() for b in bs)
+        self.assertEqual(len(json.dumps(bench.tictactoe_state(case, "cells"))), longest)
+
+
+# Generátor Mýtných bran stránky se stejnou náhodou jako ROWS_JS: seed, gates, n → řady banditRow.
+BANDIT_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "banditRow(arg.gates, rand)")
+assert BANDIT_ROWS_JS != ROWS_JS
+BANDIT_PAGE = {}
+
+
+def bandit_page(n=900, gates=4, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) jako n-tice bench.py (brány, správná, třída, prázdný deník)."""
+    if (n, gates, seed) not in BANDIT_PAGE:
+        raw = run_js(BANDIT_ROWS_JS, {"seed": seed, "gates": gates, "n": n})
+        BANDIT_PAGE[n, gates, seed] = [(tuple(tuple(g) for g in r["gates"]), r["answer"], r["cls"], ()) for r in raw], raw
+    return BANDIT_PAGE[n, gates, seed]
+
+
+def bandit_hit(case, name):
+    import bench
+    picks = bench.BANDIT_SHORTCUTS[name]([(w, n) for w, n, _ in case[0]])
+    return (case[1] in picks) / len(picks)
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Bandit(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ gates: BANDIT_GATES, explore: BANDIT_EXPLORE, split: BANDIT_SPLIT, total: BANDIT_TOTAL, margin: BANDIT_MARGIN,"
+                    " chances: BANDIT_CHANCES, classes: BANDIT_CLASSES, fresh: BANDIT_FRESH, tries: BANDIT_TRIES, watch: BANDIT_WATCH,"
+                    " patterns: BANDIT_PATTERNS, ties: BANDIT_TIE_SHARES, errors: BANDIT_ERRORS, q4: banditQuestion(4), q5: banditQuestion(5) })", None)
+        self.assertEqual((js["gates"], js["explore"], js["split"], js["total"]), (list(bench.BANDIT_GATES), bench.BANDIT_EXPLORE,
+                                                                                 [list(s) for s in bench.BANDIT_SPLIT], bench.BANDIT_TOTAL))
+        self.assertEqual(js["margin"], [bench.BANDIT_MARGIN.numerator, bench.BANDIT_MARGIN.denominator])
+        self.assertEqual((js["chances"], js["classes"], js["fresh"], js["tries"]), (list(bench.BANDIT_CHANCES), list(bench.BANDIT_CLASSES),
+                                                                                    [list(f) for f in bench.BANDIT_FRESH], bench.BANDIT_TRIES))
+        self.assertEqual(json.dumps(js["watch"]), json.dumps({c: list(w) for c, w in bench.BANDIT_WATCH.items()}))
+        self.assertEqual(json.dumps(js["patterns"]), json.dumps({str(k): v for k, v in bench.BANDIT_PATTERNS.items()}))   # i pořadí vzorů: losují se podle něj
+        self.assertEqual(js["ties"], [list(t) for t in bench.BANDIT_TIE_SHARES])
+        self.assertEqual(js["errors"], list(bench.BANDIT_ERRORS))
+        for k in (4, 5):
+            self.assertEqual(json.dumps(js[f"q{k}"]), json.dumps(bench.bandit_question(k, "totals")))
+        cases = bench.bandit_cases(30, 5, seed=3)
+        states = run_js("arg.map(banditState)", [[list(g) for g in c[0]] for c in cases])
+        for case, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.bandit_state(case, "totals")))         # bajtově, i pořadí klíčů
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  toll: '([^'\\]*)',$", alt, re.M), [bench.ALT["toll"]])
+        self.assertNotIn("\n  toll_log: ", "\n" + alt)              # podoba history je jen v bench.py
+
+    def test_rule_check_and_shortcuts_match_bench(self):
+        import bench
+        rng = random.Random(9)
+        totals = [list(t) for t in itertools.product([(w, n) for n in range(5) for w in range(n + 1)], repeat=3)]
+        totals += [[(w, n) for n in (rng.randint(0, 16) for _ in range(k)) for w in (rng.randint(0, n),)] for k in (4, 5) for _ in range(1500)]
+        names = list(bench.BANDIT_SHORTCUTS)
+        got = run_js(f"arg.map(t => [banditAnswer(t), banditCheck(t), {json.dumps(names)}.map(n => BANDIT_SHORTCUTS[n](t))])",
+                     [[list(g) for g in t] for t in totals])
+        for t, (answer, check, picks) in zip(totals, got):
+            with self.subTest(totals=t):
+                py = bench.bandit_answer(t)
+                self.assertEqual(answer, list(py) if py else None)
+                self.assertEqual(check, bench.bandit_check(t))
+                self.assertEqual(picks, [sorted(bench.BANDIT_SHORTCUTS[n](t)) for n in names])
+        for cls in bench.BANDIT_CLASSES:                           # vzor nad úlohami bench.py
+            sub = [c for c in bench.bandit_cases(60, 4, seed=2) if c[2] == cls]
+            js = run_js("arg.map(([cls, t, a]) => banditPattern(cls, t, a))", [[cls, [[w, n] for w, n, _ in c[0]], c[1]] for c in sub])
+            self.assertEqual(js, [bench.bandit_pattern(cls, [(w, n) for w, n, _ in c[0]], c[1]) for c in sub])
+
+    def test_generated_rows_keep_the_guarantees(self):            # meze jako tests/test_bandit.py (Generator), na řadách stránky
+        import bench
+        for k in (4, 5):
+            for (gates, answer, cls, _), raw in zip(*bandit_page(900, k)):
+                totals = [(w, n) for w, n, _ in gates]
+                with self.subTest(k=k, gates=gates):
+                    self.assertEqual(list(raw), ["gates", "answer", "cls", "truth"])
+                    self.assertEqual(raw["truth"], answer)
+                    self.assertEqual(len(gates), k)
+                    self.assertTrue(all(0 <= w <= n <= 16 and c in bench.BANDIT_CHANCES for w, n, c in gates))
+                    self.assertEqual(bench.bandit_answer(totals), (answer, cls))
+                    self.assertEqual(bench.bandit_check(totals), answer)
+                    self.assertLessEqual(sum(n for _, n in totals), 10 * k)
+                    shares = sorted((Fraction(w, n) for w, n in totals if n >= 3), reverse=True)
+                    top = 2 if cls == "tie" else 1
+                    if cls != "explore" and len(shares) > top:
+                        self.assertGreaterEqual(shares[top - 1] - shares[top], Fraction(1, 10))
+                    if cls == "tie":
+                        self.assertLess(shares[0], 1)
+                    if cls == "explore":
+                        self.assertIn(totals[answer], bench.BANDIT_FRESH)
+
+    def test_classes_answers_and_shortcuts_like_bench(self):      # stejné meze jako tests/test_bandit.py
+        for k, low, high, top in ((4, 0.18, 0.32, 0.40), (5, 0.14, 0.26, 0.36)):
+            c = bandit_page(900, k)[0]
+            classes, answers = Counter(x[2] for x in c), Counter(x[1] for x in c)
+            for cls in ("explore", "exploit", "tie"):
+                self.assertTrue(0.28 <= classes[cls] / len(c) <= 0.38, (k, classes))
+            for gate in range(k):
+                self.assertTrue(low <= answers[gate] / len(c) <= high, (k, answers))
+            for cls in ("explore", "exploit", "tie"):
+                sub = [x for x in c if x[2] == cls]
+                share = lambda name: sum(bandit_hit(x, name) for x in sub) / len(sub)
+                for name in ("most_wins", "most_tries", "fewest_tries", "fewest_losses", "lowest_rate", "lowest_rate_tried", "exclusion"):
+                    if not (cls == "explore" and name == "fewest_tries"):
+                        with self.subTest(k=k, cls=cls, shortcut=name):
+                            self.assertLessEqual(share(name), top)
+                if cls == "explore":
+                    self.assertEqual(share("fewest_tries"), 1)
+                    self.assertLessEqual(share("greedy"), 0.35)
+                if cls == "exploit":
+                    self.assertEqual(share("greedy"), 1)
+
+    def test_summary_matches_bench(self):                          # i neplatné volby: do přesnosti správně, do rozboru jako neplatné, ztráta největší
+        import bench
+        for k in (4, 5):
+            cases, rng, keys = bench.bandit_cases(240, k, seed=5), random.Random(6), bench.gate_keys(k)
+            choices = [rng.choice(keys + keys + [None, "gate_9", 2, "Gate 1"]) for _ in cases]
+            js_cases = [{"gates": [list(g) for g in c[0]], "answer": c[1], "cls": c[2]} for c in cases]
+            got = run_js("banditSummary(arg.cases, arg.choices, arg.keys)", {"cases": js_cases, "choices": choices, "keys": keys})
+            py = bench.bandit_summary(cases, choices, keys)
+            self.assertEqual(json.dumps(got["by_class"]), json.dumps(py["by_class"]))
+            self.assertEqual(json.dumps(got["errors"]), json.dumps(py["errors"]))                  # i pořadí klíčů
+            same(self, py["loss"], got["loss"], f"loss K={k}")
+        empty = run_js("banditSummary([], [], arg)", bench.gate_keys(4))
+        self.assertEqual(empty["by_class"], {"explore": [0, 0], "exploit": [0, 0], "tie": [0, 0]})    # prázdná hra: stránka ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for k in (4, 5):
+            warm = run_js(f"banditWarm({k})", None)
+            totals = [(w, n) for w, n, _ in warm["gates"]]
+            self.assertEqual(list(warm), ["gates", "answer", "cls"])
+            self.assertEqual(bench.bandit_answer(totals), (warm["answer"], warm["cls"]))
+            longest = max(len(json.dumps(bench.bandit_state(c))) for c in bench.bandit_cases(200, k, seed=2))
+            self.assertGreaterEqual(len(json.dumps(bench.bandit_state((tuple(map(tuple, warm["gates"])), 0, "exploit", ())))), longest)
+
+    def test_same_seed_same_rows_and_speed(self):                 # spec: jedna řada pod ~20 ms; měří se průměr, ne nejhorší (stroj, JIT)
+        first = run_js(BANDIT_ROWS_JS, {"seed": 7, "gates": 4, "n": 40})
+        self.assertEqual(run_js(BANDIT_ROWS_JS, {"seed": 7, "gates": 4, "n": 40}), first)
+        self.assertNotEqual(run_js(BANDIT_ROWS_JS, {"seed": 8, "gates": 4, "n": 40}), first)
+        ms = run_js(BANDIT_ROWS_JS.replace("return [...Array(arg.n)].map(() => banditRow(arg.gates, rand));",
+                                           "const t0 = Date.now(); for (let i = 0; i < arg.n; i++) banditRow(arg.gates, rand); return Date.now() - t0;"),
+                    {"seed": 3, "gates": 5, "n": 600})
+        self.assertLess(ms / 600, 5, ms)
+
+    def test_bounded_search_raises(self):
+        got = run_js("[[4, 'odd'], [3, 'explore'], [6, 'tie']].map(([k, cls]) => { try { banditCase(Math.random, k, cls); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["banditCase: unsupported task for 4 gates and class odd", "banditCase: unsupported task for 3 gates and class explore",
+                               "banditCase: unsupported task for 6 gates and class tie"])
+        got = run_js("(() => { try { banditCase(() => 0.999999, 4, 'explore'); return null; } catch (e) { return e.message; } })()", None)
+        self.assertRegex(got, r"^banditCase: no explore task \([HTM]{5}\) for 4 gates after 20000 tries$")
 
 
 if __name__ == "__main__":
