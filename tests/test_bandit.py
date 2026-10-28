@@ -523,7 +523,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; pravidlo, g
     def test_scenario_is_offered_selected_and_wired(self):
         page = page_source()
         self.assertEqual(page.count('<option value="bandit" data-i18n="opt.scenario.bandit"></option>'), 1)
-        self.assertEqual(len(re.findall(r"SC = \{ obstacles, [a-zA-Z, ]*\bbandit \}\[v\];", page)), 1)      # registr scénářů, bandit poslední
+        self.assertEqual(len(re.findall(r"SC = \{ obstacles, [a-zA-Z, ]*\bbandit\b[a-zA-Z, ]* \}\[v\];", page)), 1)      # registr scénářů, bandit v něm (za ním scénáře z větve hra-hint-diff-vzor)
         self.assertEqual(page.count("v === 'bandit'"), 1)
         self.assertEqual(page.count("// ---------- scénář: mýtné brány ----------"), 1)
         # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
