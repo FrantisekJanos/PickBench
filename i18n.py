@@ -346,6 +346,19 @@ TEXTS = {
     "bench.err.defer": {"cs": "--defer chce práh jistoty větší než 0 a nejvýš 1, třeba 0.8.",
                         "en": "--defer needs a confidence threshold above 0 and at most 1, such as 0.8."},
     # --defer: řádek pod modelem; procenta přicházejí hotová, {covered}/{n} úloh nad prahem, {handed} pod prahem, {brier} = „0.142“ nebo „—“.
+    "bench.err.sweepScenario": {"cs": "Volba --sweep-lanes jde jen s překážkami (bez volby scénáře) nebo s --numbers.",
+                                "en": "The --sweep-lanes option works only with obstacles (no scenario option) or with --numbers."},
+    "bench.err.sweepCombo": {"cs": "Volba --sweep-lanes se nekombinuje s --lanes, --mirror, --inject, --deadline-ms ani --defer.",
+                             "en": "The --sweep-lanes option cannot be combined with --lanes, --mirror, --inject, --deadline-ms or --defer."},
+    # --sweep-lanes: úvod ({n} úloh na každý počet), sloupec počtu pruhů a bran, trend od {first} do {last} (procenta hotová, medián v ms).
+    "bench.intro.sweepLanes": {"cs": "{n} {n|situace|situace|situací} pro každý počet pruhů od 2 do 8; sada je pro všechny modely stejná",
+                               "en": "{n} {n|situation|situations} for every number of lanes from 2 to 8, the same for all models"},
+    "bench.intro.sweepNumbers": {"cs": "{n} {n|řada|řady|řad} čísel pro každý počet bran od 2 do 8; sada je pro všechny modely stejná",
+                                 "en": "{n} {n|row|rows} of numbers for every number of gates from 2 to 8, the same for all models"},
+    "bench.col.lanes": {"cs": "pruhů", "en": "lanes"},
+    "bench.col.gates": {"cs": "bran", "en": "gates"},
+    "bench.sweep.trend": {"cs": "od {first} do {last}: správně {acc_first} → {acc_last}, medián {p50_first} → {p50_last} ms",
+                          "en": "from {first} to {last}: correct {acc_first} → {acc_last}, median {p50_first} → {p50_last} ms"},
     "bench.defer": {"cs": "práh jistoty {threshold}: pokrytí {coverage} ({covered}/{n}), přesnost nad prahem {acc}, "
                           "předat člověku nebo pravidlům {handed}; Brier {brier}",
                     "en": "confidence threshold {threshold}: coverage {coverage} ({covered}/{n}), accuracy above the threshold {acc}, "

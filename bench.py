@@ -16,6 +16,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -35,6 +36,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --pattern tev1
           python bench.py 100 --tictactoe tev1
           python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -165,6 +167,9 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             Když server už zahřívací dotaz odmítne (HTTP 400), řádek řekne „nevešlo se“ a důvod doslova od serveru;
             Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
 --deadline-ms L:  přibude sloupec goodput = podíl rozhodnutí správných a zároveň do L ms.
+--sweep-lanes:  průchod 2 až 8 pruhů (s --numbers bran): N úloh (výchozí 100) pro každý počet, tytéž jako s --lanes K;
+            pro každý model řádek na každý počet (správně, medián, p95, rozh./s, ECE a pruh # za každých 5 % správně)
+            a pod nimi trend od 2 do 8. Jen překážky a --numbers; nekombinuje se s --lanes, --mirror, --inject, --deadline-ms ani --defer.
 --defer T:  pod řádkem modelu řádek prahu jistoty T (víc než 0 a nejvýš 1, třeba 0.8): pokrytí = podíl úloh s jistotou aspoň T
             (ty by rozhodl model), přesnost nad prahem, kolik úloh předat člověku nebo pravidlům (odpověď bez jistoty se předává)
             a Brierovo skóre = průměr (jistota − správně)² přes odpovědi s jistotou, 0 = dokonalé.
@@ -201,6 +206,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -220,6 +226,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --pattern tev1
           python bench.py 100 --tictactoe tev1
           python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -350,6 +357,9 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
             Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
 --deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--sweep-lanes:  a sweep over 2 to 8 lanes (gates with --numbers): N tasks (default 100) for every number, the same as with --lanes K;
+            for every model a row for every number (correct, median, p95, dec./s, ECE and a bar with one # for every 5% correct)
+            and below them the trend from 2 to 8. Obstacles and --numbers only; cannot be combined with --lanes, --mirror, --inject, --deadline-ms or --defer.
 --defer T:  below the model row, a line for the confidence threshold T (above 0 and at most 1, such as 0.8): coverage = the share of tasks
             with a confidence of at least T (the model would decide them), accuracy above the threshold, how many tasks to hand over to a
             person or the rules (an answer without a confidence is handed over) and the Brier score = the mean (confidence − correct)², 0 = perfect.
@@ -3711,6 +3721,36 @@ def run_bandit(model, cases, mirror=False, inject=False, deadline=None, form=Non
     return r
 
 
+# ---------- průchod počtem pruhů (--sweep-lanes) ----------
+SWEEP_LANES = range(2, 9)                            # počty pruhů (bran) průchodu
+SWEEP_BAR = 20                                       # znaků # za 100 % správně: jeden znak za každých 5 %
+
+
+def run_sweep(model, n, numbers=False):
+    """Pro každý počet pruhů (s numbers bran) 2–8 vlastní sada n úloh, stejná jako bench.py n --lanes K. Vrací [(K, souhrn)]."""
+    if numbers:
+        return [(k, run_numbers(model, number_cases(n, k), k)) for k in SWEEP_LANES]
+    return [(k, run_lanes(model, make_cases(n, k), k)) for k in SWEEP_LANES]
+
+
+def sweep_header(numbers=False):
+    """Záhlaví tabulky průchodu; šířky sloupců jsou v obou jazycích stejné, slova jsou ze záhlaví hlavní tabulky."""
+    cols = [(i18n.t("bench.col.model"), "<20"), (i18n.t("bench.col.gates") if numbers else i18n.t("bench.col.lanes"), ">7"),
+            (i18n.t("bench.col.acc"), ">9"), (i18n.t("bench.col.p50"), ">9"), (i18n.t("bench.col.p95"), ">8"),
+            (i18n.t("bench.col.rate"), ">9"), (i18n.t("bench.col.ece"), ">7")]
+    return "".join(format(text, width) for text, width in cols)
+
+
+def print_sweep(model, rows):
+    """Řádek na každý počet pruhů (v obou jazycích stejný; # = 5 % správně) a pod nimi trend od prvního k poslednímu počtu."""
+    for k, r in rows:
+        bar = "#" * round(r["acc"] * SWEEP_BAR)
+        print(f"{model:<20}{k:>7}{pct(r['acc']):>9}{r['p50']:>7.0f}ms{r['p95']:>6.0f}ms{1000 / r['avg']:>9.1f}{pct(r['ece']):>7}   {bar}".rstrip(), flush=True)
+    (k0, first), (k1, last) = rows[0], rows[-1]
+    print(" " * 20 + i18n.t("bench.sweep.trend", first=k0, last=k1, acc_first=pct(first["acc"]), acc_last=pct(last["acc"]),
+                            p50_first=f"{first['p50']:.0f}", p50_last=f"{last['p50']:.0f}"), flush=True)
+
+
 @contextlib.contextmanager
 def hosted_model(model):
     """Kolem měření jednoho modelu. U lokálního modelu nedělá nic.
@@ -3785,6 +3825,7 @@ def parse_args(argv):
     p.add_argument("--inject", action="store_true")
     p.add_argument("--deadline-ms", type=float)
     p.add_argument("--defer", type=float)                        # práh jistoty 0–1: řádek pokrytí, přesnosti nad prahem a Brierova skóre
+    p.add_argument("--sweep-lanes", action="store_true")         # průchod 2–8 pruhů (s --numbers bran)
     p.add_argument("rest", nargs="*")
     a = p.parse_intermixed_args(argv)                # volby smí stát mezi N a modely
     a.n = int(a.rest.pop(0)) if a.rest and a.rest[0].isdigit() else None
@@ -4139,13 +4180,27 @@ def main(argv):
         sys.exit(i18n.t("bench.err.deadline"))
     if args.defer is not None and not 0 < args.defer <= 1:       # i NaN
         sys.exit(i18n.t("bench.err.defer"))
+    if args.sweep_lanes and sum(map(bool, scenarios)) > bool(args.numbers):      # jen překážky a číselné duely
+        sys.exit(i18n.t("bench.err.sweepScenario"))
+    if args.sweep_lanes and (args.lanes_given or args.mirror or args.inject or args.deadline_ms is not None or args.defer is not None):
+        sys.exit(i18n.t("bench.err.sweepCombo"))
     if args.max_usd is not None or args.max_hosted is not None:
         if (args.max_usd is not None and not 0 <= args.max_usd < float("inf")) or (args.max_hosted is not None and args.max_hosted < 0):
             sys.exit(i18n.t("bench.err.limits"))
         providers.BUDGET = providers.Budget(args.max_usd, args.max_hosted)       # strop útraty tohoto spuštění
     head = header(args.mirror, args.deadline_ms)
     row = lambda r, note: print_row(r, note, args.defer)        # řádek modelu, s --defer i s řádkem prahu jistoty
-    if args.public:
+    if args.sweep_lanes:
+        n = args.n or 100
+        if args.numbers:
+            print(i18n.t("bench.intro.sweepNumbers", n=n) + "\n")
+        else:
+            print(i18n.t("bench.intro.sweepLanes", n=n) + "\n")
+        print(sweep_header(args.numbers))
+        for m in args.models:
+            with hosted_model(m):
+                print_sweep(m, run_sweep(m, n, args.numbers))
+    elif args.public:
         try:
             ds = load_public(args.public)
         except (ValueError, OSError) as e:           # JSONDecodeError je ValueError

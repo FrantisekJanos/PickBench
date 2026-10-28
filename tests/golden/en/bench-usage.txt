@@ -16,6 +16,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -35,6 +36,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --pattern tev1
           python bench.py 100 --tictactoe tev1
           python bench.py 100 --bandit tev1
+          python bench.py 50 --sweep-lanes tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -165,6 +167,9 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
             Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
 --deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--sweep-lanes:  a sweep over 2 to 8 lanes (gates with --numbers): N tasks (default 100) for every number, the same as with --lanes K;
+            for every model a row for every number (correct, median, p95, dec./s, ECE and a bar with one # for every 5% correct)
+            and below them the trend from 2 to 8. Obstacles and --numbers only; cannot be combined with --lanes, --mirror, --inject, --deadline-ms or --defer.
 --defer T:  below the model row, a line for the confidence threshold T (above 0 and at most 1, such as 0.8): coverage = the share of tasks
             with a confidence of at least T (the model would decide them), accuracy above the threshold, how many tasks to hand over to a
             person or the rules (an answer without a confidence is handed over) and the Brier score = the mean (confidence − correct)², 0 = perfect.
