@@ -1753,5 +1753,49 @@ class Hint(unittest.TestCase):
             self.assertGreaterEqual(len(json.dumps(bench.hint_state(tuple(v), w["hint"]))), longest, k)
 
 
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Diff(unittest.TestCase):
+    def test_constants_and_relatives_match_bench(self):
+        import bench
+        js = run_js("({ words: DIFF_WORDS, numbers: DIFF_NUMBERS, classes: DIFF_CLASSES, modes: DIFF_MODES, share: DIFF_REPEAT_SHARE,"
+                    " tries: DIFF_TRIES, near: DIFF_NEIGHBOURS, far: DIFF_FAR, pools: [2, 3, 4, 5, 6, 7, 8].map(diffPoolPairs) })", None)
+        self.assertEqual((js["words"], js["numbers"]), (list(bench.DIFF_WORDS), list(bench.DIFF_NUMBERS)))
+        self.assertEqual((js["classes"], js["modes"]), (list(bench.DIFF_CLASSES), list(bench.DIFF_MODES)))
+        self.assertEqual((js["share"], js["tries"]), (bench.DIFF_REPEAT_SHARE, bench.DIFF_TRIES))
+        self.assertEqual(json.dumps(js["near"]), json.dumps({w: list(v) for w, v in bench.DIFF_NEIGHBOURS.items()}))      # i pořadí: losuje se z nich
+        self.assertEqual(json.dumps(js["far"]), json.dumps({w: list(v) for w, v in bench.DIFF_FAR.items()}))
+        self.assertEqual(js["pools"], [bench.diff_pool_pairs(k) for k in range(2, 9)])
+
+    def test_pairs_keep_the_class_relation(self):        # jako tests/test_diff.py (Pairs): 2000× na třídu, vztah platí z obou stran
+        import bench
+        pairs = run_js(ROWS_JS.replace("[...Array(arg.n)].map(() => signRow(arg.lanes, rand))",
+                                       "DIFF_CLASSES.map(cls => [...Array(arg.n)].map(() => diffPair(rand, cls)))"), {"seed": 2, "lanes": 0, "n": 2000})
+        for cls, got in zip(bench.DIFF_CLASSES, pairs):
+            with self.subTest(cls=cls):
+                self.assertTrue(all(bench.diff_related(cls, a, b) for a, b in got))
+                self.assertTrue(0.4 <= sum(a < b for a, b in got) / len(got) <= 0.6)            # pořadí ve dvojici 1 : 1
+        values = [[2408, 2409], [2409, 2408], [2408, 2418], [1234, 5678], ["wear", "pear"], ["stem", "lane"], ["road", "load"], ["tape", "cape"]]
+        got = run_js("arg.map(([a, b]) => [diffDistance(a, b), ...DIFF_CLASSES.map(c => diffRelated(c, a, b))])", values)
+        for (a, b), row in zip(values, got):
+            want = [bench.diff_distance(a, b)] + [False if c == "num1" and isinstance(a, str) else bench.diff_related(c, a, b) for c in bench.DIFF_CLASSES]
+            self.assertEqual(row, want, (a, b))                                               # num1 u slov v Pythonu nejde (rozdíl řetězců)
+
+    def test_state_and_question_match_bench(self):        # ve hře jen podoba lists
+        import bench
+        cases = bench.diff_cases(60, 5, seed=4)
+        states = run_js("arg.map(([b, a]) => diffState(b, a))", [[list(c[0]), list(c[1])] for c in cases])
+        for c, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.diff_state(c[0], c[1], "lists")))
+        for k, q in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(diffQuestion)", None)):
+            self.assertEqual(json.dumps(q), json.dumps(bench.diff_question(k, "lists")), k)
+
+    def test_alternative_wording_matches_bench(self):      # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  changed_list: '([^'\\]*)',$", alt, re.M), [bench.ALT["changed_list"]])
+        self.assertNotIn("\n  changed: ", "\n" + alt)        # podoba dicts je jen v bench.py
+
+
 if __name__ == "__main__":
     unittest.main()

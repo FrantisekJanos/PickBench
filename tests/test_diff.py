@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,8 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
+from test_queue import method                                                   # víceřádková metoda objektu scénáře
 
 LANG_ENV = "PICKBENCH_LANG"
 NUMBERS = ((2408, 2144, 4943, 2486), (2409, 2144, 4943, 2486))          # num1 v pruhu 1, plain
@@ -404,6 +408,25 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --diff tev1", text)
             self.assertIn("\n--diff:     ", text)
             self.assertIn("\n--dicts, --lists:  ", text)
+
+
+def diff_body():
+    return page_source().split("\nconst diff = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; generátor, stav a rozbor hlídá tests/test_parity.py (Diff)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_matches_bench(self):                    # zrcadla otázek obou nových scénářů jako bench.variant; ostatní otázky beze změny
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        questions = ([bench.diff_question(k, "lists") for k in range(2, 9)] + [bench.hint_question(k) for k in (2, 3, 8)]
+                     + [bench.queue_question(4, True), bench.lookahead_question(5, "blocked"), bench.memory_question(5), bench.rule_question("labeled")])
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(questions) + ";" + (
+            "process.stdout.write(JSON.stringify(Q.map(q => [0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(q)), v)))));")
+        for q, by_variant in zip(questions, run_page_js(code)):
+            for v, js in enumerate(by_variant):
+                self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))
 
 
 if __name__ == "__main__":

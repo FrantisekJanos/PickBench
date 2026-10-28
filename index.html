@@ -1195,6 +1195,7 @@ const ALT = {                                              // jinak formulované
   bet: 'Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.',
   speed: 'The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.',
   depot: "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
+  changed_list: 'Two photos show the same row of lanes, before first and after second; each one lists the lane values from left to right, so its first item belongs to lane 1. In after, the value of exactly one lane differs from its value in before. Pick that lane.',
 };
 const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
@@ -4461,6 +4462,67 @@ function pointsText(x) {
 function hintWarm(lanes) {
   const values = [...Array(lanes)].map((_, i) => 20000 - lanes + 1 + i);
   return { values, answer: lanes - 1, truth: lanes - 1, gap: 'tight', cond: 'incongruent', hint: 0, set: -1 };
+}
+
+// Co se změnilo: slova, dvojice hodnot, stav a otázka jako DIFF_*, diff_* v bench.py (jen podoba lists, výchozí v bench.py).
+// Pruh je index od nuly (pruh 1 = 0). Hodnoty jsou čísla 1000–9999, nebo slova z DIFF_WORDS; co jde do modelu, je anglicky.
+const DIFF_WORDS = `
+road load toad goad read roar roam foam loan lean mean meat heat beat seat sent rent bent tent test best nest west vest rest
+boat coat goat moat most mist mast fast last list lost cost host hose nose rose rise wise wide ride rode code cope hope rope
+ripe pipe wipe wine mine fine line lane late gate game tame time tile tale sale male mile mole hole pole pile file fire hire
+wire wore more mare care cave wave save gave pave pale bale bake lake make take wake cake came same name tape cape
+farm form fork cork corn horn born barn bark park part dart dark hard harm warm worm word ward wand band hand land sand bend
+lend mend tend fend find kind mind bind wind wild mild bolt colt cold bold gold hold fold told toll tall ball call hall
+wall fall fill hill mill will well bell tell sell cell dell deer peer pear bear gear year near wear hear dear fear tear team
+beam seam ship shop stop step stem item
+`.split(/\s+/).filter(Boolean);
+const DIFF_NUMBERS = [1000, 9999];
+const DIFF_CLASSES = ['num1', 'numnew', 'word1', 'wordnew'];      // číslo o 1, jiné číslo, slovo o písmeno, jiné slovo
+const DIFF_MODES = ['plain', 'repeat'];                           // řada bez opakování / hodnoty ze zásoby dvojic, opakují se
+const DIFF_REPEAT_SHARE = 0.5, DIFF_TRIES = 1000;
+
+function diffDistance(a, b) {                              // jako diff_distance: počet míst, kde se znaky zápisu liší (zip: po kratší)
+  const x = String(a), y = String(b);
+  let n = 0;
+  for (let i = 0; i < Math.min(x.length, y.length); i++) n += x[i] !== y[i];
+  return n;
+}
+const DIFF_NEIGHBOURS = Object.fromEntries(DIFF_WORDS.map(w => [w, DIFF_WORDS.filter(v => diffDistance(w, v) === 1)]));     // slova o písmeno
+const DIFF_FAR = Object.fromEntries(DIFF_WORDS.map(w => [w, DIFF_WORDS.filter(v => diffDistance(w, v) === 4)]));           // bez společného písmene na místě
+
+function diffPair(rand, cls) {                             // jako diff_pair: dvojice (stará, nová) třídy cls v náhodném pořadí
+  let pair;
+  if (cls === 'num1') {
+    const x = 10 * (100 + Math.floor(rand() * 900)) + Math.floor(rand() * 9);      // poslední číslice 0–8: +1 nemá přenos
+    pair = [x, x + 1];
+  } else if (cls === 'numnew') {
+    const x = pickInt(rand, ...DIFF_NUMBERS), digits = String(x);
+    const y = [0, 1, 2, 3].map(i => pickOf(rand, [...(i === 0 ? '123456789' : '0123456789')].filter(d => d !== digits[i]))).join('');
+    pair = [x, Number(y)];
+  } else if (cls === 'word1') {
+    const x = pickOf(rand, DIFF_WORDS);
+    pair = [x, pickOf(rand, DIFF_NEIGHBOURS[x])];
+  } else if (cls === 'wordnew') {
+    const x = pickOf(rand, DIFF_WORDS);
+    pair = [x, pickOf(rand, DIFF_FAR[x])];
+  } else throw new Error(`diffPair: unknown class ${cls}`);
+  return rand() < 0.5 ? pair : [pair[1], pair[0]];
+}
+const diffPoolPairs = lanes => Math.floor((lanes + 3) / 2);      // počet dvojic v zásobě podoby repeat
+const diffSingle = (rand, cls) => cls === 'num1' || cls === 'numnew' ? pickInt(rand, ...DIFF_NUMBERS) : pickOf(rand, DIFF_WORDS);
+function diffRelated(cls, old, nw) {                       // jako diff_related
+  if (cls === 'num1') return Math.abs(old - nw) === 1 && diffDistance(old, nw) === 1;
+  return diffDistance(old, nw) === (cls === 'word1' ? 1 : 4);
+}
+
+const diffState = (before, after) => ({ before: [...before], after: [...after] });     // diff_state(…, "lists")
+const DIFF_INTRO = 'A camera took two photos of the same row of lanes, first before and then after. Each lane shows one value, a number or a word. ';
+const DIFF_ASK = 'Exactly one lane shows a different value in after than in before. Choose that lane.';
+function diffQuestion(lanes) {                             // diff_question(lanes, "lists"): klíč changed_list
+  const criteria = {};
+  laneKeys(lanes).forEach((k, i) => criteria[k] = `Lane ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : ''));
+  const instructions = DIFF_INTRO + 'The lists before and after hold the lane values from left to right; the first item is lane 1. ' + DIFF_ASK;
+  return { changed_list: { type: 'choice', instructions, criteria } };
 }
 
 // ==== sdíleno s Pythonem: konec ====
