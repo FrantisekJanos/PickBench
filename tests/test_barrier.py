@@ -552,6 +552,10 @@ def page_function(name):
     return found[0]
 
 
+# Registr scénářů s řadami v selectScenario: jediný zápis, testy ostatních scénářů ho importují (S3, T3, J3 ho prodlouží).
+REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule, queue, queueWeighted, bet, cruise, timetable }[v];"
+
+
 class Page(unittest.TestCase):                                         # scénář ve stránce; pravidla, generátor a výpočty hlídá tests/test_parity.py (Barrier)
     def test_core_hooks_for_a_two_option_scenario(self):
         page = page_source()
@@ -574,7 +578,7 @@ class Page(unittest.TestCase):                                         # scéná
     def test_scenario_is_offered_selected_and_wired(self):
         page = page_source()
         self.assertEqual(page.count('<option value="barrier" data-i18n="opt.scenario.barrier"></option>'), 1)
-        self.assertEqual(page.count("SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
         self.assertEqual(page.count("// ---------- scénář: závora ----------"), 1)
         # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
         self.assertEqual(page.count("  warmTask() { return this.task(BARRIER_WARM, null, null); },"), 1)

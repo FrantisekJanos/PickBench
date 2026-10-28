@@ -21,7 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient, recording
 from test_golden import Clock, fake_urlopen
-from test_barrier import page_function, page_source, run_page_js      # kus skriptu stránky v node
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 EXAMPLE = (".#..", "..#.", "###.", "....")           # příklad z rešerše: auto v pruhu 2 (index 1); správně right, hladový left
@@ -458,9 +458,6 @@ class Cli(unittest.TestCase):
             self.assertIn(bench.LOOKAHEAD_FORM + ".", text)
 
 
-REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v];"
-
-
 def lookahead_body():
     return page_source().split("\nconst lookahead = {", 1)[1].split("\n};\n", 1)[0]
 
@@ -510,8 +507,8 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         page = page_source()
         self.assertIn("  id: 'lookahead', lanesFree: true, minLanes: 3,", lookahead_body())
         self.assertEqual(page.count("  lanes: () => Math.max(3, +$('lanes').value),"), 1)
-        self.assertEqual(page.count("  for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);"), 1)
-        self.assertEqual(page.count("  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;"), 1)
+        self.assertEqual(page.count("  for (const o of lanes.options) o.disabled = +o.value < (SC.minLanes ?? 2);"), 1)
+        self.assertEqual(page.count("  if (+lanes.value < (SC.minLanes ?? 2)) lanes.value = SC.minLanes;"), 1)
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_car_takes_the_lane_of_the_task_and_moves_one_lane(self):

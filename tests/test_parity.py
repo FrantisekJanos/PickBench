@@ -941,5 +941,686 @@ class Rule(unittest.TestCase):
         self.assertGreaterEqual(len(json.dumps(state)), longest)                                    # horní odhad délky dotazu ve stepEstimate
 
 
+QUEUE_HAND = [[["car", "car"], ["truck"], ["bus", "van"]], [["car", "van"], ["bus", "car"]], [["motorbike", "tractor"], ["car", "van", "bus"]],
+              [["car"], ["van"], ["bus", "car"]], [["bus"], ["truck", "car"], ["van", "van", "van"]], [["bus", "car"], ["tractor"], ["truck", "van"]]]   # ručně ověřené fronty z tests/test_queue.py (Basics)
+
+# Generátor Nejkratší fronty stránky se stejnou náhodou jako ROWS_JS: seed, lanes, weighted, n → řady queueRow.
+QUEUE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "queueRow(arg.lanes, arg.weighted, rand)")
+assert QUEUE_ROWS_JS != ROWS_JS
+QUEUE_PAGE = {}
+
+
+def queue_page(n, lanes, weighted, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (fronty, pruh, třída, nejkratší text, nejméně vozidel)."""
+    if (n, lanes, weighted, seed) not in QUEUE_PAGE:
+        raw = run_js(QUEUE_ROWS_JS, {"seed": seed, "lanes": lanes, "weighted": weighted, "n": n})
+        QUEUE_PAGE[n, lanes, weighted, seed] = raw, [(tuple(tuple(q) for q in r["queues"]), r["answer"], r["cls"], tuple(r["text"]), r["count"]) for r in raw]
+    return QUEUE_PAGE[n, lanes, weighted, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Queue(unittest.TestCase):
+    def test_constants_match_bench(self):
+        import bench
+        js = run_js("({ vehicles: QUEUE_VEHICLES, weights: QUEUE_WEIGHTS, size: QUEUE_SIZE, gaps: QUEUE_GAPS, share: QUEUE_COUNT_SHARE, tries: QUEUE_TRIES,"
+                    " heavy: QUEUE_HEAVY, light: QUEUE_LIGHT, shapes: QUEUE_SHAPES, cum: QUEUE_SHAPE_CUM, keys: [2, 8].map(laneKeys),"
+                    " textShare: [2, 3, 4, 8].map(queueTextShare) })", None)
+        self.assertEqual(js["vehicles"], list(bench.QUEUE_VEHICLES))
+        self.assertEqual(json.dumps(js["weights"]), json.dumps(bench.QUEUE_WEIGHTS))                 # i pořadí klíčů
+        self.assertEqual((js["size"], js["gaps"]), (list(bench.QUEUE_SIZE), list(bench.QUEUE_GAPS)))
+        self.assertEqual((js["share"], js["tries"]), (bench.QUEUE_COUNT_SHARE, bench.QUEUE_TRIES))
+        self.assertEqual((js["heavy"], js["light"]), (list(bench.QUEUE_HEAVY), list(bench.QUEUE_LIGHT)))
+        self.assertEqual(js["shapes"], [list(s) for s in bench.QUEUE_SHAPES])                       # pořadí rozhoduje o losování
+        self.assertEqual(len(js["cum"]), len(bench.QUEUE_SHAPE_CUM))
+        for a, b in zip(js["cum"], bench.QUEUE_SHAPE_CUM):
+            self.assertTrue(math.isclose(a, b, rel_tol=1e-12), (a, b))
+        self.assertEqual(js["keys"], [bench.lane_keys(2), bench.lane_keys(8)])
+        self.assertEqual(js["textShare"], [bench.queue_text_share(k) for k in (2, 3, 4, 8)])
+
+    def test_counting_matches_bench(self):                         # délky, nejkratší text, nejméně vozidel a těžkých, shoda = všechny pruhy
+        import bench
+        cases = bench.queue_cases(60, 4, seed=3) + bench.queue_cases(60, 6, True, seed=4) + bench.queue_cases(30, 2, seed=5)
+        grids = [[list(q) for q in queues] for queues, *_ in cases] + QUEUE_HAND
+        got = run_js("arg.map(qs => [qs.map(q => queueLength(q, false)), qs.map(q => queueLength(q, true)), queueText(qs), queueCount(qs),"
+                     " queueHeavy(qs), queueFewest(qs.map(q => q.length))])", grids)
+        for qs, (plain, weighted, text, count, heavy, fewest) in zip(grids, got):
+            queues = tuple(tuple(q) for q in qs)
+            with self.subTest(queues=queues):
+                self.assertEqual(plain, [bench.queue_length(q) for q in queues])
+                self.assertEqual(weighted, [bench.queue_length(q, True) for q in queues])
+                self.assertEqual(text, list(bench.queue_text(queues)))
+                self.assertEqual(count, bench.queue_count(queues))                                   # None = víc pruhů s nejméně vozidly
+                self.assertEqual(heavy, list(bench.queue_heavy(queues)))
+                self.assertEqual(fewest, list(bench.queue_fewest([len(q) for q in queues])))
+
+    def test_class_matches_bench_and_raises(self):
+        import bench
+        got = run_js("[1, 2, 3, 4, 11].map(queueClass).concat([(() => { try { queueClass(0); return null; } catch (e) { return e.message; } })()])", None)
+        self.assertEqual(got[:5], [bench.queue_class(g) for g in (1, 2, 3, 4, 11)])
+        self.assertEqual(got[5], "queueClass: gap must be at least 1, got 0")                        # nic se neopravuje potichu
+
+    def test_state_and_question_match_bench(self):
+        import bench
+        cases = bench.queue_cases(20, 4, seed=7) + bench.queue_cases(20, 8, True, seed=8)
+        grids = [[list(q) for q in queues] for queues, *_ in cases] + QUEUE_HAND
+        for qs, state in zip(grids, run_js("arg.map(queueState)", grids)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.queue_state(tuple(tuple(q) for q in qs))), qs)     # bajtově, i pořadí klíčů
+        asked = run_js("[2, 3, 4, 5, 6, 7, 8].flatMap(k => [queueQuestion(k, false), queueQuestion(k, true)])", None)
+        want = [bench.queue_question(k, w) for k in range(2, 9) for w in (False, True)]
+        for js, py in zip(asked, want):
+            self.assertEqual(json.dumps(js), json.dumps(py), next(iter(py)))
+
+    def test_alternative_wording_and_lane_count_match_bench(self):     # ALT a ALT_LANES stojí mimo sdílený blok: čtou se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        for key in ("lane", "lane_weighted"):
+            self.assertEqual(re.findall(r"^  %s: '([^'\\]*)',$" % key, alt, re.M), [bench.ALT[key]], key)
+        self.assertEqual(re.search(r"\nconst ALT_LANES = /(.*?)/;", page).group(1), bench.ALT_LANES.pattern)      # obě větve jako v bench.py
+
+    def test_random_helpers_follow_python(self):                  # cumWeights = accumulate, pickCum = bisect_right na rand · součet, shuffleWith od konce
+        import bisect
+        rs = [0, 0.1, 1 / 6, 0.5, 0.75, 0.9999]
+        got = run_js("({ cum: cumWeights([1, 2, 3.5, 0, 4]), picks: arg.map(r => pickCum(() => r, ['a', 'b', 'c', 'd', 'e'], cumWeights([1, 2, 3.5, 0, 4]))),"
+                     " shuffled: shuffleWith((() => { const s = [0.9, 0.1, 0.5, 0.3]; return () => s.shift(); })(), [0, 1, 2, 3, 4]) })", rs)
+        cum = list(itertools.accumulate([1, 2, 3.5, 0, 4]))
+        self.assertEqual(got["cum"], cum)
+        self.assertEqual(got["picks"], ["abcde"[bisect.bisect(cum, r * cum[-1], 0, 4)] for r in rs])     # jako random.choices v CPythonu
+        a, seq = [0, 1, 2, 3, 4], [0.9, 0.1, 0.5, 0.3]
+        for i in range(4, 0, -1):
+            j = math.floor(seq.pop(0) * (i + 1))
+            a[i], a[j] = a[j], a[i]
+        self.assertEqual(got["shuffled"], a)
+
+    def test_class_tally_matches_bench(self):
+        import bench
+        rng, keys = random.Random(3), bench.lane_keys(4)
+        tops = [[rng.randrange(4), rng.choice(bench.QUEUE_GAPS)] for _ in range(200)]
+        choices = [rng.choice(keys + [None, "lane_9", 2]) for _ in tops]
+        got = run_js("classTally(QUEUE_GAPS, arg.tops, arg.choices, arg.keys)", {"tops": tops, "choices": choices, "keys": keys})
+        self.assertEqual(json.dumps(got), json.dumps(bench.class_tally(bench.QUEUE_GAPS, [tuple(t) for t in tops], choices, keys)))
+
+    def test_generated_rows_keep_the_guarantees(self):            # jako tests/test_queue.py (Generator.test_cases_keep_the_guarantees)
+        import bench
+        for lanes, n in ((2, 300), (4, 900), (8, 120)):
+            for weighted in (False, True):
+                raw, cases = queue_page(n, lanes, weighted)
+                for r, (queues, answer, cls, text, count) in zip(raw, cases):
+                    with self.subTest(lanes=lanes, weighted=weighted, queues=queues):
+                        self.assertEqual(list(r), ["queues", "answer", "cls", "text", "count", "truth"])
+                        self.assertEqual(r["truth"], answer)
+                        self.assertEqual(len(queues), lanes)
+                        self.assertTrue(all(1 <= len(q) <= 12 and set(q) <= set(bench.QUEUE_VEHICLES) for q in queues))
+                        lengths = [bench.queue_length(q, weighted) for q in queues]
+                        rest = sorted(lengths[:answer] + lengths[answer + 1:])
+                        self.assertLess(lengths[answer], rest[0])                         # jediná nejkratší fronta
+                        self.assertEqual(bench.queue_class(rest[0] - lengths[answer]), cls)
+                        self.assertEqual((text, count), (bench.queue_text(queues), bench.queue_count(queues)))
+                        self.assertIsNotNone(count)
+                        if not weighted:
+                            self.assertEqual(count, answer)
+
+    def test_classes_and_answers_are_spread(self):
+        for weighted in (False, True):
+            _, c = queue_page(900, 4, weighted)
+            classes, answers = Counter(x[2] for x in c), Counter(x[1] for x in c)
+            for cls in ("gap1", "gap2-3", "gap4+"):
+                self.assertTrue(0.25 <= classes[cls] / 900 <= 0.42, (weighted, classes))
+            for lane in range(4):
+                self.assertGreaterEqual(answers[lane] / 900, 0.15, (weighted, answers))
+
+    def test_shortest_text_is_balanced(self):                     # meze jako tests/test_queue.py (shoda = trefa)
+        import bench
+        from test_queue import fewest
+
+        def share(c, cls):
+            sub = [x for x in c if x[2] == cls]
+            return sum(x[1] in fewest([len(json.dumps(list(q))) for q in x[0]]) for x in sub) / len(sub)
+        for weighted in (False, True):
+            for cls in ("gap1", "gap2-3"):
+                with self.subTest(weighted=weighted, cls=cls):
+                    self.assertTrue(0.2 <= share(queue_page(900, 4, weighted)[1], cls) <= 0.45)
+                    self.assertTrue(0.3 <= share(queue_page(300, 2, weighted)[1], cls) <= 0.7)
+        self.assertGreaterEqual(share(queue_page(900, 4, False)[1], "gap4+"), 0.95)
+        weighted = queue_page(900, 4, True)[1]
+        for cls in ("gap1", "gap2-3"):
+            sub = [x for x in weighted if x[2] == cls]
+            heavy = sum(x[1] in fewest([sum(v in bench.QUEUE_WEIGHTS for v in q) for q in x[0]]) for x in sub)
+            with self.subTest(heavy=cls):
+                self.assertTrue(0.2 <= heavy / len(sub) <= 0.45, heavy / len(sub))
+        differ = sum(count != answer for _, answer, _, _, count in weighted) / 900
+        self.assertTrue(0.4 <= differ <= 0.6, differ)                                          # nejméně vozidel je jinde v polovině úloh
+
+    def test_same_seed_same_rows(self):
+        first = run_js(QUEUE_ROWS_JS, {"seed": 7, "lanes": 4, "weighted": True, "n": 30})
+        self.assertEqual(run_js(QUEUE_ROWS_JS, {"seed": 7, "lanes": 4, "weighted": True, "n": 30}), first)
+        self.assertNotEqual(run_js(QUEUE_ROWS_JS, {"seed": 8, "lanes": 4, "weighted": True, "n": 30}), first)
+        self.assertNotEqual(run_js(QUEUE_ROWS_JS, {"seed": 7, "lanes": 4, "weighted": False, "n": 30}), first)
+
+    def test_bounded_search_raises(self):                          # jako tests/test_queue.py; tries = 0 místo mock.patch (Rozhodnutí F2)
+        got = run_js("[[4, 'gap1', 0], [1, 'gap1'], [9, 'gap1'], [4, 'gap0']]"
+                     ".map(([k, cls, tries]) => { try { queueCase(Math.random, k, cls, true, tries); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["queueCase: no gap1 task for 4 lanes after 0 tries", "queueCase: unsupported lanes 1 or class gap1",
+                               "queueCase: unsupported lanes 9 or class gap1", "queueCase: unsupported lanes 4 or class gap0"])
+
+    def test_errors_match_bench(self):                             # i neplatné volby; s vahami navíc nejkratší podle počtu
+        import bench
+        for weighted, lanes in ((False, 4), (True, 4), (True, 6)):
+            cases = bench.queue_cases(90, lanes, weighted, seed=6)
+            keys, rng = bench.lane_keys(lanes), random.Random(lanes + weighted)
+            choices = [rng.choice(keys + keys + [None, "lane_9", 3, ["lane_1"], "LANE_1"]) for _ in cases]
+            js_cases = [{"queues": [list(q) for q in qs], "answer": a, "cls": cls, "text": list(text), "count": count} for qs, a, cls, text, count in cases]
+            got = run_js("queueErrors(arg.cases, arg.choices, arg.keys, arg.weighted)", {"cases": js_cases, "choices": choices, "keys": keys, "weighted": weighted})
+            with self.subTest(weighted=weighted, lanes=lanes):
+                self.assertEqual(json.dumps(got), json.dumps(bench.queue_errors(cases, choices, keys, weighted)))      # i pořadí klíčů
+                self.assertGreater(got["invalid"], 0)
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for lanes, warm in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(k => queueWarm(k))", None)):
+            queues = tuple(tuple(q) for q in warm["queues"])
+            with self.subTest(lanes=lanes):
+                self.assertEqual(list(warm), ["queues", "answer", "cls", "text", "count", "truth"])
+                self.assertEqual(len(queues), lanes)
+                for weighted in (False, True):
+                    lengths = [bench.queue_length(q, weighted) for q in queues]
+                    self.assertEqual([i for i, x in enumerate(lengths) if x == min(lengths)], [warm["answer"]])     # jediná nejkratší, s vahami i bez
+                self.assertEqual((warm["truth"], warm["count"], list(warm["text"])), (lanes - 1, bench.queue_count(queues), list(bench.queue_text(queues))))
+                longest = max(len(json.dumps(bench.queue_state(c[0]))) for w in (False, True) for c in bench.queue_cases(20, lanes, w, seed=lanes))
+                self.assertGreaterEqual(len(json.dumps(bench.queue_state(queues))), longest)          # horní odhad délky dotazu ve stepEstimate
+
+
+# Generátor Sázky na pruh stránky se stejnou náhodou jako ROWS_JS: seed, lanes (= počet bran), n → řady betRow.
+BET_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "betRow(arg.lanes, rand)")
+assert BET_ROWS_JS != ROWS_JS
+BET_PAGE = {}
+
+
+def bet_page(n, gates, seed=1):
+    """Řady generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.bet_case."""
+    if (n, gates, seed) not in BET_PAGE:
+        raw = run_js(BET_ROWS_JS, {"seed": seed, "lanes": gates, "n": n})
+        BET_PAGE[n, gates, seed] = raw, [(tuple(r["rewards"]), tuple(r["chances"]), r["answer"], r["level"], r["topReward"], r["topChance"])
+                                         for r in raw]
+    return BET_PAGE[n, gates, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Bet(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ levels: BET_LEVELS, rewards: BET_REWARDS, same: BET_SAME_CHANCES, chances: BET_CHANCES, margin: BET_MARGIN,"
+                    " share: BET_SHORTCUT_SHARE, tries: BET_TRIES,"
+                    " top: [[10, 30, 20], [30, 30, 20], [50, 50, 50]].map(betTop), second: [[10, 30, 20], [40, 30, 30]].map(betSecond) })", None)
+        self.assertEqual(js["levels"], list(bench.BET_LEVELS))
+        self.assertEqual((js["rewards"], js["same"], js["chances"]), (list(bench.BET_REWARDS), list(bench.BET_SAME_CHANCES), list(bench.BET_CHANCES)))
+        self.assertEqual((js["margin"], js["share"], js["tries"]), (bench.BET_MARGIN, bench.BET_SHORTCUT_SHARE, bench.BET_TRIES))
+        self.assertEqual(js["top"], [bench.bet_top(v) for v in ((10, 30, 20), (30, 30, 20), (50, 50, 50))])
+        self.assertEqual(js["second"], [list(bench.bet_second(v)) for v in ((10, 30, 20), (40, 30, 30))])
+        tasks = [[list(rewards), list(chances)] for gates in range(3, 9) for rewards, chances, *_ in bench.bet_cases(5, gates, seed=gates)]
+        for (rewards, chances), state in zip(tasks, run_js("arg.map(([r, c]) => betState(r, c))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.bet_state(rewards, chances)))       # bajtově, i pořadí klíčů
+        for gates, question in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => betQuestion(k))", None)):
+            self.assertEqual(json.dumps(question), json.dumps(bench.bet_question(gates)), gates)
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  bet: '([^'\\]*)',$", alt, re.M), [bench.ALT["bet"]])
+
+    def test_generated_rows_keep_the_guarantees(self):             # záruky jako tests/test_bet.py (Generator.test_cases_keep_the_guarantees)
+        import bench
+        for gates, n in ((3, 900), (4, 900), (8, 300)):
+            raw, cases = bet_page(n, gates)
+            for r, (rewards, chances, answer, level, top_reward, top_chance) in zip(raw, cases):
+                with self.subTest(gates=gates, rewards=rewards, chances=chances):
+                    self.assertEqual(list(r), ["rewards", "chances", "answer", "level", "topReward", "topChance", "truth"])
+                    self.assertEqual(r["truth"], answer)
+                    self.assertEqual((len(rewards), len(chances)), (gates, gates))
+                    self.assertTrue(set(rewards) <= set(bench.BET_REWARDS))
+                    ev = [x * c for x, c in zip(rewards, chances)]
+                    self.assertGreaterEqual(100 * ev[answer], 105 * max(ev[:answer] + ev[answer + 1:]))     # aspoň o 5 % víc než druhá
+                    self.assertEqual((top_reward, top_chance), (bench.bet_top(rewards), bench.bet_top(chances)))
+                    if level == "same":
+                        self.assertEqual(len(set(chances)), 1)
+                        self.assertIn(chances[0], bench.BET_SAME_CHANCES)
+                        self.assertEqual((top_reward, top_chance), (answer, None))
+                    elif level == "round":
+                        self.assertEqual(sorted(chances), [50] * (gates - 1) + [100])
+                        self.assertEqual(top_reward, answer)
+                        self.assertNotEqual(top_chance, answer)
+                    else:
+                        self.assertEqual(level, "general")
+                        self.assertTrue(set(chances) <= set(bench.BET_CHANCES))
+                        self.assertNotIn(None, (top_reward, top_chance))
+
+    def test_levels_and_answers_are_spread(self):
+        import bench
+        for gates, n, low in ((3, 900, 0.2), (8, 300, 0.05)):
+            _, cases = bet_page(n, gates)
+            levels, answers = Counter(x[3] for x in cases), Counter(x[2] for x in cases)
+            for level in bench.BET_LEVELS:
+                self.assertTrue(0.22 <= levels[level] / n <= 0.45, (gates, levels))
+            for gate in range(gates):
+                self.assertGreaterEqual(answers[gate] / n, low, (gates, answers))
+
+    def test_general_shortcuts_are_balanced(self):                 # meze jako tests/test_bet.py: v general při K = 4 žádná zkratka nad 0,45
+        general = [x for x in bet_page(1800, 4)[1] if x[3] == "general"]
+        self.assertGreaterEqual(len(general), 550)
+
+        def elimination(x):                                        # brána bez nejvyšší odměny i šance; víc kandidátů → vyšší odměna, shoda → dřívější
+            rewards, _, _, _, top_reward, top_chance = x
+            rest = [i for i in range(len(rewards)) if i not in (top_reward, top_chance)]
+            return max(rest, key=lambda i: (rewards[i], -i))
+        shortcuts = {"reward": lambda x: x[4] == x[2], "chance": lambda x: x[5] == x[2], "elimination": lambda x: elimination(x) == x[2],
+                     "second": lambda x: x[0][x[2]] == sorted(x[0], reverse=True)[1]}
+        for name, hit in shortcuts.items():
+            with self.subTest(shortcut=name):
+                self.assertLessEqual(sum(map(hit, general)) / len(general), 0.45)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(BET_ROWS_JS, {"seed": 7, "lanes": 4, "n": 50})
+        self.assertEqual(run_js(BET_ROWS_JS, {"seed": 7, "lanes": 4, "n": 50}), first)
+        self.assertNotEqual(run_js(BET_ROWS_JS, {"seed": 8, "lanes": 4, "n": 50}), first)
+
+    def test_bounded_search_raises(self):                          # rand = 0: samé odměny 20 a šance 20, marže nikdy nevyjde
+        got = run_js("[[() => 0, 3, 'same'], [Math.random, 2, 'same'], [Math.random, 9, 'same'], [Math.random, 3, 'odd']]"
+                     ".map(([rand, k, level]) => { try { betCase(rand, k, level); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["betCase: no same task for 3 gates after 10000 tries", "betCase: unsupported task for 2 gates and level same",
+                               "betCase: unsupported task for 9 gates and level same", "betCase: unsupported task for 3 gates and level odd"])
+
+    def test_summary_matches_bench(self):                          # i neplatné volby: regret 1, do chyb jako neplatné
+        import bench
+        cases = bench.bet_cases(300, 4, seed=4) + bench.bet_cases(120, 3, seed=3)
+        rng = random.Random(6)
+        keys4, keys3 = bench.gate_keys(4), bench.gate_keys(3)
+        choices = [rng.choice((keys4 if len(c[0]) == 4 else keys3) * 2 + [None, "gate_9", 2, ["gate_1"]]) for c in cases]
+        js_cases = [{"rewards": list(r), "chances": list(ch), "answer": a, "level": lv, "topReward": tr, "topChance": tc}
+                    for r, ch, a, lv, tr, tc in cases]
+        for part, keys in ((slice(0, 300), keys4), (slice(300, None), keys3)):
+            got = run_js("betSummary(arg.cases, arg.choices, arg.keys)", {"cases": js_cases[part], "choices": choices[part], "keys": keys})
+            py = bench.bet_summary(cases[part], choices[part], keys)
+            self.assertEqual(list(got), list(py))                                                   # pořadí klíčů
+            self.assertEqual(json.dumps(got["by_level"]), json.dumps(py["by_level"]))
+            self.assertEqual(json.dumps(got["errors"]), json.dumps(py["errors"]))
+            same(self, py["regret"], got["regret"], "regret")
+            self.assertTrue(all(got["errors"][k] > 0 for k in ("reward", "chance", "invalid")), got)
+        self.assertIsNone(run_js("betSummary([], [], arg).regret", keys4))                          # NaN → null v JSON: stránka ukáže „—“
+
+    def test_error_kind_follows_the_summary_order(self):           # odměna před šancí, správná volba nikam, neplatná
+        case = {"rewards": [300, 200, 100], "chances": [20, 60, 90], "answer": 1, "level": "general", "topReward": 0, "topChance": 2}
+        got = run_js("['gate_2', 'gate_1', 'gate_3', null, 'gate_4', 1].map(c => betErrorKind(arg, c, gateKeys(3)))"
+                     ".concat([betErrorKind({ ...arg, rewards: [100, 200, 300], topReward: 2, topChance: 2 }, 'gate_3', gateKeys(3)),"
+                     " betErrorKind({ ...arg, chances: [50, 60, 50], topChance: 1, answer: 2 }, 'gate_1', gateKeys(3))])", case)
+        self.assertEqual(got, [None, "reward", "chance", "invalid", "invalid", "invalid", "reward", "reward"])
+        self.assertEqual(run_js("[betEv(120, 70), betEv(390, 95), betEv(30, 15)]", None), [84, 370.5, 4.5])
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        for gates, warm in zip(range(3, 9), run_js("[3, 4, 5, 6, 7, 8].map(k => betWarm(k))", None)):
+            rewards, chances = tuple(warm["rewards"]), tuple(warm["chances"])
+            with self.subTest(gates=gates):
+                self.assertEqual(list(warm), ["rewards", "chances", "answer", "level", "topReward", "topChance", "truth"])
+                self.assertEqual((len(rewards), len(chances)), (gates, gates))
+                ev = [r * c for r, c in zip(rewards, chances)]
+                self.assertGreaterEqual(100 * ev[0], bench.BET_MARGIN * max(ev[1:]))                 # správně brána 1 s marží
+                self.assertEqual((warm["answer"], warm["truth"]), (0, 0))
+                self.assertEqual((warm["topReward"], warm["topChance"]), (bench.bet_top(rewards), bench.bet_top(chances)))
+                longest = max(len(json.dumps(bench.bet_state(r, c))) for r, c, *_ in bench.bet_cases(200, gates, seed=gates))
+                self.assertGreaterEqual(len(json.dumps(bench.bet_state(rewards, chances))), longest)      # horní odhad délky dotazu
+
+
+CRUISE_HAND = [[97, "icy", "none"], [130, "wet", "dense"], [19, "dry", "none"], [300, "dry", "light"], [8, "dry", "none"], [150, "icy", "dense"]]
+# příklad ze specu Tempomatu, HAND_A a HAND_C z tests/test_cruise.py, kraje CRUISE_DIST a zahřívací úloha
+
+# Generátor Tempomatu stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy cruiseRow.
+CRUISE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "cruiseRow(rand)")
+assert CRUISE_ROWS_JS != ROWS_JS
+CRUISE_PAGE = {}
+
+
+def cruise_page(n=3000, seed=1):
+    """Úlohy generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (m, road, fog, answer, cls, place)."""
+    if (n, seed) not in CRUISE_PAGE:
+        raw = run_js(CRUISE_ROWS_JS, {"seed": seed, "n": n})
+        CRUISE_PAGE[n, seed] = raw, [(r["m"], r["road"], r["fog"], r["answer"], r["cls"], r["place"]) for r in raw]
+    return CRUISE_PAGE[n, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Cruise(unittest.TestCase):
+    def test_constants_and_tables_match_bench(self):
+        import bench
+        js = run_js("({ top: CRUISE_TOP, bands: CRUISE_BANDS, dist: CRUISE_DIST, edge: CRUISE_EDGE, road: CRUISE_ROAD, fog: CRUISE_FOG,"
+                    " classes: CRUISE_CLASSES, places: CRUISE_PLACES, weights: CRUISE_WEIGHTS, ins: CRUISE_INS })", None)
+        self.assertEqual((js["top"], js["bands"], js["dist"], js["edge"]),
+                         (bench.CRUISE_TOP, list(bench.CRUISE_BANDS), list(bench.CRUISE_DIST), bench.CRUISE_EDGE))
+        self.assertEqual(json.dumps(js["road"]), json.dumps(bench.CRUISE_ROAD))           # i pořadí: cruise_case hledá slovo podle srážky
+        self.assertEqual(json.dumps(js["fog"]), json.dumps(bench.CRUISE_FOG))
+        self.assertEqual((js["classes"], js["places"]), (list(bench.CRUISE_CLASSES), list(bench.CRUISE_PLACES)))
+        self.assertEqual(list(js["weights"]), list(bench.CRUISE_WEIGHTS))
+        for cls, combos in bench.CRUISE_WEIGHTS.items():
+            self.assertEqual(js["weights"][cls], [[list(k), w] for k, w in combos.items()], cls)     # pořadí rozhoduje o losování
+        self.assertEqual(js["ins"], bench.CRUISE_INS)
+        ms = list(range(0, 401))
+        got = run_js("({ band: arg.map(bandLevel), edge: arg.map(nearEdge), neighbor: arg.filter(m => m >= 8 && m <= 300).map(neighborLevel),"
+                     " range: [1, 2, 3, 4, 5, 6, 7].map(bandRange) })", ms)
+        self.assertEqual(got["band"], [bench.band_level(m) for m in ms])
+        self.assertEqual(got["edge"], [bench.near_edge(m) for m in ms])
+        self.assertEqual(got["neighbor"], [bench.neighbor_level(m) for m in range(8, 301)])
+        self.assertEqual(got["range"], [list(bench.band_range(k)) for k in range(1, 8)])
+        combos = [[m, road, fog] for m in range(8, 301, 3) for road in bench.CRUISE_ROAD for fog in bench.CRUISE_FOG]
+        self.assertEqual(run_js("arg.map(([m, road, fog]) => cruiseLevel(m, road, fog))", combos),
+                         [bench.cruise_level(*c) for c in combos])                               # bez ořezu, i pod 1
+
+    def test_state_question_and_choice_level_match_bench(self):
+        import bench
+        tasks = CRUISE_HAND + [list(c[:3]) for c in bench.cruise_cases(60, seed=5)]
+        for task, state in zip(tasks, run_js("arg.map(([m, road, fog]) => cruiseState(m, road, fog))", tasks)):
+            self.assertEqual(json.dumps(state), json.dumps(bench.cruise_state(*task)), task)  # bajtově, i pořadí klíčů
+        self.assertEqual(json.dumps(run_js("cruiseQuestion()", None)), json.dumps(bench.cruise_question()))
+        self.assertEqual(run_js("levelKeys()", None), bench.level_keys())
+        picks = [f"level_{k}" for k in range(0, 9)] + [None, "3", 3, ["level_1"], "Level 3", "level_03", True]
+        self.assertEqual(run_js("arg.map(choiceLevel)", picks), [bench.choice_level(p) for p in picks])
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  speed: '([^'\\]*)',$", alt, re.M), [bench.ALT["speed"]])
+
+    def test_generated_rows_keep_the_guarantees(self):             # jako tests/test_cruise.py (záruky, podmínky třídy, poloha u hranice)
+        import bench
+        from test_cruise import BANDS, band_level_check
+        raw, cases = cruise_page()
+        classes = {"table": (False, False), "road": (True, False), "fog": (False, True), "both": (True, True)}
+        for r, (m, road, fog, answer, cls, place) in zip(raw, cases):
+            with self.subTest(r=r):
+                self.assertEqual(list(r), ["m", "road", "fog", "answer", "cls", "place", "truth"])
+                self.assertIsInstance(m, int)
+                self.assertTrue(8 <= m <= 300)
+                self.assertTrue(1 <= answer <= 7)
+                self.assertEqual(answer, band_level_check(m) - bench.CRUISE_ROAD[road] - bench.CRUISE_FOG[fog])
+                self.assertEqual(r["truth"], answer - 1)
+                self.assertEqual((road != "dry", fog != "none"), classes[cls])
+                self.assertEqual(any(b - 3 <= m <= b + 2 for b in BANDS), place == "edge")
+                self.assertIn((band_level_check(m), bench.CRUISE_ROAD[road], bench.CRUISE_FOG[fog]), bench.CRUISE_WEIGHTS[cls])   # jen kombinace s vahou
+
+    def test_classes_and_places_are_spread(self):                  # meze jako tests/test_cruise.py
+        import bench
+        _, cases = cruise_page()
+        classes = Counter(x[4] for x in cases)
+        for cls in bench.CRUISE_CLASSES:
+            sub = [x for x in cases if x[4] == cls]
+            with self.subTest(cls=cls):
+                self.assertTrue(0.22 <= classes[cls] / len(cases) <= 0.28, classes)
+                self.assertTrue(0.45 <= sum(x[5] == "edge" for x in sub) / len(sub) <= 0.55)
+
+    def test_cheap_shortcuts_are_balanced(self):                   # stejné zkratky a meze jako tests/test_cruise.py
+        import bench
+        from test_cruise import band_level_check, cheap_shortcuts
+        _, cases = cruise_page()
+        for cls in ("road", "fog", "both"):
+            sub = [x for x in cases if x[4] == cls]
+            for name, guess in cheap_shortcuts().items():
+                with self.subTest(cls=cls, shortcut=name):
+                    self.assertLessEqual(sum(guess(x) == x[3] for x in sub) / len(sub), 0.35)
+        for cls, want in (("table", 1.0), ("road", 0.0), ("fog", 0.0), ("both", 0.0)):
+            sub = [x for x in cases if x[4] == cls]
+            self.assertEqual(sum(band_level_check(x[0]) == x[3] for x in sub) / len(sub), want, cls)      # jen vzdálenost
+        for x in (x for x in cases if x[4] == "both"):                                    # vynechaná mlha / vynechaný povrch nikdy netrefí
+            band, p, f = band_level_check(x[0]), bench.CRUISE_ROAD[x[1]], bench.CRUISE_FOG[x[2]]
+            self.assertNotIn(x[3], (band - p, band - f), x)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(CRUISE_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(CRUISE_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(CRUISE_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_bad_arguments_and_a_broken_guarantee_raise(self):     # jako tests/test_cruise.py: nic se neopravuje potichu
+        got = run_js("[['floor', 'edge'], ['table', 'near'], ['toString', 'edge']]"
+                     ".map(([cls, place]) => { try { cruiseCase(Math.random, cls, place); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["cruiseCase: unsupported class floor or place edge", "cruiseCase: unsupported class table or place near",
+                               "cruiseCase: unsupported class toString or place edge"])
+        broken = run_js("(() => { CRUISE_WEIGHTS.both = [[[1, 1, 1], 1]];"                 # stupeň 1 − 2 je pod 1
+                        " try { cruiseCase(Math.random, 'both', 'middle'); return null; } catch (e) { return e.message; } })()", None)
+        self.assertEqual(broken, "cruiseCase: generated task breaks its guarantees")
+
+    def test_summary_matches_bench(self):                          # i neplatné odpovědi: v MAE počítají 6, do rozboru jako neplatné
+        import bench
+        from test_cruise import HAND, HAND_LEVELS
+        cases, rng = bench.cruise_cases(300, seed=4), random.Random(6)
+        levels = [c[3] if i < 40 else rng.choice([1, 2, 3, 4, 5, 6, 7, None]) for i, c in enumerate(cases)]
+        cases, levels = cases + HAND, levels + HAND_LEVELS                                # ruční úlohy s každým druhem chyby
+        js_cases = [{"m": m, "road": road, "fog": fog, "answer": a, "cls": cls, "place": place} for m, road, fog, a, cls, place in cases]
+        got = run_js("cruiseSummary(arg.cases, arg.levels)", {"cases": js_cases, "levels": levels})
+        py = bench.cruise_summary(cases, levels)
+        same(self, got, py)
+        self.assertEqual([list(got), list(got["scale"]), list(got["errors"])], [list(py), list(py["scale"]), list(py["errors"])])   # pořadí klíčů
+        self.assertTrue(all(v > 0 for v in got["errors"].values()), got["errors"])
+        empty = run_js("cruiseSummary([], [])", None)
+        self.assertEqual(empty["scale"], {"within": None, "mae": None, "fast": 0, "slow": 0})      # NaN: prázdná hra ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("cruiseWarm()", None)
+        self.assertEqual(list(warm), ["m", "road", "fog", "answer", "cls", "place", "truth"])
+        self.assertEqual(warm["answer"], bench.cruise_level(warm["m"], warm["road"], warm["fog"]))
+        self.assertEqual((warm["truth"], warm["place"] == "edge"), (warm["answer"] - 1, bench.near_edge(warm["m"])))
+        self.assertIn((bench.band_level(warm["m"]), bench.CRUISE_ROAD[warm["road"]], bench.CRUISE_FOG[warm["fog"]]), bench.CRUISE_WEIGHTS[warm["cls"]])
+        longest = max(len(json.dumps(bench.cruise_state(*c[:3]))) for c in bench.cruise_cases(300, seed=2))
+        self.assertGreaterEqual(len(json.dumps(bench.cruise_state(warm["m"], warm["road"], warm["fog"]))), longest)   # horní odhad délky dotazu
+
+
+def timetable_js(case):
+    """Úloha bench.py (n-tice timetable_case) jako objekt úlohy stránky."""
+    rows, order, z, service, exception, answer, size, pos, rule = case
+    return {"rows": [list(r) for r in rows], "order": list(order), "zip": z, "service": service,
+            "exception": list(exception) if exception else None, "answer": answer, "size": size, "pos": pos, "rule": rule}
+
+
+# timetableTable stránky se stejnou náhodou jako ROWS_JS: seed, lanes = počet řádků, n tabulek.
+TIMETABLE_TABLE_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "timetableTable(rand, arg.lanes)")
+assert TIMETABLE_TABLE_JS != ROWS_JS
+
+# Generátor Jízdního řádu stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy timetableRow.
+TIMETABLE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "timetableRow(rand)")
+assert TIMETABLE_ROWS_JS != ROWS_JS
+TIMETABLE_PAGE = {}
+
+
+def timetable_case_of(r):
+    """Úloha stránky jako n-tice timetable_case (řádky, pořadí, PSČ, služba, výjimka, depo, velikost, poloha, výjimka)."""
+    return (tuple(tuple(x) for x in r["rows"]), tuple(r["order"]), r["zip"], r["service"], tuple(r["exception"]) if r["exception"] else None,
+            r["answer"], r["size"], r["pos"], r["rule"])
+
+
+def timetable_page(n=900, seed=1):
+    """Úlohy generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py."""
+    if (n, seed) not in TIMETABLE_PAGE:
+        raw = run_js(TIMETABLE_ROWS_JS, {"seed": seed, "n": n})
+        TIMETABLE_PAGE[n, seed] = raw, [timetable_case_of(r) for r in raw]
+    return TIMETABLE_PAGE[n, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Timetable(unittest.TestCase):
+    def test_constants_and_question_match_bench(self):
+        import bench
+        js = run_js("({ depots: TIMETABLE_DEPOTS, services: TIMETABLE_SERVICES, exc: TIMETABLE_EXC_SERVICES, zip: TIMETABLE_ZIP, width: TIMETABLE_MIN_WIDTH,"
+                    " sizes: TIMETABLE_SIZES, positions: TIMETABLE_POSITIONS, rules: TIMETABLE_RULES, near: TIMETABLE_NEAR, inner: TIMETABLE_INNER,"
+                    " positionRules: TIMETABLE_POSITION_RULES, tries: TIMETABLE_TRIES, question: timetableQuestion() })", None)
+        self.assertEqual((js["depots"], js["services"], js["exc"]),
+                         (list(bench.TIMETABLE_DEPOTS), list(bench.TIMETABLE_SERVICES), list(bench.TIMETABLE_EXC_SERVICES)))
+        self.assertEqual((js["zip"], js["width"], js["near"], js["inner"], js["tries"]),
+                         (list(bench.TIMETABLE_ZIP), bench.TIMETABLE_MIN_WIDTH, bench.TIMETABLE_NEAR, bench.TIMETABLE_INNER, bench.TIMETABLE_TRIES))
+        self.assertEqual(json.dumps(js["sizes"]), json.dumps({k: list(v) for k, v in bench.TIMETABLE_SIZES.items()}))     # i pořadí tříd
+        self.assertEqual((js["positions"], js["rules"], js["positionRules"]),
+                         (list(bench.TIMETABLE_POSITIONS), list(bench.TIMETABLE_RULES), list(bench.TIMETABLE_POSITION_RULES)))
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.timetable_question()))          # bajtově, i pořadí dep
+
+    def test_index_and_solver_by_hand(self):                       # jako tests/test_timetable.py (Basics.test_row_and_solve_by_hand)
+        import bench
+        from test_timetable import ROWS
+        spans = [[a, b] for a, b, _ in ROWS]
+        got = run_js("[10000, 81333, 81334, 87678, 87679, 99999].map(z => timetableIndex(arg, z))"
+                     ".concat([[arg, 9999], [arg, 100000], [[[10000, 50000], [50000, 99999]], 50000]]"
+                     ".map(([s, z]) => { try { timetableIndex(s, z); return null; } catch (e) { return e.message; } }))", spans)
+        self.assertEqual(got, [0, 0, 1, 1, 2, 2, "timetableIndex: zip 9999 is in 0 rows", "timetableIndex: zip 100000 is in 0 rows",
+                               "timetableIndex: zip 50000 is in 2 rows"])
+        state = {"parcel": {"zip": 81334, "service": "express"},
+                 "routes": [{"zip_from": a, "zip_to": b, "depot": d} for a, b, d in ROWS], "exceptions": []}
+        states = [state, {**state, "parcel": {"zip": 81333, "service": "express"}}, {**state, "exceptions": [{"service": "express", "depot": "oak"}]},
+                  {**state, "exceptions": [{"service": "cooled", "depot": "oak"}]}, {**state, "routes": state["routes"][::-1]}]
+        self.assertEqual(run_js("arg.map(timetableSolve)", states), [bench.timetable_solve(s) for s in states])
+        self.assertEqual(run_js("arg.map(timetableSolve)", states), ["maple", "birch", "oak", "maple", "maple"])      # kraje včetně, výjimka přebíjí
+
+    def test_table_keeps_the_guarantees(self):                     # jako tests/test_timetable.py (Basics.test_table_covers_the_range_without_gaps)
+        import bench
+        for n in range(3, 13):
+            for rows in run_js(TIMETABLE_TABLE_JS, {"seed": n, "lanes": n, "n": 30}):
+                with self.subTest(n=n, rows=rows):
+                    self.assertEqual(len(rows), n)
+                    self.assertEqual((rows[0][0], rows[-1][1]), (10000, 99999))
+                    self.assertTrue(all(rows[i][1] + 1 == rows[i + 1][0] for i in range(n - 1)))
+                    self.assertGreaterEqual(min(b - a + 1 for a, b, _ in rows), 300)
+                    self.assertTrue(all(rows[i][2] != rows[i + 1][2] for i in range(n - 1)))
+                    self.assertTrue({d for _, _, d in rows} <= set(bench.TIMETABLE_DEPOTS))
+        crawl = "let x = 0; const rand = () => (x = (x + 1e-6) % 1);"      # sousední řezy: interval užší než 300 v každém pokusu
+        self.assertEqual(run_js("(() => {" + crawl + " try { timetableTable(rand, 5); return null; } catch (e) { return e.message; } })()", None),
+                         "timetableTable: no table of 5 rows after 1000 tries")
+
+    def test_state_matches_bench(self):
+        import bench
+        from test_timetable import APPLIES, DECOY
+        cases = bench.timetable_cases(90, seed=3) + [DECOY, APPLIES, DECOY[:4] + (None, "maple", "small", "near", "none")]
+        for case, state in zip(cases, run_js("arg.map(timetableState)", [timetable_js(c) for c in cases])):
+            self.assertEqual(json.dumps(state), json.dumps(bench.timetable_state(case, "sorted")), case)      # bajtově, i pořadí klíčů
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky; apostrofy → dvojité uvozovky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r'^  depot: "([^"\\]*)",$', alt, re.M), [bench.ALT["depot"]])
+
+    def test_generated_rows_keep_the_guarantees(self):             # jako tests/test_timetable.py (Generator.test_cases_keep_the_guarantees)
+        import bench
+        from test_timetable import position, route_index, solve
+        raw, cases = timetable_page()
+        for r, case in zip(raw, cases):
+            rows, order, z, service, exception, answer, size, pos, rule = case
+            with self.subTest(case=case):
+                self.assertEqual(list(r), ["rows", "order", "zip", "service", "exception", "answer", "size", "pos", "rule", "truth"])
+                self.assertEqual(sorted(order), list(range(len(rows))))
+                lo, hi = bench.TIMETABLE_SIZES[size]
+                self.assertTrue(lo <= len(rows) <= hi)
+                self.assertEqual((rows[0][0], rows[-1][1]), (10000, 99999))
+                self.assertTrue(all(rows[k][1] + 1 == rows[k + 1][0] and rows[k][2] != rows[k + 1][2] for k in range(len(rows) - 1)))
+                self.assertGreaterEqual(min(b - a + 1 for a, b, _ in rows), 300)
+                i = route_index(rows, z)
+                self.assertEqual(position(rows, i, z), pos)
+                near = {rows[j][2] for j in (i - 1, i + 1) if 0 <= j < len(rows)}
+                self.assertIn(service, bench.TIMETABLE_SERVICES)
+                if rule == "none":
+                    self.assertIsNone(exception)
+                else:
+                    self.assertIn(exception[0], bench.TIMETABLE_EXC_SERVICES)
+                    self.assertNotIn(exception[1], near | {rows[i][2]})
+                    if rule == "applies":
+                        self.assertEqual(service, exception[0])
+                    else:
+                        self.assertIn(service, bench.TIMETABLE_EXC_SERVICES)
+                        self.assertNotEqual(service, exception[0])
+                self.assertEqual(answer, exception[1] if rule == "applies" else rows[i][2])
+                self.assertEqual(solve(bench.timetable_state(case, "sorted")), answer)
+                self.assertEqual(r["truth"], bench.TIMETABLE_DEPOTS.index(answer))
+
+    def test_classes_answers_and_sides_are_spread(self):           # meze jako tests/test_timetable.py
+        import bench
+        from test_timetable import route_index
+        _, c = timetable_page()
+        for k, order in ((6, bench.TIMETABLE_SIZES), (7, bench.TIMETABLE_POSITIONS), (8, bench.TIMETABLE_RULES)):
+            counts = Counter(x[k] for x in c)
+            for cls in order:
+                self.assertTrue(0.25 <= counts[cls] / len(c) <= 0.42, counts)
+        answers = Counter(x[5] for x in c)
+        for depot in bench.TIMETABLE_DEPOTS:
+            self.assertTrue(0.10 <= answers[depot] / len(c) <= 0.25, answers)
+        edge = [x for x in c if x[7] != "inner"]
+        low = sum(x[2] - x[0][route_index(x[0], x[2])][0] <= bench.TIMETABLE_NEAR for x in edge)      # u zip_from, ne u zip_to
+        self.assertTrue(0.4 <= low / len(edge) <= 0.6, low / len(edge))
+
+    def test_table_shortcuts_stay_well_below_the_answer(self):     # první řádek a nejčastější depo nejvýš 0,45 (podoba sorted)
+        import bench
+        from test_timetable import expected_hit, most_frequent
+        _, c = timetable_page()
+        for pos in bench.TIMETABLE_POSITIONS:
+            sub = [x for x in c if x[7] == pos and x[8] != "applies"]
+            first = sum(expected_hit(x[5], {x[0][0][2]}) for x in sub) / len(sub)
+            frequent = sum(expected_hit(x[5], most_frequent(x[0])) for x in sub) / len(sub)
+            with self.subTest(pos=pos):
+                self.assertLessEqual(first, 0.45)
+                self.assertLessEqual(frequent, 0.45)
+
+    def test_a_boundary_is_one_of_two_rows(self):                  # u hranice je správně jeden ze dvou sousedních řádků, laťka 0,5
+        import bench
+        from test_timetable import exclusive, expected_hit, nearest
+        _, c = timetable_page()
+        near = [x for x in c if x[7] == "near" and x[8] != "applies"]
+        for x in near:
+            self.assertEqual(expected_hit(x[5], nearest(x[0], x[2], 0)) + expected_hit(x[5], nearest(x[0], x[2], 1)), 1, x)
+        for end in (0, 1):
+            share = sum(expected_hit(x[5], nearest(x[0], x[2], end)) for x in near) / len(near)
+            self.assertTrue(0.35 <= share <= 0.65, (end, share))
+        for pos, want in (("inner", 1), ("near", 1), ("bound", 0)):                     # hranice bez rovnosti padá jen na hranici
+            sub = [x for x in c if x[7] == pos and x[8] != "applies"]
+            self.assertEqual(sum(exclusive(bench.timetable_state(x, "sorted")) == x[5] for x in sub) / len(sub), want, pos)
+
+    def test_exception_is_balanced(self):
+        import bench
+        from test_timetable import always_exception, never_exception
+        with_exception = [x for x in timetable_page()[1] if x[4] is not None]
+        for model in (always_exception, never_exception):
+            share = sum(model(bench.timetable_state(x, "sorted")) == x[5] for x in with_exception) / len(with_exception)
+            self.assertTrue(0.4 <= share <= 0.6, (model.__name__, share))
+
+    def test_same_seed_same_rows(self):
+        first = run_js(TIMETABLE_ROWS_JS, {"seed": 7, "n": 40})
+        self.assertEqual(run_js(TIMETABLE_ROWS_JS, {"seed": 7, "n": 40}), first)
+        self.assertNotEqual(run_js(TIMETABLE_ROWS_JS, {"seed": 8, "n": 40}), first)
+
+    def test_unknown_classes_raise(self):
+        got = run_js("[['huge', 'inner', 'none'], ['small', 'edge', 'none'], ['small', 'inner', 'maybe']]"
+                     ".map(([s, p, r]) => { try { timetableCase(Math.random, s, p, r); return null; } catch (e) { return e.message; } })", None)
+        self.assertEqual(got, ["timetableCase: unknown class huge, inner, none", "timetableCase: unknown class small, edge, none",
+                               "timetableCase: unknown class small, inner, maybe"])
+
+    def test_summary_matches_bench(self):                          # i neplatné volby: jiný typ, jiné velikost písmen, nic
+        import bench
+        cases, rng = bench.timetable_cases(300, seed=4), random.Random(6)
+        depots = list(bench.TIMETABLE_DEPOTS)
+        choices = [rng.choice(depots + depots + [None, "Oak", "depot_1", 3]) for _ in cases]
+        js = [timetable_js(c) for c in cases]
+        got = run_js("timetableSummary(arg.cases, arg.choices)", {"cases": js, "choices": choices})
+        self.assertEqual(json.dumps(got), json.dumps(bench.timetable_summary(cases, choices)))      # i pořadí klíčů
+        kinds = run_js("arg.cases.map((c, i) => timetableErrorKind(c, arg.choices[i]))", {"cases": js, "choices": choices})
+        self.assertEqual(Counter(k for k in kinds if k), Counter({k: v for k, v in bench.timetable_errors(cases, choices).items() if v}))
+        self.assertEqual(run_js("timetableSummary([], [])", None)["by_rule"]["applies"], [0, 0])     # prázdná hra: stránka ukáže „—“
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("timetableWarm()", None)
+        case = timetable_case_of(warm)
+        self.assertEqual(list(warm), ["rows", "order", "zip", "service", "exception", "answer", "size", "pos", "rule", "truth"])
+        self.assertEqual(len(case[0]), 12)
+        self.assertEqual((case[0][0][0], case[0][-1][1]), (10000, 99999))
+        self.assertTrue(all(case[0][k][1] + 1 == case[0][k + 1][0] and case[0][k][2] != case[0][k + 1][2] for k in range(11)))
+        self.assertEqual(bench.timetable_solve(bench.timetable_state(case, "sorted")), warm["answer"])
+        self.assertEqual((warm["rule"], warm["truth"]), ("decoy", bench.TIMETABLE_DEPOTS.index(warm["answer"])))
+        longest = max(len(json.dumps(bench.timetable_state(c, "sorted"))) for c in bench.timetable_cases(300, seed=2))
+        self.assertGreaterEqual(len(json.dumps(bench.timetable_state(case, "sorted"))), longest)      # horní odhad délky dotazu ve stepEstimate
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 EXAMPLE = (("car", "car"), ("truck",), ("bus", "van"))   # bez vah 2, 1, 2 (správně pruh 2); s vahami 2, 3, 4 (správně pruh 1)
@@ -366,6 +369,143 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py 100 --queue --weighted tev1", text)
             self.assertIn("\n--queue:    ", text)
             self.assertIn("\n--weighted:  ", text)
+
+
+def queue_body():
+    return page_source().split("\nconst queue = {", 1)[1].split("\n};\n", 1)[0]
+
+
+def method(body, name):                     # víceřádková metoda objektu scénáře, končí řádkem „  },“
+    return re.search(r"\n  " + name + r"\(.*?\) \{.*?\n  \},", body, re.S).group(0)[1:-1]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; počítání front, generátor a rozbor hlídá tests/test_parity.py (Queue)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_fills_in_the_lanes_like_bench(self):        # ALT_LANES má dvě větve: fronta bere číslo z „toll gate with N lanes“, dva kroky z „a N-lane road“
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        questions = ([bench.queue_question(k, w) for k in range(2, 9) for w in (False, True)]
+                     + [bench.lookahead_question(k, "blocked") for k in (3, 8)]
+                     + [bench.number_question(4), bench.memory_question(5), bench.sign_question(3), bench.rule_question("labeled")])   # otázky bez {lanes}: beze změny
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(questions) + ";" + (
+            "process.stdout.write(JSON.stringify(Q.map(q => [0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(q)), v)))));")
+        for q, by_variant in zip(questions, run_page_js(code)):
+            for v, js in enumerate(by_variant):
+                self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        for value in ("queue", "queueWeighted"):
+            self.assertEqual(page.count(f'<option value="{value}" data-i18n="opt.scenario.{value}"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: nejkratší fronta ----------"), 1)
+        self.assertEqual(page.count("|| v === 'queue' || v === 'queueWeighted'"), 1)      # bez „) {“: další části podmínku prodlouží
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(queueWarm(LANES), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, queueRow(LANES, this.weighted, rnd))); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(queueRow(LANES, this.weighted, rnd)); },"), 1)
+        body = queue_body()
+        for call in ("id: 'queue', lanesFree: true, weighted: false,", "rollInject([d.truth])", "queueState(d.queues)",
+                     "injectText(INJECT_NOTE, laneKeys(LANES)[inject])", "variantOf(queueQuestion(LANES, this.weighted), v)",
+                     "classTally(QUEUE_GAPS, ", "queueErrors(", "t(this.weighted ? 'queue.errorsWeighted' : 'queue.errors', ", "QUEUE_GAP_NAME[",
+                     "laneOf: (r, move) => move,"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+        self.assertNotIn("SC.weighted", body)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_weighted_queue_inherits_and_asks_lane_weighted(self):    # vážená fronta je zděděný objekt; otázka i odpověď pod klíčem lane_weighted
+        page = page_source()
+        self.assertEqual(page.count("const queueWeighted = { __proto__: queue, id: 'queueWeighted', weighted: true,"), 1)
+        laneKeys = re.search(r"\nconst laneKeys = [^\n]*\n", page).group(0)
+        code = laneKeys + "let LANES = 3; const proto = {" + method(queue_body(), "parse") + "};" + (
+            "const plain = { __proto__: proto, weighted: false }, heavy = { __proto__: proto, weighted: true };"
+            "const a = { lane: { choice: 'lane_2' } }, b = { lane_weighted: { choice: 'lane_3', confidence: 0.7 } };"
+            "process.stdout.write(JSON.stringify([plain.parse(a).move, plain.parse(b).move, heavy.parse(a).move, heavy.parse(b)]));")
+        self.assertEqual(run_page_js(code), [1, -1, -1, {"move": 2, "conf": 0.7}])
+
+    def test_queue_rows_come_every_six_cells(self):               # fronta až 12 vozidel: rozestup 6; řada zmizí, až je budka pod plátnem
+        page = page_source()
+        self.assertEqual(page.count("const QUEUE_GAP = 6, QUEUE_SPAN = 4.6;"), 1)
+        self.assertIn("  gap: QUEUE_GAP, keep: QUEUE_SPAN + 1.5,", queue_body())
+        car_y, h, cell = (int(re.search(r"\b%s = (\d+)" % k, page).group(1)) for k in ("CAR_Y", "H", "CELL"))
+        self.assertGreaterEqual(4.6 + 1.5, 4.6 + (h - car_y) / cell)                              # pod autem je (H − CAR_Y) / CELL polí
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
+        laneKeys = re.search(r"\nconst laneKeys = [^\n]*\n", page_source()).group(0)
+        code = laneKeys + "let LANES = 3; const base = { tally() {} }; const o = { __proto__: base," + method(queue_body(), "tally") + "};" + (
+            "const g = { cases: [], choices: [] }, task = { queues: [['car'], ['bus', 'van'], ['truck']], answer: 0, cls: 'gap1', text: [0], count: 0, truth: 0, state: {} };"
+            "[1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"queues": [["car"], ["bus", "van"], ["truck"]], "answer": 0, "cls": "gap1", "text": [0], "count": 0}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["lane_2", "lane_1", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_lists_the_queues(self):                 # fronty s délkou podle otázky (s vahami vážená), volba a správný pruh
+        from test_parity import run_js
+        code = "(() => { const laneName = i => t('lane.name', { n: i + 1 }); const proto = {" + method(queue_body(), "describeLast") + "};" + (
+            "const task = { queues: [['car', 'truck'], ['bus']], truth: 1 };"
+            "return [{ __proto__: proto, weighted: false }, { __proto__: proto, weighted: true }].map(o => o.describeLast(task, { move: 0 })); })()")
+        plain, heavy = run_js(code, None)
+        self.assertEqual(plain.split("\n"), ["fronty:  1: car truck (2)  ·  2: bus (1)", "zvoleno: pruh 1  (správně: pruh 2)"])
+        self.assertEqual(heavy.split("\n")[0], "fronty:  1: car truck (4)  ·  2: bus (3)")
+        self.assertEqual(run_js(code, None, "en")[0].split("\n")[1], "chosen:  lane 1  (correct: lane 2)")
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_layout_keeps_the_rule(self):          # délka sloupce = (vážená) délka fronty × jednotka; nejkratší fronta je nejkratší sloupec; vejde se
+        from test_parity import run_js
+        data = [[[list(q) for q in c[0]], w] for w in (False, True) for k in (2, 4, 8) for c in bench.queue_cases(15, k, w, seed=k)]
+        data += [[[["truck"] * 12, ["car"]], True], [[["car"] * 12, ["bus"] * 11], False]]       # vážená délka 36: jednotka ~4,9 px
+        line = re.search(r"\nconst QUEUE_BOOTH = [^\n]*\n", page_source()).group(0)
+        got = run_js("(() => {" + line + page_function("queueLayout") + "return arg.map(([qs, w]) => queueLayout(qs, w, 176)); })()", data)
+        for (queues, weighted), lay in zip(data, got):
+            lengths = [bench.queue_length(q, weighted) for q in queues]
+            unit = lay["unit"]
+            with self.subTest(queues=queues, weighted=weighted):
+                self.assertAlmostEqual(unit, min(16, 176 / max(lengths)))
+                for q, chips, length in zip(queues, lay["lanes"], lengths):
+                    self.assertEqual([c["vehicle"] for c in chips], list(q))                      # pořadí fronty, vozidlo 0 u budky
+                    self.assertAlmostEqual(chips[0]["y1"], length * unit)
+                    self.assertAlmostEqual(chips[-1]["y0"], 0, places=9)
+                    self.assertLessEqual(chips[0]["y1"], 176 + 1e-9)
+                    for a, b in zip(chips, chips[1:]):
+                        self.assertAlmostEqual(a["y0"], b["y1"])                                   # souvislý sloupec
+                    for c in chips:
+                        w = bench.QUEUE_WEIGHTS.get(c["vehicle"], 1) if weighted else 1
+                        self.assertAlmostEqual(c["y1"] - c["y0"], w * unit)                        # těžké 3× jen s vahami
+                        self.assertEqual(c["heavy"], weighted and w > 1)
+                tops = [chips[0]["y1"] for chips in lay["lanes"]]
+                answer = lengths.index(min(lengths))
+                self.assertTrue(all(top > tops[answer] for i, top in enumerate(tops) if i != answer), tops)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):          # štítek: nejkratší fronta, jiný pruh, nejméně vozidel bez vah, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        code = "(() => {" + re.search(r"\nconst RESULT = [^\n]*\n", page).group(0) + page_function("queueLabel") + (
+            "const Q = [['car', 'car', 'car', 'car'], ['truck', 'bus'], ['van', 'van', 'car']];"      # bez vah 4, 2, 3; s vahami 4, 6, 3
+            "const r = (result, chosen, truth) => ({ queues: Q, result, chosen, truth, count: 1 });"
+            "return [[r('ok', 2, 2), true], [r('bad', 1, 2), true], [r('bad', 0, 2), true], [r('bad', -1, 2), true], [r('late', undefined, 2), true],"
+            " [r('bad', 0, 1), false]].map(([row, w]) => queueLabel(row, w)); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ pruh 3: nejkratší fronta (3)", "✗ pruh 2: nejméně vozidel, ale váha 6; nejkratší pruh 3 (3)",
+                                                   "✗ pruh 1 (4), nejkratší je pruh 3 (3)", "✗ neplatná odpověď", "⏱ nestihl",
+                                                   "✗ pruh 1 (4), nejkratší je pruh 2 (2)"])
+        self.assertEqual(en[1]["text"], "✗ lane 2: the fewest vehicles, but weight 6; the shortest is lane 3 (3)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8", "#f85149"])
+
+    def test_drawing_writes_only_through_t_and_shows_pick_and_legend(self):
+        for literal in ("fillText('", 'fillText("', "fillText(`"):
+            self.assertNotIn(literal, page_function("drawQueue"))                                # fronta bez textu, emoji a čísla bez písmen
+            self.assertNotIn(literal, queue_body())
+        body = queue_body()
+        for part in ("drawQueue(r, y, this.weighted)", "queueLabel(r, this.weighted)", "drawRowLabel(", "strokeRect(", "r.y > -QUEUE_LABEL",
+                     "panels: ['confPanel', 'legend']", "'legend.queue.queue'", "'legend.queue.pick'", "'legend.queue.out'"):
+            self.assertIn(part, body)
+        self.assertIn("queueLayout(r.queues, weighted, (QUEUE_SPAN - QUEUE_BOOTH) * CELL)", page_function("drawQueue"))
+        weighted = re.search(r"\nconst queueWeighted = [^\n]*\n", page_source()).group(0)
+        self.assertIn("'legend.queue.heavy'", weighted)
+        self.assertNotIn("'legend.queue.heavy'", body)                                           # bez vah oranžová vozidla nejsou
 
 
 if __name__ == "__main__":

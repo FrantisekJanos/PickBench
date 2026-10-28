@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 REWARDS = tuple(range(20, 400, 10))
@@ -321,6 +324,111 @@ class Cli(unittest.TestCase):
             self.assertIn("python bench.py [N] --bet [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
             self.assertIn("python bench.py 100 --bet tev1", text)
             self.assertIn("\n--bet:      ", text)
+
+
+def bet_body():
+    return page_source().split("\nconst bet = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; generátor a rozbor hlídá tests/test_parity.py (Bet)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_matches_bench(self):                          # zrcadlo: obrácené pořadí bran, jiná formulace bez počtu bran
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        questions = [bench.bet_question(k) for k in range(3, 9)]
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(questions) + ";" + (
+            "process.stdout.write(JSON.stringify(Q.map(q => [0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(q)), v)))));")
+        for q, by_variant in zip(questions, run_page_js(code)):
+            for v, js in enumerate(by_variant):
+                self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (len(q["bet"]["criteria"]), v))
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="bet" data-i18n="opt.scenario.bet"></option>'), 1)
+        self.assertRegex(REGISTRY, r", bet[,\s]")
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: sázka na pruh ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(betWarm(LANES), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, betRow(LANES, rnd))); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(betRow(LANES, rnd)); },"), 1)
+        body = bet_body()
+        for call in ("rollInject([d.truth])", "betState(d.rewards, d.chances)", "injectText(INJECT_NOTE, `gate_${inject + 1}`)",
+                     "variantOf(betQuestion(LANES), v)", "a.bet?.choice", "betSummary(", "panels: ['confPanel', 'legend']"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    def test_road_has_at_least_three_gates(self):                  # volič stojí na 2 (jiný scénář, uložené nastavení, krok fronty): silnice má 3 brány
+        page = page_source()
+        body = bet_body()
+        self.assertIn("  id: 'bet', lanesFree: true, minLanes: 3,", body)
+        self.assertIn("  lanes() { return Math.max(3, +$('lanes').value); },", body)
+        self.assertEqual(page.count("  lanes: () => Math.max(3, +$('lanes').value),"), 1)               # řádek Dvou kroků dopředu zůstává jediný
+        self.assertEqual(page.count("  if (+lanes.value < (SC.minLanes ?? 2)) lanes.value = SC.minLanes;"), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null (regret 1, do chyb jako neplatná)
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", bet_body(), re.S).group(0)[1:-1]
+        gate_keys = re.search(r"\nconst gateKeys = [^\n]*\n", page_source()).group(0)
+        code = gate_keys + "const LANES = 3; const base = { tally() {} }; const o = { __proto__: base," + tally + "};" + (
+            "const g = { cases: [], choices: [] }, task = { rewards: [300, 200, 100], chances: [20, 60, 90], answer: 1, level: 'general',"
+            " topReward: 0, topChance: 2, truth: 1, state: {} };"
+            "[1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"rewards": [300, 200, 100], "chances": [20, 60, 90], "answer": 1, "level": "general", "topReward": 0, "topChance": 2}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["gate_2", "gate_1", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_shows_rewards_chances_and_payouts(self):
+        from test_parity import run_js
+        page = page_source()
+        method = re.search(r"\n  describeLast\(task, res\) \{.*?\n  \},", bet_body(), re.S).group(0)[1:-1]
+        payout = re.search(r"\nconst betPayout = [^\n]*\n", page).group(0)
+        code = "(() => {" + payout + "const o = {" + method + "};" + (
+            "return o.describeLast({ rewards: [300, 200, 110], chances: [20, 60, 90] , truth: 1 }, { move: 0 }); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual(cs.split("\n"), ["brány:   300 × 20 %   200 × 60 %   110 × 90 %", "výplaty: 60   120   99",
+                                          "zvoleno: brána 1 (60)  (správně: brána 2 (120))"])
+        self.assertEqual(en.split("\n")[0], "gates:   300 × 20%   200 × 60%   110 × 90%")
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):          # štítek: nejvyšší výplata, návnada odměna / šance, jiná, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "betPayout"))
+        code = "(() => {" + consts + page_function("betLabel") + (
+            "const r = (result, chosen) => ({ rewards: [300, 200, 100, 50], chances: [20, 60, 90, 25], answer: 1, truth: 1, level: 'general',"
+            " topReward: 0, topChance: 2, result, chosen });"
+            "return [r('ok', 1), r('bad', 0), r('bad', 2), r('bad', 3), r('bad', -1), r('late', undefined)].map(betLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ brána 2: nejvyšší výplata 120", "✗ návnada nejvyšší odměna: brána 1 (60), nejvyšší výplata brána 2 (120)",
+                                                   "✗ návnada nejvyšší šance: brána 3 (90), nejvyšší výplata brána 2 (120)",
+                                                   "✗ brána 4 (12.5), nejvyšší výplata brána 2 (120)", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ highest-reward decoy: gate 1 (60), the highest payout is gate 2 (120)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_gate_shows_reward_chance_and_payout(self):  # před průjezdem čísla a obrys volby, po něm výplaty a štítek; písmena jen ze štítku
+        from test_parity import run_js
+        page = page_source()
+        method = re.search(r"\n  drawItems\(g\) \{.*?\n  \},", bet_body(), re.S).group(0)[1:-1]
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "betPayout"))
+        code = "(() => { const texts = [], strokes = [], LW = 100, W = 300, H = 600, CAR_Y = 540, CELL = 44;" + consts + (
+            page_function("drawBet") + page_function("betLabel") + page_function("drawRowLabel") +
+            "const ctx = new Proxy({ fillText(s) { texts.push(String(s)); }, strokeRect(x) { strokes.push(Math.round(x)); }, measureText: s => ({ width: s.length * 6 }) },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const o = { drawRing() {}," + method + "};"
+            "const row = extra => ({ y: 3, rewards: [300, 200, 100], chances: [20, 60, 90], answer: 1, truth: 1, level: 'general', topReward: 0, topChance: 2,"
+            " inject: null, passLane: 1, result: null, chosen: undefined, ...extra });"
+            "o.drawItems({ rows: [row({ chosen: 2 }), row({ y: 7 })] }); const before = texts.splice(0), lines = strokes.splice(0);"
+            "o.drawItems({ rows: [row({ y: -0.3, result: 'ok', chosen: 1, passLane: 1 })] });"
+            "return { before, strokes: lines, after: texts }; })()")
+        got = run_js(code, None)
+        self.assertEqual(len(got["strokes"]), 1)                                                   # jen zvolená brána neprojeté řady s odpovědí
+        self.assertTrue(all(not re.search(r"[^\W\d_]", s) for s in got["before"]), got["before"])   # odměny a šance: bez písmen
+        for s in ("300", "20 %", "90 %"):
+            self.assertIn(s, got["before"])
+        for s in ("= 60", "= 120", "= 90", "✓ brána 2: nejvyšší výplata 120"):
+            self.assertIn(s, got["after"])
 
 
 if __name__ == "__main__":

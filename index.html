@@ -110,7 +110,7 @@
       <p id="about"></p>
       <div class="controls">
         <label><span data-i18n="ui.scenario"></span>
-          <select id="scenario"><option value="obstacles" data-i18n="opt.scenario.obstacles"></option><option value="numbers" data-i18n="opt.scenario.numbers"></option><option value="signs" data-i18n="opt.scenario.signs"></option><option value="memory" data-i18n="opt.scenario.memory"></option><option value="barrier" data-i18n="opt.scenario.barrier"></option><option value="lookahead" data-i18n="opt.scenario.lookahead"></option><option value="rule" data-i18n="opt.scenario.rule"></option></select>
+          <select id="scenario"><option value="obstacles" data-i18n="opt.scenario.obstacles"></option><option value="numbers" data-i18n="opt.scenario.numbers"></option><option value="signs" data-i18n="opt.scenario.signs"></option><option value="memory" data-i18n="opt.scenario.memory"></option><option value="barrier" data-i18n="opt.scenario.barrier"></option><option value="lookahead" data-i18n="opt.scenario.lookahead"></option><option value="rule" data-i18n="opt.scenario.rule"></option><option value="queue" data-i18n="opt.scenario.queue"></option><option value="queueWeighted" data-i18n="opt.scenario.queueWeighted"></option><option value="bet" data-i18n="opt.scenario.bet"></option><option value="cruise" data-i18n="opt.scenario.cruise"></option><option value="timetable" data-i18n="opt.scenario.timetable"></option></select>
         </label>
         <label><span data-i18n="ui.lanes"></span> <select id="lanes"></select></label>
         <label><span data-i18n="ui.driver"></span>
@@ -306,6 +306,11 @@ const TEXTS = {
   'opt.scenario.barrier': { cs: 'Závora', en: 'Barrier' },
   'opt.scenario.lookahead': { cs: 'Dva kroky dopředu', en: 'Two steps ahead' },
   'opt.scenario.rule': { cs: 'Skryté pravidlo', en: 'Hidden rule' },
+  'opt.scenario.queue': { cs: 'Nejkratší fronta', en: 'Shortest queue' },
+  'opt.scenario.queueWeighted': { cs: 'Nejkratší fronta (vážená)', en: 'Shortest queue (weighted)' },
+  'opt.scenario.bet': { cs: 'Sázka na pruh', en: 'Bet on a lane' },
+  'opt.scenario.cruise': { cs: 'Tempomat', en: 'Cruise control' },
+  'opt.scenario.timetable': { cs: 'Jízdní řád', en: 'Timetable' },
   'opt.scenario.emails': { cs: 'E-maily: {name}', en: 'E-mails: {name}' },
   'opt.scenario.public': { cs: 'Veřejná sada: {name}', en: 'Public dataset: {name}' },
   'opt.scenario.noEmails': { cs: 'E-maily (žádná sada ve složce datasets/)', en: 'E-mails (no dataset in the datasets/ folder)' },
@@ -334,6 +339,11 @@ const TEXTS = {
   'scenario.barrier': { cs: 'závora', en: 'barrier' },
   'scenario.lookahead': { cs: 'dva kroky dopředu', en: 'two steps ahead' },
   'scenario.rule': { cs: 'skryté pravidlo', en: 'hidden rule' },
+  'scenario.queue': { cs: 'nejkratší fronta', en: 'shortest queue' },
+  'scenario.queueWeighted': { cs: 'nejkratší fronta (vážená)', en: 'shortest queue (weighted)' },
+  'scenario.bet': { cs: 'sázka na pruh', en: 'bet on a lane' },
+  'scenario.cruise': { cs: 'tempomat', en: 'cruise control' },
+  'scenario.timetable': { cs: 'jízdní řád', en: 'timetable' },
   'mode.bench': { cs: 'benchmark', en: 'benchmark' },
   'mode.benchAborted': { cs: 'benchmark (přerušen)', en: 'benchmark (interrupted)' },
   'mode.ladder': { cs: 'žebřík, max {best} polí/s', en: 'ladder, max {best} cells/s' },
@@ -366,15 +376,15 @@ const TEXTS = {
   'tip.mUsd': { cs: 'Jen u hostovaného modelu: průměrná cena jednoho dotazu × 1000, v dolarech. Cena dotazu = vstupní tokeny, které poskytovatel napočítal, × jeho cena za milion tokenů (výstup se neúčtuje). Se zrcadly stojí každá úloha třikrát tolik, do průměru jde jen původní zadání. U lokálních modelů je „—“ — ty mají energii na rozhodnutí.', en: 'Hosted model only: the mean price of one request × 1000, in dollars. Price of a request = the input tokens the provider counted × the provider\'s price per million tokens (the provider does not bill output). With mirrors every task costs three times as much, but only the original prompt goes into the mean. For local models it is "—" — those have energy per decision.' },
   'tip.mNet': { cs: 'Jen u hostovaného modelu: doba jednoho spojení (TCP a TLS) ze serveru hry k serveru poskytovatele, změřená před během. Je to hrubý odhad ceny sítě — dotazy pak jdou po už otevřeném spojení, takže v každé latenci zbývá zhruba jedna cesta tam a zpět. První měření zahrnuje i dotaz na DNS.', en: 'Hosted model only: the time of one connection (TCP and TLS) from the game server to the provider\'s server, measured before the run. It is a rough estimate of how much of the latency is the network — the requests then travel over a connection that is already open, so roughly one round trip remains in the latency of every request. The first measurement also includes the DNS lookup.' },
   'tip.mSpend': { cs: 'Kolik dolarů stály hostované dotazy od spuštění serveru hry a jaký je strop. Po dosažení stropu (dolary nebo počet dotazů) server další hostovaný dotaz nepošle a běh skončí chybou. Strop se nastavuje jen proměnnými PICKBENCH_MAX_USD a PICKBENCH_MAX_HOSTED při startu serveru; ze stránky ho změnit nejde. Restart serveru počítadlo nuluje — skutečným stropem je zůstatek u poskytovatele. Údaj „(+N bez ceny)“ za částkou říká, kolik odpovědí poskytovatel poslal bez počtu tokenů: jejich cena v útratě není, částka je proto spodní odhad, a strop serveru za ně drží odhad.', en: 'How many dollars the hosted requests have cost since the game server started, and what the spend cap is. Once the server reaches the cap (dollars or number of requests), it sends no further hosted requests and the run ends with an error. You set the cap only with the variables PICKBENCH_MAX_USD and PICKBENCH_MAX_HOSTED when the server starts; you cannot change it from the page. Restarting the server resets the counter — the real cap is the balance with the provider. The "(+N unpriced)" figure after the amount says how many answers the provider sent without a token count: their price is not in the spend, so the amount is a lower bound, and the server\'s spend cap counts an estimate for them.' },
-  'tip.mN': { cs: 'Kolik rozhodnutí je v měření. U překážek připadá na jednu řadu několik rozhodnutí, u e-mailů a číselných duelů jedno. Z malého počtu jsou percentily, ECE i přesnost jen orientační. Zákazy a výjimky mají na řadu jedno rozhodnutí jako e-maily. U paměťové stopy také jedno. U závory také jedno. U dvou kroků dopředu také jedno. U skrytého pravidla také jedno.', en: 'How many decisions are in the measurement. For obstacles there are several decisions per row; for e-mails, number duels, bans and exceptions, memory trace and the barrier, one. With a small number of decisions, the percentiles, ECE and accuracy are only rough estimates. For two steps ahead, one as well. For the hidden rule, one as well.' },
+  'tip.mN': { cs: 'Kolik rozhodnutí je v měření. U překážek připadá na jednu řadu několik rozhodnutí, u e-mailů a číselných duelů jedno. Z malého počtu jsou percentily, ECE i přesnost jen orientační. Zákazy a výjimky mají na řadu jedno rozhodnutí jako e-maily. U paměťové stopy také jedno. U závory také jedno. U dvou kroků dopředu také jedno. U skrytého pravidla také jedno. U nejkratší fronty také jedno. U sázky na pruh také jedno. U tempomatu také jedno. U jízdního řádu také jedno.', en: 'How many decisions are in the measurement. For obstacles there are several decisions per row; for e-mails, number duels, bans and exceptions, memory trace and the barrier, one. With a small number of decisions, the percentiles, ECE and accuracy are only rough estimates. For two steps ahead, one as well. For the hidden rule, one as well. For the shortest queue, one as well. For the bet on a lane, one as well. For the cruise control, one as well. For the timetable, one as well.' },
   'tip.chartCap': { cs: 'Sloupec za každé z posledních 150 rozhodnutí, výška = doba rozhodnutí; měřítko určuje nejpomalejší z nich. Ukáže zadrhnutí a postupné zpomalování, které se v průměru ztratí.', en: 'One bar for each of the last 150 decisions, height = decision time; the slowest of them sets the scale. It reveals stalls and a gradual slowdown, which get lost in the mean.' },
   'tip.calTitle': { cs: 'Odpovědi rozdělené do pásem po 5 % podle jistoty, kterou model k odpovědi uvedl: nad osou kolikrát byl v pásmu správně, pod osou kolikrát špatně (výška je odmocninová, přesný počet je u sloupce). Dobře kalibrovaný model chybuje hlavně při nízké jistotě. ECE shrnuje rozdíl mezi jistotou a skutečnou úspěšností a počítá se z 10 pásem.', en: 'Answers split into 5% bins by the confidence the model reported with the answer: the bar above the axis shows how many answers in the bin were correct, the bar below the axis how many were wrong (the height is on a square-root scale and the exact count is next to the bar). A well-calibrated model makes its errors mostly at low confidence. ECE sums up the difference between the confidence and the actual success rate, and the page computes it from 10 bins.' },
-  'tip.scenario': { cs: 'Co model řeší. Překážky: volí pruh s nejdelší volnou cestou. Číselné duely: volí bránu s největším číslem. E-maily: třídí e-maily ze zvolené sady do kategorií; pruhů je tolik, kolik má sada kategorií. Veřejná sada: vybírá štítek z desítek možností nebo z vlastní nabídky úlohy; běží jen jako benchmark bez hry (sady stahuje fetch_datasets.py). Zákazy a výjimky: v každém pruhu je dopravní značka a model volí jediný pruh, kam vozidlo smí. Paměťová stopa: model dostane historii minutých značek se štítky kroků zpět a volí bránu se značkou, kterou auto minulo před N kroky. Závora: model dostane stav křižovatky a pět pravidel s pořadím a odpoví pravděpodobností, že auto smí projet. Dva kroky dopředu: model dostane pruh auta a 4 řady s překážkami a volí tah pro nejbližší řadu tak, aby auto projelo všechny. Skryté pravidlo: model dostane deník dřívějších pokusů a znaky 3 bran a volí bránu podle pravidla, které se po 3 správných pokusech v řadě mění.', en:'What the model solves. Obstacles: it picks the lane with the longest free road. Number duels: it picks the gate with the largest number. E-mails: it sorts the e-mails of the selected dataset into categories; there are as many lanes as the dataset has categories. Public dataset: it picks a label from dozens of options or from the list that the task itself carries; this scenario runs only as a benchmark without the game (fetch_datasets.py downloads the datasets). Bans and exceptions: every lane has a traffic sign and the model picks the one lane the vehicle may enter. Memory trace: the model gets the history of the signs passed, each labelled with its steps back, and picks the gate with the sign passed N steps back. Barrier: the model gets the state of an intersection and five rules in order of priority and answers with the probability that the car may drive through. Two steps ahead: the model gets the lane of the car and 4 rows with obstacles and picks the move for the nearest row that lets the car get through all of them. Hidden rule: the model gets the log of earlier picks and the features of 3 gates and picks the gate by a rule that changes after 3 correct picks in a row.' },
-  'tip.lanes': { cs: 'Počet pruhů, tedy možností, ze kterých model vybírá (2–8). U překážek a číselných duelů se volí tady, u e-mailů ho určuje sada. Víc pruhů znamená delší zadání a těžší úlohu, takže výsledky s různým počtem pruhů nejsou srovnatelné. U zákazů a výjimek se volí také tady. U paměťové stopy je to počet bran a volí se také tady. U závory mění jen šířku silnice, úloha pruhy nemá. U dvou kroků dopředu se volí také tady, od 3 pruhů; možnosti jsou vždy 3 (vlevo, zůstat, vpravo). U skrytého pravidla jsou vždy 3 brány.', en: 'The number of lanes, that is, the number of options the model picks from (2–8). For obstacles, number duels, bans and exceptions and memory trace (where it is the number of gates) you select it here, while for e-mails the dataset sets it. For the barrier it only sets the width of the road; the task has no lanes. More lanes mean a longer prompt and a harder task, so results with different numbers of lanes are not comparable. For two steps ahead you select it here too, from 3 lanes; there are always 3 moves (left, stay, right). For the hidden rule there are always 3 gates.' },
+  'tip.scenario': { cs: 'Co model řeší. Překážky: volí pruh s nejdelší volnou cestou. Číselné duely: volí bránu s největším číslem. E-maily: třídí e-maily ze zvolené sady do kategorií; pruhů je tolik, kolik má sada kategorií. Veřejná sada: vybírá štítek z desítek možností nebo z vlastní nabídky úlohy; běží jen jako benchmark bez hry (sady stahuje fetch_datasets.py). Zákazy a výjimky: v každém pruhu je dopravní značka a model volí jediný pruh, kam vozidlo smí. Paměťová stopa: model dostane historii minutých značek se štítky kroků zpět a volí bránu se značkou, kterou auto minulo před N kroky. Závora: model dostane stav křižovatky a pět pravidel s pořadím a odpoví pravděpodobností, že auto smí projet. Dva kroky dopředu: model dostane pruh auta a 4 řady s překážkami a volí tah pro nejbližší řadu tak, aby auto projelo všechny. Skryté pravidlo: model dostane deník dřívějších pokusů a znaky 3 bran a volí bránu podle pravidla, které se po 3 správných pokusech v řadě mění. Nejkratší fronta: model dostane fronty vozidel v pruzích mýtné brány a volí pruh s nejkratší frontou; ve vážené se nákladní auto, autobus a traktor počítají za 3 vozidla. Sázka na pruh: model dostane u každé brány odměnu a šanci v procentech a volí bránu s nejvyšší očekávanou výplatou (odměna × šance). Tempomat: model dostane vzdálenost překážky, povrch a mlhu a volí stupeň rychlosti 1–7 podle tabulky v zadání. Jízdní řád: model dostane zásilku (PSČ a službu), tabulku tras s rozsahy PSČ a případnou výjimku pro jednu službu a volí jedno ze 6 dep.', en:'What the model solves. Obstacles: it picks the lane with the longest free road. Number duels: it picks the gate with the largest number. E-mails: it sorts the e-mails of the selected dataset into categories; there are as many lanes as the dataset has categories. Public dataset: it picks a label from dozens of options or from the list that the task itself carries; this scenario runs only as a benchmark without the game (fetch_datasets.py downloads the datasets). Bans and exceptions: every lane has a traffic sign and the model picks the one lane the vehicle may enter. Memory trace: the model gets the history of the signs passed, each labelled with its steps back, and picks the gate with the sign passed N steps back. Barrier: the model gets the state of an intersection and five rules in order of priority and answers with the probability that the car may drive through. Two steps ahead: the model gets the lane of the car and 4 rows with obstacles and picks the move for the nearest row that lets the car get through all of them. Hidden rule: the model gets the log of earlier picks and the features of 3 gates and picks the gate by a rule that changes after 3 correct picks in a row. Shortest queue: the model gets the queues of vehicles in the lanes of a toll gate and picks the lane with the shortest queue; in the weighted one a truck, a bus and a tractor count as 3 vehicles. Bet on a lane: the model gets the reward and the chance in percent of every gate and picks the gate with the highest expected payout (reward × chance). Cruise control: the model gets the distance to the obstacle, the road surface and the fog and picks a speed level 1–7 by the table in the prompt. Timetable: the model gets a parcel (ZIP code and service), a table of routes with ZIP ranges and maybe an exception for one service, and picks one of 6 depots.' },
+  'tip.lanes': { cs: 'Počet pruhů, tedy možností, ze kterých model vybírá (2–8). U překážek a číselných duelů se volí tady, u e-mailů ho určuje sada. Víc pruhů znamená delší zadání a těžší úlohu, takže výsledky s různým počtem pruhů nejsou srovnatelné. U zákazů a výjimek se volí také tady. U paměťové stopy je to počet bran a volí se také tady. U závory mění jen šířku silnice, úloha pruhy nemá. U dvou kroků dopředu se volí také tady, od 3 pruhů; možnosti jsou vždy 3 (vlevo, zůstat, vpravo). U skrytého pravidla jsou vždy 3 brány. U nejkratší fronty se volí také tady (2–8). U sázky na pruh je to počet bran a volí se také tady, od 3. U tempomatu je pruhů vždy 7: pruh je stupeň rychlosti 1–7. U jízdního řádu je pruhů vždy 6, jeden na každé depo.', en: 'The number of lanes, that is, the number of options the model picks from (2–8). For obstacles, number duels, bans and exceptions and memory trace (where it is the number of gates) you select it here, while for e-mails the dataset sets it. For the barrier it only sets the width of the road; the task has no lanes. More lanes mean a longer prompt and a harder task, so results with different numbers of lanes are not comparable. For two steps ahead you select it here too, from 3 lanes; there are always 3 moves (left, stay, right). For the hidden rule there are always 3 gates. For the shortest queue you select it here too (2–8). For the bet on a lane it is the number of gates, selected here too, from 3. For the cruise control there are always 7 lanes: a lane is a speed level 1–7. For the timetable there are always 6 lanes, one for every depot.' },
   'tip.driver': { cs: 'Kdo rozhoduje. Model: každé rozhodnutí je dotaz na vybraný model přes Ollamu. Pravidla: ideální řidič, který zná správnou odpověď — měřítko „správně“ a kontrola hry bez modelu. Náhodně: náhodná volba, ukazuje výsledek bez jakéhokoli úsudku.', en: 'Who decides. Model: every decision is a request to the selected model through Ollama. Rules: the ideal driver, which knows the correct answer — the yardstick for "correct" and a check of the game without a model. Random: a random choice, which shows what a driver with no judgment scores.' },
   'tip.model': { cs: 'Rozhodovací model, který se použije u řidiče Model. Lokální modely jsou z Ollamy; nabídka se načítá při otevření stránky a když Ollama neběží, je prázdná. První dotaz po výběru jiného modelu trvá déle (načtení do paměti) a do měření se nepočítá. Skupina „Hostované“ se ukáže, jen když má server klíč poskytovatele: model pak běží u něj, texty úloh odcházejí mimo tento počítač, každý dotaz stojí peníze a latence obsahuje síť. Při latenci stovek milisekund až sekundy model ve hře v reálném čase většinu řad nestihne — to je měřený výsledek, ne chyba.', en: 'The decision model that the Model driver uses. Local models come from Ollama; the page loads the list when it opens, and the list is empty when Ollama is not running. The first request after selecting a different model takes longer (loading into memory) and does not count in the measurement. The "Hosted" group appears only when the server has a provider key: the model then runs at the provider, the task texts leave this computer, every request costs money and the latency includes the network. With a latency of hundreds of milliseconds up to a second, the model misses most rows in the game in Real time and Ladder modes — that is a measured result, not an error.' },
   'tip.mode': { cs: 'Reálný čas: auto jede zvolenou rychlostí a pomalé rozhodnutí znamená náraz nebo „nestihl“. Po tazích: hra na každé rozhodnutí počká, měří se kvalita bez vlivu rychlosti. Žebřík: reálný čas, rychlost stoupá po úrovních dlouhých 60 polí, dokud model udrží nejvýš 1 chybu na úroveň; výsledek je nejvyšší zvládnutá rychlost.', en: 'Real time: the car moves at the selected speed and a slow decision means a crash or "missed". Turn-based: the game waits for every decision and measures quality without the effect of speed. Ladder: real time, with the speed rising level by level (each level is 60 cells long) as long as the model makes at most 1 error per level; the result is the highest speed it managed.' },
-  'tip.speed': { cs: 'Rychlost auta v polích za sekundu; platí v reálném čase. Řady přijíždějí po 4 polích, takže rychlost ÷ 4 je počet řad za sekundu, které musí model stihnout. V žebříku rychlost řídí hra a posuvník je zamčený. U dvou kroků dopředu přijíždějí bloky po 6 polích, rychlost ÷ 6.', en: 'Car speed in cells per second; it applies in Real time mode. Rows arrive every 4 cells, so speed ÷ 4 is the number of rows per second the model has to keep up with. In Ladder mode the game controls the speed and the slider is locked. For two steps ahead the blocks arrive every 6 cells, speed ÷ 6.' },
+  'tip.speed': { cs: 'Rychlost auta v polích za sekundu; platí v reálném čase. Řady přijíždějí po 4 polích, takže rychlost ÷ 4 je počet řad za sekundu, které musí model stihnout. V žebříku rychlost řídí hra a posuvník je zamčený. U dvou kroků dopředu přijíždějí bloky po 6 polích, rychlost ÷ 6. U nejkratší fronty přijíždějí brány také po 6 polích, rychlost ÷ 6. U jízdního řádu také po 6 polích, rychlost ÷ 6.', en: 'Car speed in cells per second; it applies in Real time mode. Rows arrive every 4 cells, so speed ÷ 4 is the number of rows per second the model has to keep up with. In Ladder mode the game controls the speed and the slider is locked. For two steps ahead the blocks arrive every 6 cells, speed ÷ 6. For the shortest queue the gates also arrive every 6 cells, speed ÷ 6. For the timetable also every 6 cells, speed ÷ 6.' },
   'tip.runlen': { cs: 'Po kolika ujetých polích hra sama skončí a zapíše výsledek; 0 = bez limitu, do stisku Stop. Stejná délka dělá průjezdy různých modelů srovnatelné. Žebřík má vlastní konec a limit ignoruje, benchmark bez hry má svůj počet úloh.', en: 'How many cells the car drives before the game ends by itself and records the result; 0 = no limit, until you press Stop. The same length makes the runs of different models comparable. Ladder mode has its own end and ignores the limit, and the benchmark without the game has its own number of tasks.' },
   'tip.seed': { cs: 'Libovolný text nebo číslo. Stejné semínko se stejným nastavením dá pokaždé stejné řady ve stejném pořadí (i stejné úlohy benchmarku a stejné úlohy s pokynem), takže každý model dostane totéž. Prázdné = pokaždé jinak. V reálném čase se dál liší, na které řady se model stihne zeptat — to je měřený jev, ne náhoda. Se semínkem nástroje bench.py nesouvisí: stejné číslo tam dá jiné úlohy.', en: 'Any text or number. The same seed with the same settings gives the same rows in the same order every time (also the same benchmark tasks and the same tasks with the instruction), so every model gets the same thing. Empty = different every time. In Real time and Ladder modes, which rows the page manages to ask the model about still varies — that is a measured effect, not chance. The seed is unrelated to the seed of the bench.py tool: the same number gives different tasks there.' },
   'tip.extra': { cs: 'Jen u překážek: ke každému dotazu přidá druhou otázku typu ano/ne (je do 2 polí před autem překážka?). Odpověď hru neřídí; volba ukazuje, o kolik další otázka prodlouží rozhodnutí.', en: 'Obstacles only: adds a second, yes/no question to every request (is there an obstacle within 2 cells ahead of the car?). The answer does not steer the game; the option shows how much one more question lengthens the decision.' },
@@ -446,9 +456,9 @@ const TEXTS = {
   'col.stab': { cs: 'stabilita', en: 'stability' },
   'col.stab.tip': { cs: 'Jen se zrcadly: podíl úloh se stejnou odpovědí ve všech třech variantách zadání. Bez zrcadel je „—“.', en: 'With mirrors only: the share of tasks with the same answer in all three prompt variants. Without mirrors it is "—".' },
   'col.errors': { cs: 'chyby', en: 'errors' },
-  'col.errors.tip': { cs: 'U překážek počet nárazů, u e-mailů a číselných duelů počet řad projetých špatně (odpověď přišla včas, ale byla chybná). V benchmarku bez hry je „—“. U zákazů a výjimek jako u číselných duelů: řady projeté špatně. U paměťové stopy také řady projeté špatně. U závory řady s falešným průjezdem, zbytečným stáním nebo neplatnou odpovědí. U dvou kroků dopředu bloky projeté se špatným tahem. U skrytého pravidla řady projeté jinou branou, než říká pravidlo.', en: 'For obstacles the number of crashes; for e-mails, number duels, bans and exceptions, memory trace and the barrier, the number of rows passed with a wrong answer (the answer arrived in time but was wrong; at the barrier, an invalid answer counts too). In the benchmark without the game it is "—". For two steps ahead, the blocks passed with a wrong move. For the hidden rule, the rows passed through a gate other than the one the rule asks for.' },
+  'col.errors.tip': { cs: 'U překážek počet nárazů, u e-mailů a číselných duelů počet řad projetých špatně (odpověď přišla včas, ale byla chybná). V benchmarku bez hry je „—“. U zákazů a výjimek jako u číselných duelů: řady projeté špatně. U paměťové stopy také řady projeté špatně. U závory řady s falešným průjezdem, zbytečným stáním nebo neplatnou odpovědí. U dvou kroků dopředu bloky projeté se špatným tahem. U skrytého pravidla řady projeté jinou branou, než říká pravidlo. U nejkratší fronty řady projeté pruhem, který nemá nejkratší frontu. U sázky na pruh řady projeté branou bez nejvyšší výplaty. U tempomatu řady projeté jiným stupněm, než dává tabulka. U jízdního řádu řady projeté branou jiného depa.', en: 'For obstacles the number of crashes; for e-mails, number duels, bans and exceptions, memory trace and the barrier, the number of rows passed with a wrong answer (the answer arrived in time but was wrong; at the barrier, an invalid answer counts too). In the benchmark without the game it is "—". For two steps ahead, the blocks passed with a wrong move. For the hidden rule, the rows passed through a gate other than the one the rule asks for. For the shortest queue, the rows passed in a lane that does not have the shortest queue. For the bet on a lane, the rows passed through a gate without the highest payout. For the cruise control, the rows passed at a level other than the one the table gives. For the timetable, the rows passed through the gate of another depot.' },
   'col.late': { cs: 'nestihl', en: 'missed' },
-  'col.late.tip': { cs: 'Počet řad, ke kterým model nestihl odpovědět dřív, než minuly auto (e-maily a číselné duely ve hře). U překážek a v benchmarku je „—“. Platí to i pro zákazy a výjimky ve hře. Platí to i pro paměťovou stopu ve hře. Platí to i pro závoru ve hře; auto tam bez odpovědi jede. Platí to i pro dva kroky dopředu ve hře. Platí to i pro skryté pravidlo ve hře.', en: 'The number of rows the model did not manage to answer before they passed the car (e-mails, number duels, bans and exceptions, memory trace and the barrier in the game; at the barrier the car goes without an answer). For obstacles and in the benchmark it is "—". The same holds for two steps ahead in the game. The same holds for the hidden rule in the game.' },
+  'col.late.tip': { cs: 'Počet řad, ke kterým model nestihl odpovědět dřív, než minuly auto (e-maily a číselné duely ve hře). U překážek a v benchmarku je „—“. Platí to i pro zákazy a výjimky ve hře. Platí to i pro paměťovou stopu ve hře. Platí to i pro závoru ve hře; auto tam bez odpovědi jede. Platí to i pro dva kroky dopředu ve hře. Platí to i pro skryté pravidlo ve hře. Platí to i pro nejkratší frontu ve hře. Platí to i pro sázku na pruh ve hře. Platí to i pro tempomat ve hře. Platí to i pro jízdní řád ve hře.', en: 'The number of rows the model did not manage to answer before they passed the car (e-mails, number duels, bans and exceptions, memory trace and the barrier in the game; at the barrier the car goes without an answer). For obstacles and in the benchmark it is "—". The same holds for two steps ahead in the game. The same holds for the hidden rule in the game. The same holds for the shortest queue in the game. The same holds for the bet on a lane in the game. The same holds for the cruise control in the game. The same holds for the timetable in the game.' },
   'col.dist': { cs: 'ujeto', en: 'driven' },
   'col.dist.tip': { cs: 'Ujetá vzdálenost v polích; v benchmarku bez hry „—“. S délkou průjezdu se rovná limitu, pokud běh nikdo nezastavil dřív.', en: 'The distance driven in cells; in the benchmark without the game "—". When a run length is set, it equals that length, unless someone stopped the run early.' },
   'col.joule': { cs: 'J/rozh.', en: 'J/decision' },
@@ -468,7 +478,7 @@ const TEXTS = {
   'col.f1': { cs: 'macro-F1', en: 'macro-F1' },
   'col.f1.tip': { cs: 'Jen u sad e-mailů a veřejných sad: průměr F1 přes třídy, každá třída stejnou vahou bez ohledu na počet úloh; třída bez jediné úlohy v běhu se nepočítá. Na rozdíl od sloupce „správně“ ho nevytáhne nahoru jedna velká třída. U vzorku s pár úlohami na třídu je hrubý.', en: 'E-mail datasets and public datasets only: the mean of F1 over the classes, each class with the same weight regardless of its number of tasks; a class without a single task in the run does not count. Unlike the value in the "correct" column, it is not pulled up by one large class. For a sample with a few tasks per class it is rough.' },
   'col.goodput': { cs: 'goodput', en: 'goodput' },
-  'col.goodput.tip': { cs: 'Podíl rozhodnutí správných a zároveň včas. V benchmarku bez hry je „včas“ do limitu z pole „limit na rozhodnutí“ (bez limitu „—“). Ve hře v reálném čase a v žebříku je limitem příjezd řady k autu: řady projeté správně ÷ všechny projeté řady (e-maily, číselné duely); u překážek a po tazích „—“. Spojuje kvalitu a rychlost do jednoho čísla. Zákazy a výjimky se ve hře počítají stejně jako číselné duely. U paměťové stopy také. U závory také. U dvou kroků dopředu také. U skrytého pravidla také.', en:'The share of decisions that were correct and also in time. In the benchmark without the game, "in time" means within the deadline from the "decision deadline" field (with no deadline "—"). In the game in Real time and Ladder modes, the deadline is the arrival of the row at the car: rows passed correctly ÷ all rows passed (e-mails, number duels, bans and exceptions, memory trace, barrier); for obstacles and in Turn-based mode "—". It combines quality and speed into one number. The same holds for two steps ahead. The same holds for the hidden rule.' },
+  'col.goodput.tip': { cs: 'Podíl rozhodnutí správných a zároveň včas. V benchmarku bez hry je „včas“ do limitu z pole „limit na rozhodnutí“ (bez limitu „—“). Ve hře v reálném čase a v žebříku je limitem příjezd řady k autu: řady projeté správně ÷ všechny projeté řady (e-maily, číselné duely); u překážek a po tazích „—“. Spojuje kvalitu a rychlost do jednoho čísla. Zákazy a výjimky se ve hře počítají stejně jako číselné duely. U paměťové stopy také. U závory také. U dvou kroků dopředu také. U skrytého pravidla také. U nejkratší fronty také. U sázky na pruh také. U tempomatu také. U jízdního řádu také.', en:'The share of decisions that were correct and also in time. In the benchmark without the game, "in time" means within the deadline from the "decision deadline" field (with no deadline "—"). In the game in Real time and Ladder modes, the deadline is the arrival of the row at the car: rows passed correctly ÷ all rows passed (e-mails, number duels, bans and exceptions, memory trace, barrier); for obstacles and in Turn-based mode "—". It combines quality and speed into one number. The same holds for two steps ahead. The same holds for the hidden rule. The same holds for the shortest queue. The same holds for the bet on a lane. The same holds for the cruise control. The same holds for the timetable.' },
   'col.usd': { cs: '$ / 1000 rozh.', en: '$ / 1000 decisions' },
   'col.usd.tip': { cs: 'Jen u hostovaného modelu: průměrná cena jednoho dotazu × 1000 v dolarech (vstupní tokeny × cena poskytovatele). U lokálních modelů „—“; jejich cenou je energie ve sloupci J/rozh. Ceník je v providers.py s datem.', en: 'Hosted model only: the mean price of one request × 1000 in dollars (input tokens × the provider\'s price). For local models "—"; their price is the energy in the J/decision column. The price list is in providers.py with its date.' },
   'col.net': { cs: 'síť ms', en: 'network ms' },
@@ -503,6 +513,10 @@ const TEXTS = {
   'last.barrier': { cs: 'stav:     {state}\np(jeď):   {noul}\nzvoleno:  {pick}  (správně: {truth})\nrozhodlo: {rule}', en: 'state:   {state}\np(go):   {noul}\nchosen:  {pick}  (correct: {truth})\ndecided: {rule}' },
   'last.lookahead': { cs: 'auto:     pruh {lane}\nzakázáno: {rows}\nzvoleno:  {pick}  (správně: {truth})\nhladový:  {greedy}', en: 'car:     lane {lane}\nblocked: {rows}\nchosen:  {pick}  (correct: {truth})\ngreedy:  {greedy}' },
   'last.rule': { cs: 'deník:   {log}\nbrány:   {gates}\nzvoleno: {pick}  (správně: {truth})\nmodel:   znaky dostává anglicky (color, shape, count)', en: 'log:     {log}\ngates:   {gates}\nchosen:  {pick}  (correct: {truth})\nmodel:   gets the features in English (color, shape, count)' },
+  'last.queue': { cs: 'fronty:  {queues}\nzvoleno: {pick}  (správně: {truth})', en: 'queues:  {queues}\nchosen:  {pick}  (correct: {truth})' },
+  'last.bet': { cs: 'brány:   {gates}\nvýplaty: {payouts}\nzvoleno: {pick}  (správně: {truth})', en: 'gates:   {gates}\npayouts: {payouts}\nchosen:  {pick}  (correct: {truth})' },
+  'last.cruise': { cs: 'stav:    {state}\nzvoleno: {pick}  (správně: {truth})\nvýpočet: {why}', en: 'state:   {state}\nchosen:  {pick}  (correct: {truth})\nwhy:     {why}' },
+  'last.timetable': { cs: 'zásilka: PSČ {zip}, služba {service}\ntrasy:   {routes}\nvýjimky: {exceptions}\nzvoleno: {pick}  (správně: {truth})\nmodel:   depa a služby dostává anglicky (alder, birch, …; standard, express, …)', en: 'parcel:     ZIP {zip}, service {service}\nroutes:     {routes}\nexceptions: {exceptions}\nchosen:     {pick}  (correct: {truth})\nmodel:      gets the depots and services in English (alder, birch, …; standard, express, …)' },
   // „Poslední rozhodnutí“, řádky společné všem scénářům: doba rozhodnutí (u hostovaného modelu za ní počet tokenů) a výsledek úlohy se schovaným pokynem
   'last.ms': { cs: '{ms} ms', en: '{ms} ms' },
   'last.tokens': { cs: ', vstupních tokenů: {n}', en: ', input tokens: {n}' },
@@ -520,11 +534,11 @@ const TEXTS = {
   'scenario.obstacles.tile.blind': { cs: 'polí ujetých během 1 rozhodnutí', en: 'cells driven during 1 decision' },
   'scenario.obstacles.tip.blind': { cs: 'Rychlost auta × průměrná doba rozhodnutí: o kolik polí auto popojede, než odpověď dorazí. Čím je číslo větší, tím starší je stav, podle kterého model rozhodl; řady jsou od sebe 4 pole. Jen v reálném čase a v žebříku.', en: 'Car speed × mean decision time: how many cells the car moves forward before the answer arrives. The larger the number, the older the state the model based its decision on; the rows are 4 cells apart. In Real time and Ladder modes only.' },
   // scénáře s řadami (e-maily, číselné duely): společné dlaždice Kvality; názvy „špatně“ a „nestihl“ jsou result.bad a result.late
-  'row.tip.bad': { cs: 'Řady, u kterých odpověď přišla včas, ale byla špatná — auto projelo jiným bodem nebo jinou branou. Ve výsledcích sloupec „chyby“. V benchmarku bez hry je „—“. U zákazů a výjimek auto projelo pruhem, kam vozidlo nesmí. U paměťové stopy auto projelo branou s jinou značkou, než se hledala. U závory auto projelo, kde mělo stát, stálo, kde mělo jet, nebo odpověď byla neplatná. U dvou kroků dopředu auto zvolilo jiný tah než ten, se kterým projede všechny 4 řady. U skrytého pravidla auto projelo jinou branou, než říká pravidlo.', en: 'Rows where the answer arrived in time but was wrong — the car passed through a different dot, a different gate (in memory trace, a gate with a sign other than the one to find) or, in bans and exceptions, a lane the vehicle may not enter; at the barrier, it went when it should have stopped, stopped when it should have gone, or the answer was invalid. In the results it is the "errors" column. In the benchmark without the game it is "—". For two steps ahead, the car made a move other than the one that gets it through all 4 rows. For the hidden rule, the car passed through a gate other than the one the rule asks for.' },
+  'row.tip.bad': { cs: 'Řady, u kterých odpověď přišla včas, ale byla špatná — auto projelo jiným bodem nebo jinou branou. Ve výsledcích sloupec „chyby“. V benchmarku bez hry je „—“. U zákazů a výjimek auto projelo pruhem, kam vozidlo nesmí. U paměťové stopy auto projelo branou s jinou značkou, než se hledala. U závory auto projelo, kde mělo stát, stálo, kde mělo jet, nebo odpověď byla neplatná. U dvou kroků dopředu auto zvolilo jiný tah než ten, se kterým projede všechny 4 řady. U skrytého pravidla auto projelo jinou branou, než říká pravidlo. U nejkratší fronty auto vjelo do pruhu, který nemá nejkratší frontu. U sázky na pruh auto projelo branou, která nemá nejvyšší výplatu. U tempomatu auto zvolilo jiný stupeň rychlosti, než dává tabulka po srážkách. U jízdního řádu auto projelo branou jiného depa, než kam zásilka patří.', en: 'Rows where the answer arrived in time but was wrong — the car passed through a different dot, a different gate (in memory trace, a gate with a sign other than the one to find) or, in bans and exceptions, a lane the vehicle may not enter; at the barrier, it went when it should have stopped, stopped when it should have gone, or the answer was invalid. In the results it is the "errors" column. In the benchmark without the game it is "—". For two steps ahead, the car made a move other than the one that gets it through all 4 rows. For the hidden rule, the car passed through a gate other than the one the rule asks for. For the shortest queue, the car joined a lane that does not have the shortest queue. For the bet on a lane, the car passed through a gate that does not have the highest payout. For the cruise control, the car picked a speed level other than the one the table gives after the reductions. For the timetable, the car passed through the gate of a depot other than the one the parcel belongs to.' },
   'row.tip.late': { cs: 'Řady, které minuly auto dřív, než k nim model stihl odpovědět. V reálném čase se model ptá na nejbližší řadu, kterou ještě může stihnout, a ostatní přeskočí; u modelu pomalejšího než rozestup řad je podíl zhruba 1 − interval ÷ latence. V režimu Po tazích nenastává.', en: 'Rows that passed the car before the model managed to answer them. In Real time and Ladder modes the page asks the model about the nearest row it can still answer in time and skips the others; for a model slower than the interval between rows, the share is roughly 1 − interval ÷ latency. This does not happen in Turn-based mode.' },
   'row.tile.acc': { cs: 'přesnost modelu', en: 'model accuracy' },
   'row.tip.acc': { cs: 'Podíl správných odpovědí ze všech odpovědí modelu, včetně těch, které přišly pozdě a auto už neřídily. Na rozdíl od první dlaždice nezávisí na rychlosti. Ve výsledcích sloupec „správně“.', en: 'The share of correct answers among all of the model\'s answers, including those that arrived late and no longer steered the car. Unlike the first tile, it does not depend on speed. In the results it is the "correct" column.' },
-  'row.tip.rate': { cs: 'Požadováno = rychlost auta ÷ 4 (řady jsou po 4 polích), tedy kolik řad za sekundu přijíždí; jen v reálném čase. Rozhodnuto = počet rozhodnutí ÷ doba běhu. Když je rozhodnuto méně než požadováno, model nestíhá a přibývá „nestihl“. U dvou kroků dopředu jsou bloky po 6 polích, požadováno = rychlost ÷ 6.', en: 'Required = car speed ÷ 4 (the rows are 4 cells apart), that is, how many rows arrive per second; in Real time and Ladder modes only. Decided = number of decisions ÷ run duration. When decided is lower than required, the model does not keep up and the "missed" count grows. For two steps ahead the blocks are 6 cells apart, required = speed ÷ 6.' },
+  'row.tip.rate': { cs: 'Požadováno = rychlost auta ÷ 4 (řady jsou po 4 polích), tedy kolik řad za sekundu přijíždí; jen v reálném čase. Rozhodnuto = počet rozhodnutí ÷ doba běhu. Když je rozhodnuto méně než požadováno, model nestíhá a přibývá „nestihl“. U dvou kroků dopředu jsou bloky po 6 polích, požadováno = rychlost ÷ 6. U nejkratší fronty jsou brány také po 6 polích, požadováno = rychlost ÷ 6. U jízdního řádu také, požadováno = rychlost ÷ 6.', en: 'Required = car speed ÷ 4 (the rows are 4 cells apart), that is, how many rows arrive per second; in Real time and Ladder modes only. Decided = number of decisions ÷ run duration. When decided is lower than required, the model does not keep up and the "missed" count grows. For two steps ahead the blocks are 6 cells apart, required = speed ÷ 6. For the shortest queue the gates are 6 cells apart too, required = speed ÷ 6. For the timetable too, required = speed ÷ 6.' },
   // scénář e-maily: karty fronty vedle silnice (přípony za názvem kategorie a za výsledkem řady), popis, tabulka záměn, dlaždice
   'card.inject': { cs: ' ⚠ s pokynem', en: ' ⚠ with the instruction' },
   'card.model': { cs: ' — model: {label}', en: ' — model: {label}' },
@@ -673,6 +687,125 @@ const TEXTS = {
   'legend.rule.rule': { cs: 'Skryté pravidlo říká, který znak platí. Po 3 správných pokusech v řadě se změní.', en: 'The hidden rule says which feature is right. After 3 correct picks in a row it changes.' },
   'legend.rule.out': { cs: 'Přeškrtnutá brána je vyloučená: staré pravidlo (po změně neplatí) nebo znak, který od poslední změny dostal ✗. Nepřeškrtnutá zbude jen jedna.', en: 'A crossed-out gate is ruled out: the old rule (no longer holds after a change) or a feature that got ✗ since the last change. Only one gate is left uncrossed.' },
   'legend.rule.log': { cs: 'Deník pod silnicí: znak dříve zvolené brány, ✓ správně, ✗ špatně; ? = teď volí model.', en: 'Log under the road: the feature of an earlier picked gate, ✓ correct, ✗ wrong; ? = the model is picking now.' },
+  // scénář nejkratší fronta (i vážená): popis, tabulka přesnosti podle rozdílu front s řádkem chyb (queue.gap, queue.errors, queue.errorsWeighted znak po znaku jako bench.queue.* v i18n.py), dlaždice
+  'scenario.queue.about': { cs: 'Nejkratší fronta: každá řada je mýtná brána a v každém pruhu před ní čeká fronta 1 až 12 vozidel. Model dostane seznam vozidel v každém pruhu a volí pruh s nejkratší frontou; nejkratší fronta je vždy jediná. Čím delší fronta, tím delší sloupec vozidel; budka brány je nahoře a konec fronty dole u auta. Po odpovědi modrý obrys ukáže zvolený pruh, auto do něj vjede a na konci fronty se řada vyhodnotí. Po průjezdu jsou nad budkami délky front, nejkratší pruh je zelený a štítek pod řadou říká, který pruh model zvolil a který byl nejkratší. Tabulka „Přesnost podle rozdílu front“ dělí výsledek podle toho, o kolik je nejkratší fronta kratší než druhá (1, 2–3, 4 a víc). Brány přijíždějí po 6 polích, pruhů je 2 až 8.', en: 'Shortest queue: every row is a toll gate, and in every lane a queue of 1 to 12 vehicles waits in front of it. The model gets the list of vehicles in every lane and picks the lane with the shortest queue; the shortest queue is always unique. The longer the queue, the longer the column of vehicles; the gate booth is at the top and the end of the queue at the bottom, next to the car. After the answer a blue outline marks the chosen lane, the car moves into it, and the row is scored at the end of the queue. After the car passes, the lengths of the queues are above the booths, the shortest lane is green, and the label under the row says which lane the model picked and which one was the shortest. The "Accuracy by queue difference" table splits the result by how much shorter the shortest queue is than the next one (1, 2–3, 4 or more). The gates arrive every 6 cells, there are 2 to 8 lanes.' },
+  'scenario.queueWeighted.about': { cs: 'Nejkratší fronta (vážená): jako nejkratší fronta, ale nákladní auto, autobus a traktor se počítají za 3 vozidla; model to má v zadání. Na silnici jsou tato vozidla oranžová a 3× vyšší, takže délka sloupce je vážená délka fronty. V polovině úloh má nejméně vozidel jiný pruh, než je nejkratší vážená fronta: kdo počítá bez vah, tam chybuje, a štítek pod řadou to řekne. Tabulka „Přesnost podle rozdílu front“ dělí výsledek podle rozdílu vážených délek (1, 2–3, 4 a víc). Brány přijíždějí po 6 polích, pruhů je 2 až 8.', en: 'Shortest queue (weighted): like the shortest queue, but a truck, a bus and a tractor count as 3 vehicles, and the prompt says so. On the road these vehicles are orange and 3 times as tall, so the length of a column is the weighted length of the queue. In half of the tasks the lane with the fewest vehicles is not the shortest weighted queue: counting without weights fails there, and the label under the row says so. The "Accuracy by queue difference" table splits the result by the difference of the weighted lengths (1, 2–3, 4 or more). The gates arrive every 6 cells, there are 2 to 8 lanes.' },
+  'scenario.queue.extraTitle': { cs: 'Přesnost podle rozdílu front', en: 'Accuracy by queue difference' },
+  'scenario.queue.extraTip': { cs: 'Přesnost modelu podle rozdílu nejkratší a druhé nejkratší fronty jako v bench.py --queue: rozdíl 1, rozdíl 2–3, rozdíl 4+. Pod tabulkou rozbor chybných odpovědí jako v bench.py: nejkratší text (pruh, jehož seznam vozidel je jako text nejkratší), u vážené fronty i nejkratší podle počtu (bez vah), jiné, neplatné. Při rozdílu 1 a 2–3 generátor hlídá, aby nejkratší text trefil správný pruh jen asi v třetině úloh (při 2 pruzích v polovině); při rozdílu 4+ to nejde. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy by the difference between the shortest and the second shortest queue as in bench.py --queue: difference 1, difference 2–3, difference 4+. Below the table are the wrong answers as in bench.py: the shortest text (the lane whose list of vehicles is the shortest as text), for the weighted queue also the shortest by count (unweighted), other, invalid. At differences 1 and 2–3 the generator keeps the shortest text right in only about a third of the tasks (in half of them with 2 lanes); at 4+ that is not possible. All answers count, including the late ones.' },
+  'scenario.queue.col.gap': { cs: 'rozdíl front', en: 'queue difference' },
+  'scenario.queue.col.ratio': { cs: 'správně / celkem', en: 'correct / total' },
+  'scenario.queue.tile.match': { cs: 'pruh s nejkratší frontou', en: 'lane with the shortest queue' },
+  'scenario.queue.tile.rate': { cs: 'bran za sekundu: požadováno / rozhodnuto', en: 'gates per second: required / decided' },
+  'scenario.queue.tip.match': { cs: 'Kolika řadami auto projelo pruhem s nejkratší frontou, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows the car passed in the lane with the shortest queue, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
+  'scenario.queueWeighted.tile.count': { cs: 'nejméně vozidel bez vah', en: 'fewest vehicles, unweighted' },
+  'scenario.queueWeighted.tip.count': { cs: 'Kolik chybných odpovědí byl pruh s nejméně vozidly podle počtu bez vah, ze všech chybných a neplatných odpovědí (i pozdních). Stejné číslo je pod tabulkou „Přesnost podle rozdílu front“.', en: 'How many of the wrong answers were the lane with the fewest vehicles by count, without weights, out of all wrong and invalid answers (late ones included). The same number is below the "Accuracy by queue difference" table.' },
+  'queue.label.ok': { cs: '✓ pruh {n}: nejkratší fronta ({len})', en: '✓ lane {n}: the shortest queue ({len})' },
+  'queue.label.bad': { cs: '✗ pruh {pick} ({pickLen}), nejkratší je pruh {n} ({len})', en: '✗ lane {pick} ({pickLen}), the shortest is lane {n} ({len})' },
+  'queue.label.count': { cs: '✗ pruh {pick}: nejméně vozidel, ale váha {pickLen}; nejkratší pruh {n} ({len})', en: '✗ lane {pick}: the fewest vehicles, but weight {pickLen}; the shortest is lane {n} ({len})' },
+  'legend.queue.queue': { cs: 'fronta = sloupec vozidel v pruhu; budka mýtné brány nahoře, konec fronty dole u auta', en: 'queue = a column of vehicles in a lane; the toll booth at the top, the end of the queue at the bottom next to the car' },
+  'legend.queue.pick': { cs: 'model volí pruh s nejkratší frontou; modrý obrys = jeho volba', en: 'the model picks the lane with the shortest queue; blue outline = its pick' },
+  'legend.queue.out': { cs: 'po průjezdu: nad budkou délka fronty, nejkratší pruh zeleně', en: 'after the car passes: the length of the queue above the booth, the shortest lane in green' },
+  'legend.queue.heavy': { cs: 'oranžové = nákladní auto, autobus, traktor: počítá se za 3 vozidla, proto je 3× vyšší', en: 'orange = a truck, a bus, a tractor: counts as 3 vehicles, so it is 3 times as tall' },
+  'queue.gap': { cs: 'rozdíl {d}', en: 'difference {d}' },
+  'queue.errors': { cs: 'chyby: nejkratší text {text}, jiné {other}, neplatné {invalid}', en: 'errors: shortest text {text}, other {other}, invalid {invalid}' },
+  'queue.errorsWeighted': { cs: 'chyby: nejkratší podle počtu (bez vah) {count}, nejkratší text {text}, jiné {other}, neplatné {invalid}', en: 'errors: shortest by count (unweighted) {count}, shortest text {text}, other {other}, invalid {invalid}' },
+  // scénář sázka na pruh: popis, tabulka přesnosti podle úrovně s řádkem pod ní (bet.level.* a bet.line znak po znaku jako bench.bet.* v i18n.py), dlaždice, legenda
+  'scenario.bet.about': { cs: 'Sázka na pruh: každá řada má v každém pruhu bránu, která vyplatí svou odměnu s danou šancí v procentech, jinak nic. Model dostane odměnu a šanci každé brány a volí bránu s nejvyšší očekávanou výplatou, tedy odměna × šance; ta je vždy jediná a aspoň o 5 % vyšší než u ostatních bran. Na bráně je nahoře odměna a dole šance. Po průjezdu se pod branami ukáže výplata a brána s nejvyšší výplatou zezelená. Úlohy jsou ve třech úrovních: stejná šance u všech bran (stačí najít nejvyšší odměnu), šance 50 nebo 100 % (brána se 100 % je vždy špatně) a obecná šance 10–95 %, kde nejvyšší odměna i nejvyšší šance trefí správnou bránu jen asi v třetině úloh. Tabulka „Přesnost podle úrovně“ dělí výsledek podle úrovně, pod ní je ztráta výplaty (regret) a počet voleb nejvyšší odměny a nejvyšší šance. Bran je 3 až 8.', en: 'Bet on a lane: every row has a gate in every lane that pays out its reward with the given chance in percent and nothing otherwise. The model gets the reward and the chance of every gate and picks the gate with the highest expected payout, that is, the reward times the chance; it is always unique and at least 5% higher than at any other gate. The gate shows the reward at the top and the chance at the bottom. After the car passes, the payouts appear under the gates and the gate with the highest payout turns green. The tasks come in three levels: the same chance at every gate (finding the highest reward is enough), chances of 50 or 100% (the gate with 100% is always wrong) and a general chance from 10 to 95%, where the highest reward and the highest chance each hit the right gate in only about a third of the tasks. The "Accuracy by level" table splits the result by level; below it are the payout lost (regret) and the number of picks of the highest reward and the highest chance. There are 3 to 8 gates.' },
+  'scenario.bet.extraTitle': { cs: 'Přesnost podle úrovně', en: 'Accuracy by level' },
+  'scenario.bet.extraTip': { cs: 'Přesnost modelu podle úrovně jako v bench.py --bet: stejná šance = všechny brány mají stejnou šanci, 50 nebo 100 % = šance jen 50 nebo 100 % a brána se 100 % je špatně, obecná = šance 10–95 %. Pod tabulkou regret (průměrná ztráta výplaty proti nejlepší bráně, neplatná odpověď = celá výplata) a chyby jako v bench.py: zvolena brána s nejvyšší odměnou, s nejvyšší šancí, jiná, neplatné. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy by level as in bench.py --bet: same chance = every gate has the same chance, 50 or 100% = chances of 50 or 100% only and the gate with 100% is wrong, general = chances from 10 to 95%. Below the table are the regret (the mean loss of payout against the best gate; an invalid answer loses the whole payout) and the errors as in bench.py: the gate with the highest reward, with the highest chance, other, invalid. All answers count, including the late ones.' },
+  'scenario.bet.col.level': { cs: 'úroveň', en: 'level' },
+  'scenario.bet.col.ratio': { cs: 'správně / celkem', en: 'correct / total' },
+  'scenario.bet.tile.match': { cs: 'brána s nejvyšší výplatou', en: 'gate with the highest payout' },
+  'scenario.bet.tile.regret': { cs: 'ztráta výplaty (regret)', en: 'payout lost (regret)' },
+  'scenario.bet.tile.rate': { cs: 'řad za sekundu: požadováno / rozhodnuto', en: 'rows per second: required / decided' },
+  'scenario.bet.tip.match': { cs: 'Kolika řadami auto projelo branou s nejvyšší výplatou, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows the car passed through the gate with the highest payout, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
+  'scenario.bet.tip.regret': { cs: 'Průměrná ztráta výplaty proti nejlepší bráně: (výplata nejlepší − výplata zvolené) ÷ výplata nejlepší, přes všechny odpovědi i pozdní; neplatná odpověď ztrácí celou výplatu. 0 % = model volí vždy nejlepší bránu. Stejné číslo je pod tabulkou „Přesnost podle úrovně“.', en: 'The mean loss of payout against the best gate: (payout of the best − payout of the chosen) ÷ payout of the best, over all answers including the late ones; an invalid answer loses the whole payout. 0% = the model always picks the best gate. The same number is below the "Accuracy by level" table.' },
+  'bet.level.same': { cs: 'stejná šance', en: 'same chance' },
+  'bet.level.round': { cs: '50 nebo 100 %', en: '50 or 100%' },
+  'bet.level.general': { cs: 'obecná', en: 'general' },
+  'bet.line': { cs: 'regret {regret}; chyby: nejvyšší odměna {reward}, nejvyšší šance {chance}, jiné {other}, neplatné {invalid}', en: 'regret {regret}; errors: highest reward {reward}, highest chance {chance}, other {other}, invalid {invalid}' },
+  'bet.label.ok': { cs: '✓ brána {n}: nejvyšší výplata {ev}', en: '✓ gate {n}: the highest payout {ev}' },
+  'bet.label.reward': { cs: '✗ návnada nejvyšší odměna: brána {pick} ({pickEv}), nejvyšší výplata brána {n} ({ev})', en: '✗ highest-reward decoy: gate {pick} ({pickEv}), the highest payout is gate {n} ({ev})' },
+  'bet.label.chance': { cs: '✗ návnada nejvyšší šance: brána {pick} ({pickEv}), nejvyšší výplata brána {n} ({ev})', en: '✗ highest-chance decoy: gate {pick} ({pickEv}), the highest payout is gate {n} ({ev})' },
+  'bet.label.bad': { cs: '✗ brána {pick} ({pickEv}), nejvyšší výplata brána {n} ({ev})', en: '✗ gate {pick} ({pickEv}), the highest payout is gate {n} ({ev})' },
+  'legend.bet.gate': { cs: 'Brána: nahoře odměna (mince), dole šance, že ji vyplatí (výseč a procenta).', en: 'A gate: the reward at the top (coin), the chance that it pays out at the bottom (pie and percent).' },
+  'legend.bet.rule': { cs: 'Výplata = odměna × šance. Správná je brána s nejvyšší výplatou, ne nutně s nejvyšší odměnou nebo šancí.', en: 'Payout = reward × chance. The right gate has the highest payout, not necessarily the highest reward or chance.' },
+  'legend.bet.out': { cs: 'Po průjezdu: pod branou výplata, nejvyšší zeleně; modrý obrys = volba modelu.', en: "After the car passes: the payout under every gate, the highest in green; a blue outline = the model's pick." },
+  // scénář tempomat: popis, tabulka přesnosti podle podmínek s řádky pod ní (cruise.class.*, cruise.line a cruise.errors znak po znaku jako bench.cruise.* v i18n.py), dlaždice
+  'scenario.cruise.about': { cs: 'Tempomat: každá řada má nad silnicí ceduli se vzdáleností překážky v metrech, povrchem vozovky a mlhou. Model volí stupeň rychlosti tempomatu 1–7 podle tabulky v zadání: vzdálenost dá výchozí stupeň, mokro ubere 1 stupeň a náledí 2, slabá mlha 1 a hustá mlha 2. Pruh je stupeň: pruh 1 vlevo je nejpomalejší, pruh 7 vpravo nejrychlejší, a auto jede do pruhu zvoleného stupně. Modrý obrys ukáže volbu modelu; po průjezdu se správný stupeň zbarví zeleně a štítek pod řadou ukáže výpočet. Tabulka „Přesnost podle podmínek“ dělí úlohy podle toho, které podmínky platí (jen tabulka, povrch, mlha, obojí); pod ní je přesnost u hranice pásma a uvnitř něj, odchylka ve stupních a druhy chyb jako v bench.py --cruise.', en: 'Cruise control: above the road every row has a board with the distance to the obstacle in meters, the road surface and the fog. The model picks a cruise control speed level 1–7 by the table in the prompt: the distance gives the starting level, a wet road takes 1 level off and an icy road 2, light fog 1 and dense fog 2. A lane is a level: lane 1 on the left is the slowest, lane 7 on the right the fastest, and the car drives into the lane of the level it picked. A blue outline shows the pick of the model; after the car passes, the right level turns green and the label under the row shows the working. The "Accuracy by conditions" table splits the tasks by the conditions that apply (table only, road, fog, both); below it are the accuracy near a band boundary and inside a band, the deviation in levels and the error kinds as in bench.py --cruise.' },
+  'scenario.cruise.extraTitle': { cs: 'Přesnost podle podmínek', en: 'Accuracy by conditions' },
+  'scenario.cruise.extraTip': { cs: 'Přesnost modelu podle podmínek jako v bench.py --cruise: jen tabulka = sucho a bez mlhy, stačí přečíst tabulku; povrch = jen mokro nebo náledí; mlha = jen slabá nebo hustá mlha; obojí = povrch i mlha. Pod tabulkou: přesnost u hranice pásma (nejvýš 3 m od ní) a uvnitř pásma, podíl odpovědí nejvýš o 1 stupeň vedle, MAE (průměrná odchylka ve stupních, neplatná odpověď = 6), počet odpovědí příliš rychle a příliš pomalu, a druhy chyb: jen vzdálenost (srážky vynechané), vynechaná podmínka, každá podmínka za 1 stupeň, sousední pásmo, jiné, neplatné. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy by conditions as in bench.py --cruise: table only = a dry road without fog, reading the table is enough; road = only a wet or icy road; fog = only light or dense fog; both = road and fog. Below the table: the accuracy near a band boundary (at most 3 m from it) and inside a band, the share of answers at most 1 level off, MAE (the mean deviation in levels, an invalid answer = 6), the number of answers that are too fast and too slow, and the error kinds: distance only (reductions left out), a condition left out, each condition as 1 level, the neighboring band, other, invalid. All answers count, including the late ones.' },
+  'scenario.cruise.col.class': { cs: 'podmínky', en: 'conditions' },
+  'scenario.cruise.col.ratio': { cs: 'správně / celkem', en: 'correct / total' },
+  'scenario.cruise.tile.match': { cs: 'správný stupeň', en: 'correct level' },
+  'scenario.cruise.tile.mae': { cs: 'MAE (stupně)', en: 'MAE (levels)' },
+  'scenario.cruise.tile.rate': { cs: 'řad za sekundu: požadováno / rozhodnuto', en: 'rows per second: required / decided' },
+  'scenario.cruise.tip.match': { cs: 'Kolika řadami auto projelo ve správném stupni, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows the car passed at the right level, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
+  'scenario.cruise.tip.mae': { cs: 'MAE: průměrná odchylka zvoleného stupně od správného ve stupních, ze všech odpovědí včetně pozdních; neplatná odpověď počítá jako největší možná odchylka 6. Stejné číslo je pod tabulkou „Přesnost podle podmínek“.', en: 'MAE: the mean deviation of the picked level from the right one, in levels, over all answers including the late ones; an invalid answer counts as the largest possible deviation, 6. The same number is below the "Accuracy by conditions" table.' },
+  'cruise.class.table': { cs: 'jen tabulka', en: 'table only' },
+  'cruise.class.road': { cs: 'povrch', en: 'road' },
+  'cruise.class.fog': { cs: 'mlha', en: 'fog' },
+  'cruise.class.both': { cs: 'obojí', en: 'both' },
+  'cruise.line': { cs: 'u hranice {edge}, uvnitř pásma {middle}; ±1 stupeň {within}, MAE {mae}, příliš rychle {fast}, příliš pomalu {slow}', en: 'near a boundary {edge}, inside a band {middle}; ±1 level {within}, MAE {mae}, too fast {fast}, too slow {slow}' },
+  'cruise.errors': { cs: 'chyby: jen vzdálenost {distance}, vynechaná podmínka {omitted}, každá podmínka za 1 stupeň {flat}, sousední pásmo {neighbor}, jiné {other}, neplatné {invalid}', en: 'errors: distance only {distance}, condition left out {omitted}, each condition as 1 level {flat}, neighboring band {neighbor}, other {other}, invalid {invalid}' },
+  'cruise.level': { cs: 'stupeň {n}', en: 'level {n}' },
+  'cruise.board': { cs: '⚠ překážka za {m} m', en: '⚠ obstacle {m} m ahead' },
+  'cruise.road.dry': { cs: 'sucho', en: 'dry road' },
+  'cruise.road.wet': { cs: 'mokro', en: 'wet road' },
+  'cruise.road.icy': { cs: 'náledí', en: 'icy road' },
+  'cruise.fog.none': { cs: 'bez mlhy', en: 'no fog' },
+  'cruise.fog.light': { cs: 'slabá mlha', en: 'light fog' },
+  'cruise.fog.dense': { cs: 'hustá mlha', en: 'dense fog' },
+  'cruise.why.band': { cs: '{m} m → stupeň {level}', en: '{m} m → level {level}' },
+  'cruise.why.wet': { cs: 'mokro −1', en: 'wet road −1' },
+  'cruise.why.icy': { cs: 'náledí −2', en: 'icy road −2' },
+  'cruise.why.light': { cs: 'slabá mlha −1', en: 'light fog −1' },
+  'cruise.why.dense': { cs: 'hustá mlha −2', en: 'dense fog −2' },
+  'cruise.label.ok': { cs: '✓ stupeň {level}: {why}', en: '✓ level {level}: {why}' },
+  'cruise.label.fast': { cs: '✗ příliš rychle: stupeň {pick}, správně {level} ({why})', en: '✗ too fast: level {pick}, correct {level} ({why})' },
+  'cruise.label.slow': { cs: '✗ příliš pomalu: stupeň {pick}, správně {level} ({why})', en: '✗ too slow: level {pick}, correct {level} ({why})' },
+  'legend.cruise.lanes': { cs: 'Pruh = stupeň rychlosti tempomatu: 1 vlevo nejpomaleji, 7 vpravo nejrychleji; modrý obrys = volba modelu.', en: 'A lane is a cruise control speed level: 1 on the left is the slowest, 7 on the right the fastest; a blue outline = the pick of the model.' },
+  'legend.cruise.table': { cs: 'Výchozí stupeň podle vzdálenosti překážky: pod 20 m 1, 20–39 m 2, 40–59 m 3, 60–99 m 4, 100–149 m 5, 150–219 m 6, od 220 m 7.', en: 'Starting level by the distance to the obstacle: under 20 m 1, 20–39 m 2, 40–59 m 3, 60–99 m 4, 100–149 m 5, 150–219 m 6, from 220 m 7.' },
+  'legend.cruise.penalty': { cs: 'Pak srážky: mokro −1, náledí −2, slabá mlha −1, hustá mlha −2.', en: 'Then the reductions: wet road −1, icy road −2, light fog −1, dense fog −2.' },
+  'legend.cruise.out': { cs: 'Po průjezdu: správný stupeň zeleně, pod řadou výpočet.', en: 'After the car passes: the right level in green, the working below the row.' },
+  // scénář jízdní řád: popis, tabulka přesnosti podle velikosti tabulky s řádky pod ní (timetable.size, timetable.line a timetable.errors znak po znaku jako bench.timetable.* v i18n.py), dlaždice, jména dep a služeb
+  'scenario.timetable.about': { cs: 'Jízdní řád: každá řada je zásilka a 6 bran, jedna na každé depo (Olše, Bříza, Cedr, Javor, Dub, Borovice). Nad branami stojí cedule: zásilka s PSČ a službou, výjimka a tabulka tras, kde každý řádek posílá rozsah PSČ (oba kraje včetně) do jednoho depa. Výjimka pro službu zásilky má přednost před tabulkou, výjimka pro jinou službu neplatí. Model dostane zásilku, trasy a výjimky jako stav a volí depo; auto jede k jeho bráně a modrý obrys ukazuje jeho volbu. Po průjezdu je správná brána zeleně orámovaná a na ceduli zelený rámeček u toho, co rozhodlo (řádek trasy nebo výjimka); neplatná výjimka je přeškrtnutá. Pod řadou je štítek s výsledkem a důvodem. Tabulka „Přesnost podle velikosti tabulky“ dělí výsledek podle počtu řádků (3–5, 6–8, 9–12), pod ní je přesnost podle polohy PSČ a výjimky a řádek chyb jako v bench.py --timetable. Řady přijíždějí po 6 polích.', en: 'Timetable: every row is a parcel and 6 gates, one for every depot (Alder, Birch, Cedar, Maple, Oak, Pine). A board stands above the gates: the parcel with its ZIP code and service, the exception and a table of routes, where every row sends a range of ZIP codes (both ends included) to one depot. An exception for the service of the parcel wins over the table; an exception for another service does not apply. The model gets the parcel, the routes and the exceptions as the state and picks a depot; the car drives to its gate and a blue outline shows the pick. After the car passes, the right gate gets a green frame and the board a green frame at what decided (the route row or the exception); an exception that does not apply is struck through. Under the row a label gives the result and the reason. The "Accuracy by table size" table splits the result by the number of rows (3–5, 6–8, 9–12); below it are the accuracy by the position of the ZIP code and by the exception, and the error line as in bench.py --timetable. Rows arrive every 6 cells.' },
+  'scenario.timetable.extraTitle': { cs: 'Přesnost podle velikosti tabulky', en: 'Accuracy by table size' },
+  'scenario.timetable.extraTip': { cs: 'Přesnost modelu podle velikosti tabulky jako v bench.py --timetable: 3–5, 6–8 a 9–12 řádků. Pod tabulkou přesnost podle polohy PSČ (uvnitř řádku, 1–9 od hranice, přesně na hranici; jen úlohy bez platné výjimky) a podle výjimky (žádná, platí, neplatí) a řádek chyb: sousední řádek, výjimka přehlédnutá, výjimka navíc, jiné, neplatné. U hranice je správně vždy jeden ze dvou sousedních řádků, náhoda je tam 1/2, ne 1/6. Počítají se všechny odpovědi, i pozdní.', en: 'Model accuracy by table size as in bench.py --timetable: 3–5, 6–8 and 9–12 rows. Below the table are the accuracy by the position of the ZIP code (inside a row, 1–9 from a boundary, exactly on a boundary; only tasks without an exception that applies) and by the exception (none, applies, does not apply), and the error line: neighboring row, exception missed, exception wrongly applied, other, invalid. Near a boundary the answer is always one of two neighboring rows, so chance there is 1/2, not 1/6. All answers count, including the late ones.' },
+  'scenario.timetable.col.size': { cs: 'velikost tabulky', en: 'table size' },
+  'scenario.timetable.col.ratio': { cs: 'správně / celkem', en: 'correct / total' },
+  'scenario.timetable.tile.match': { cs: 'správné depo', en: 'right depot' },
+  'scenario.timetable.tile.applies': { cs: 'výjimka platí', en: 'exception applies' },
+  'scenario.timetable.tile.rate': { cs: 'řad za sekundu: požadováno / rozhodnuto', en: 'rows per second: required / decided' },
+  'scenario.timetable.tip.match': { cs: 'Kolika řadami auto projelo branou správného depa, ze všech projetých řad. Řada, u které odpověď nepřišla včas, se počítá jako nezvládnutá. Čistou kvalitu modelu ukazuje dlaždice „přesnost modelu“.', en: 'The number of rows the car passed through the gate of the right depot, out of all rows passed. A row where the answer did not arrive in time counts as failed. The "model accuracy" tile shows the pure quality of the model.' },
+  'scenario.timetable.tip.applies': { cs: 'Přesnost na úlohách, kde výjimka platí (služba zásilky má výjimku): správně / celkem, i pozdní odpovědi. Model, který výjimky nečte, tu má 0. Stejné číslo je pod tabulkou „Přesnost podle velikosti tabulky“.', en: 'Accuracy on the tasks where the exception applies (the service of the parcel has an exception): correct / total, late answers included. A model that does not read the exceptions gets 0 here. The same number is below the "Accuracy by table size" table.' },
+  'timetable.size': { cs: '{d} řádků', en: '{d} rows' },
+  'timetable.line': { cs: 'poloha: uvnitř {inner}, u hranice {near}, na hranici {bound}; výjimka: žádná {none}, platí {applies}, neplatí {decoy}', en: 'position: inside {inner}, near a boundary {near}, on a boundary {bound}; exception: none {none}, applies {applies}, does not apply {decoy}' },
+  'timetable.errors': { cs: 'chyby: sousední řádek {neighbor}, výjimka přehlédnutá {missed}, výjimka navíc {misapplied}, jiné {other}, neplatné {invalid}', en: 'errors: neighboring row {neighbor}, exception missed {missed}, exception wrongly applied {misapplied}, other {other}, invalid {invalid}' },
+  'timetable.depot.alder': { cs: 'Olše', en: 'Alder' },
+  'timetable.depot.birch': { cs: 'Bříza', en: 'Birch' },
+  'timetable.depot.cedar': { cs: 'Cedr', en: 'Cedar' },
+  'timetable.depot.maple': { cs: 'Javor', en: 'Maple' },
+  'timetable.depot.oak': { cs: 'Dub', en: 'Oak' },
+  'timetable.depot.pine': { cs: 'Borovice', en: 'Pine' },
+  'timetable.service.standard': { cs: 'standardní', en: 'standard' },
+  'timetable.service.express': { cs: 'expresní', en: 'express' },
+  'timetable.service.economy': { cs: 'úsporná', en: 'economy' },
+  'timetable.service.cooled': { cs: 'chlazená', en: 'cooled' },
+  'timetable.none': { cs: 'žádné', en: 'none' },
+  'timetable.parcel': { cs: '📦 PSČ {zip} · {service}', en: '📦 ZIP {zip} · {service}' },
+  'timetable.exception': { cs: 'výjimka: {service} → {depot}', en: 'exception: {service} → {depot}' },
+  'timetable.noException': { cs: 'výjimky: žádné', en: 'exceptions: none' },
+  'timetable.label.route': { cs: '✓ {depot}: PSČ v řádku {from}–{to}', en: '✓ {depot}: ZIP in the row {from}–{to}' },
+  'timetable.label.exception': { cs: '✓ {depot}: platí výjimka {service} → {depot}', en: '✓ {depot}: the exception {service} → {depot} applies' },
+  'timetable.label.missed': { cs: '✗ výjimka přehlédnutá: zvolil {pick}, platí výjimka {service} → {depot}', en: '✗ exception missed: picked {pick}, the exception {service} → {depot} applies' },
+  'timetable.label.misapplied': { cs: '✗ výjimka navíc: zvolil {pick}, výjimka je jen pro službu {service}; správně {depot}', en: '✗ exception wrongly applied: picked {pick}, the exception is only for the service {service}; right: {depot}' },
+  'timetable.label.neighbor': { cs: '✗ sousední řádek: zvolil {pick}, PSČ {zip} patří do {from}–{to} → {depot}', en: '✗ neighboring row: picked {pick}, ZIP {zip} belongs to {from}–{to} → {depot}' },
+  'timetable.label.bad': { cs: '✗ zvolil {pick}, správně {depot}', en: '✗ picked {pick}, right: {depot}' },
+  'legend.timetable.board': { cs: 'Cedule nad branami: 📦 zásilka (PSČ a služba), výjimka a trasy: rozsah PSČ → depo, oba kraje včetně.', en: 'Board above the gates: 📦 the parcel (ZIP code and service), the exception and the routes: ZIP range → depot, both ends included.' },
+  'legend.timetable.exception': { cs: 'Výjimka pro službu zásilky má přednost před tabulkou; výjimka pro jinou službu neplatí.', en: "An exception for the parcel's service wins over the table; an exception for another service does not apply." },
+  'legend.timetable.gates': { cs: 'Brány jsou depa; tečka u trasy má barvu depa. Modrý obrys = volba modelu.', en: 'The gates are the depots; the dot at a route has the color of its depot. Blue outline = the pick of the model.' },
+  'legend.timetable.out': { cs: 'Po průjezdu: zelený rámeček u správné brány a u toho, co rozhodlo (řádek trasy nebo výjimka); neplatná výjimka přeškrtnutá.', en: 'After the car passes: a green frame at the right gate and at what decided (the route row or the exception); an exception that does not apply is struck through.' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -1022,14 +1155,19 @@ const ALT = {                                              // jinak formulované
   move_blocked: 'The road has {lanes} lanes, lane 1 on the left and lane {lanes} on the right; car_lane is the lane the car is in. blocked_lanes_ahead holds the coming rows from the nearest one; each row gives the numbers of the lanes blocked in it. Ahead of every row the car moves one lane to the left, keeps its lane or moves one lane to the right, and then drives into the row; it must stay on the road. Pick the move for the nearest row after which the car can get through the largest number of rows without driving into a blocked lane.',
   gate_labeled: 'A hidden rule picks the right gate: the one that shares a given feature (color, shape or count) with the sample card. Each gate says which feature it shares with the sample. After every three correct picks in a row the rule switches to a different feature. log holds the earlier picks from the oldest: the feature the picked gate shared with the sample, and whether it was correct. Find the rule in force now and pick the gate that shares that feature with the sample.',
   go: "A car has reached an intersection. Decide whether it may cross right now. Apply the rules in this order and stop at the first one that applies: 1. Follow a police officer's signal above all else. 2. Yield to any emergency vehicle that has its siren on. 3. Do not enter a crossing while a pedestrian is on it. 4. Otherwise follow the traffic light: go on green, stop on yellow or red. 5. With the light off, follow the sign: go on a priority road, stop at give way or a stop sign.",
+  lane: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. Pick the lane whose queue is the shortest.',
+  lane_weighted: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.',
+  bet: 'Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.',
+  speed: 'The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.',
+  depot: "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
 };
-const ALT_LANES = /\ba (\d+)-lane road\b/;                  // zadání move_blocked nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
+const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
   const key = Object.keys(q)[0];
   if (v === 1) q[key].criteria = Object.fromEntries(Object.entries(q[key].criteria).reverse());
   if (v === 2) {
     let alt = ALT[key];
-    if (alt.includes('{lanes}')) alt = alt.replaceAll('{lanes}', ALT_LANES.exec(q[key].instructions)[1]);     // dva kroky dopředu: počet pruhů z původního zadání
+    if (alt.includes('{lanes}')) { const m = ALT_LANES.exec(q[key].instructions); alt = alt.replaceAll('{lanes}', m[1] ?? m[2]); }     // dva kroky dopředu a fronta: číslo nese ta větev výrazu, která se chytila
     q[key].instructions = alt + (key === 'category' ? ' ' + q[key].instructions : '');   // pravidla sady e-mailů zůstávají
   }
   return q;
@@ -2270,6 +2408,565 @@ const rule = {
   },
 };
 
+// ---------- scénář: nejkratší fronta ----------
+// Každá řada je mýtná brána s frontou vozidel v každém pruhu (queueRow ve sdíleném bloku); model volí pruh s nejkratší frontou.
+// Rozhodnutí = index pruhu, −1 neplatná odpověď. r.y je konec front u auta; fronty a budka brány jsou nad ním do QUEUE_SPAN polí.
+// Vážená fronta (queueWeighted) je tentýž objekt s weighted: true; metody čtou jen this.weighted.
+const QUEUE_GAP = 6, QUEUE_SPAN = 4.6;                     // rozestup řad a výška fronty s budkou v polích (fronta má až 12 vozidel)
+const QUEUE_GAP_NAME = { gap1: '1', 'gap2-3': '2–3', 'gap4+': '4+' };      // {d} v queue.gap, jako queue_note v bench.py
+const QUEUE_BOOTH = 0.6, QUEUE_UNIT_MAX = 16, QUEUE_LABEL = 1.3;      // výška budky v polích, nejvyšší jednotka fronty v px, do kdy (r.y nad −QUEUE_LABEL) je pod řadou štítek
+const QUEUE_GLYPH = { car: '🚗', van: '🚐', bus: '🚌', truck: '🚚', motorbike: '🏍', tractor: '🚜', minibus: '🚐', pickup: '🛻' };      // emoji potřebují barevné písmo jako vozidla u zákazů
+
+function queueLayout(queues, weighted, height) {            // sloupce vozidel v px od konce fronty nahoru; délka sloupce = (vážená) délka fronty × jednotka
+  const unit = Math.min(QUEUE_UNIT_MAX, height / Math.max(...queues.map(q => queueLength(q, weighted))));
+  return { unit, lanes: queues.map(q => {
+    let top = unit * queueLength(q, weighted);
+    return q.map(vehicle => {
+      const w = weighted ? (QUEUE_WEIGHTS[vehicle] ?? 1) : 1, y1 = top;
+      top -= unit * w;
+      return { vehicle, heavy: weighted && w > 1, y0: Math.max(0, top), y1 };
+    });
+  }) };
+}
+function queueLabel(r, weighted) {                          // slovy, co se stalo; počet pruhů z r.queues, ne z LANES
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const len = i => queueLength(r.queues[i], weighted), n = r.truth + 1;
+  if (r.result === 'ok') return { text: t('queue.label.ok', { n, len: len(r.truth) }), color: RESULT.ok.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.queues.length)) return { text: t('label.invalid'), color: RESULT.late.color };
+  return { text: t(weighted && r.chosen === r.count ? 'queue.label.count' : 'queue.label.bad', { pick: r.chosen + 1, pickLen: len(r.chosen), n, len: len(r.truth) }), color: RESULT.bad.color };
+}
+function drawQueue(r, y, weighted) {                        // sloupce vozidel, podklad, emoji a budky mýtné brány; r.y je konec front u auta
+  const lay = queueLayout(r.queues, weighted, (QUEUE_SPAN - QUEUE_BOOTH) * CELL), colH = (QUEUE_SPAN - QUEUE_BOOTH) * CELL, bh = QUEUE_BOOTH * CELL;
+  const hw = LW * 0.4;
+  lay.lanes.forEach((chips, lane) => {
+    const x = (lane + 0.5) * LW;
+    ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#2b333c';
+    ctx.fillRect(x - hw, y - colH, 2 * hw, colH);
+    for (const c of chips) {
+      ctx.fillStyle = c.heavy ? '#e69f00' : '#8b9aa8';
+      ctx.fillRect(x - hw + 1, y - c.y1 + 1, 2 * hw - 2, c.y1 - c.y0 - 1);
+      if (c.y1 - c.y0 >= 13) {
+        ctx.font = `${Math.round(Math.min(c.y1 - c.y0 - 2, 2 * hw - 4, 18))}px "Segoe UI Emoji", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#0b1016'; ctx.fillText(QUEUE_GLYPH[c.vehicle], x, y - (c.y0 + c.y1) / 2 + 1);
+      }
+    }
+    ctx.fillStyle = '#161d25'; ctx.fillRect(x - hw, y - colH - bh, 2 * hw, bh);            // budka mýtné brány a pod ní břevno
+    ctx.fillStyle = '#d29922'; ctx.fillRect(x - hw, y - colH - 2, 2 * hw, 2);
+  });
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
+const queue = {
+  __proto__: rowBase,
+  id: 'queue', lanesFree: true, weighted: false,
+  gap: QUEUE_GAP, keep: QUEUE_SPAN + 1.5,                  // řada zmizí, až je i budka pod spodním okrajem plátna
+  get about() { return t('scenario.queue.about'); },
+  panels: ['confPanel', 'legend'], legend: [['#8b9aa8', 'legend.queue.queue'], ['#4cc2ff', 'legend.queue.pick'], ['#3fb950', 'legend.queue.out']],
+  get extraTitle() { return t('scenario.queue.extraTitle'); },
+  get extraTip() { return t('scenario.queue.extraTip'); },
+  get matchTip() { return t('scenario.queue.tip.match'); },
+  lanes: () => +$('lanes').value,
+  newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
+  task(d, row = null, inject = row ? row.inject : rollInject([d.truth])) {
+    const state = queueState(d.queues);
+    if (inject !== null) state.note = injectText(INJECT_NOTE, laneKeys(LANES)[inject]);      // úloha bez pokynu pole note nemá; jako with_note v bench.py
+    return { row, queues: d.queues, answer: d.answer, cls: d.cls, text: d.text, count: d.count, truth: d.truth, inject, state };
+  },
+  rowTask(r) { return this.task(r, r); },
+  laneOf: (r, move) => move,
+  spawnRow(g, y) { g.rows.push(this.newRow(g, y, queueRow(LANES, this.weighted, rnd))); },
+  randomTask() { return this.task(queueRow(LANES, this.weighted, rnd)); },
+  warmTask() { return this.task(queueWarm(LANES), null, null); },
+  questions(v = 0) { return variantOf(queueQuestion(LANES, this.weighted), v); },
+  parse(a) {
+    const x = a[this.weighted ? 'lane_weighted' : 'lane'];
+    return { move: laneKeys(LANES).indexOf(x?.choice), conf: x?.confidence, probs: x?.probabilities };
+  },
+  randomMove: () => Math.floor(Math.random() * LANES),
+  tally(g, task, move) {                                   // počítají se všechny odpovědi, i pozdní; neplatná je null, rozbor je ve sdíleném bloku
+    super.tally(g, task, move);
+    g.cases.push({ queues: task.queues, answer: task.answer, cls: task.cls, text: task.text, count: task.count });
+    g.choices.push(laneKeys(LANES)[move] ?? null);
+  },
+  summary(g) {                                             // rozbor jednou na překreslení: quality i renderExtra čtou tentýž, nový až po další odpovědi
+    if (g.summary?.n !== g.cases.length) {
+      const keys = laneKeys(LANES);
+      g.summary = { n: g.cases.length, by_gap: classTally(QUEUE_GAPS, g.cases.map(c => [c.answer, c.cls]), g.choices, keys),
+                    errors: queueErrors(g.cases, g.choices, keys, this.weighted) };
+    }
+    return g.summary;
+  },
+  drawItems(g) {
+    const hw = LW * 0.4, colH = (QUEUE_SPAN - QUEUE_BOOTH) * CELL, bh = QUEUE_BOOTH * CELL;
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      drawQueue(r, y, this.weighted);
+      ctx.globalAlpha = 1;
+      if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES) {      // volba modelu před průjezdem: obrys sloupce a budky
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - colH - bh, 2 * hw, colH + bh);
+      }
+      this.drawRing(r, y, Math.min(LW * 0.26, 12));
+      if (r.result) {                                          // po průjezdu délky front nad budkami, správný pruh zeleně, a dokud řada není pod autem, štítek
+        ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        r.queues.forEach((q, lane) => {
+          ctx.fillStyle = lane === r.truth ? '#3fb950' : '#e6edf3';
+          ctx.fillText(String(queueLength(q, this.weighted)), (lane + 0.5) * LW, y - colH - bh - 4);
+        });
+        ctx.textAlign = 'start';
+        if (r.y > -QUEUE_LABEL) { const lab = queueLabel(r, this.weighted); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
+      }
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    }
+  },
+  describeLast(task, res) {                                // fronty s délkou podle otázky (s vahami vážená), volba a správný pruh
+    const name = i => i >= 0 ? laneName(i) : t('answer.invalid');
+    const queues = task.queues.map((q, i) => `${i + 1}: ${q.join(' ')} (${queueLength(q, this.weighted)})`).join('  ·  ');
+    return t('last.queue', { queues, pick: name(res.move), truth: name(task.truth) }) +
+      (res.probs ? '\n' + t('last.probs', { list: laneKeys(task.queues.length).map((k, i) => `${laneName(i)}: ${pctOf(res.probs[k] ?? 0, 1)}`).join(', ') }) : '');
+  },
+  quality(g, s, inGame) {                                  // vážená fronta má druhou dlaždici: kolik chyb byl pruh s nejméně vozidly bez vah
+    const tiles = this.matchTiles(g, s, inGame, t('scenario.queue.tile.match'), t('scenario.queue.tile.rate'));
+    if (this.weighted) {
+      const e = this.summary(g).errors, wrong = e.count + e.text + e.other + e.invalid;
+      tiles.splice(1, 0, [wrong ? `${e.count} / ${wrong}` : '—', t('scenario.queueWeighted.tile.count'), t('scenario.queueWeighted.tip.count')]);
+    }
+    return tiles;
+  },
+  renderExtra(g) {                                         // přesnost podle rozdílu front a pod ní řádek chyb, jako bench.py
+    const sum = this.summary(g);
+    const head = el('tr'); head.append(el('th', '', t('scenario.queue.col.gap')), el('th', '', t('scenario.queue.col.ratio')), el('th', '', t('metric.accuracy')));
+    const rows = QUEUE_GAPS.map(c => {
+      const [ok, total] = sum.by_gap[c], tr = el('tr');
+      tr.append(el('th', '', t('queue.gap', { d: QUEUE_GAP_NAME[c] })), el('td', '', `${ok} / ${total}`), el('td', '', pctText(total ? ok / total : NaN)));
+      return tr;
+    });
+    const foot = el('tr'), cell = el('td', '', t(this.weighted ? 'queue.errorsWeighted' : 'queue.errors', sum.errors));
+    cell.colSpan = 3; foot.append(cell);
+    $('conf').replaceChildren(head, ...rows, foot);
+  },
+};
+const queueWeighted = { __proto__: queue, id: 'queueWeighted', weighted: true, get about() { return t('scenario.queueWeighted.about'); }, legend: [['#8b9aa8', 'legend.queue.queue'], ['#e69f00', 'legend.queue.heavy'], ['#4cc2ff', 'legend.queue.pick'], ['#3fb950', 'legend.queue.out']] };
+
+// ---------- scénář: sázka na pruh ----------
+// Každá řada má v každém pruhu bránu s odměnou a šancí (betRow ve sdíleném bloku); model volí bránu s nejvyšší výplatou odměna × šance.
+// Rozhodnutí = index brány, −1 neplatná odpověď. Na silnici vidí divák obě veličiny jako model (čísla), po průjezdu i výplatu.
+// jméno úrovně v TEXTS (komentář nad řádkem: test čte řádek až po „};“ na jeho konci)
+const BET_LEVEL_NAME = { same: 'bet.level.same', round: 'bet.level.round', general: 'bet.level.general' };
+const betPayout = (r, i) => { const ev = betEv(r.rewards[i], r.chances[i]); return f(ev, Number.isInteger(ev) ? 0 : 1); };      // výplata brány i pro diváka: celé číslo, jinak na desetinu
+
+function betLabel(r) {                                     // slovy, co se stalo; počet bran z r.rewards
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const n = r.truth + 1, ev = betPayout(r, r.truth);
+  if (r.result === 'ok') return { text: t('bet.label.ok', { n, ev }), color: RESULT.ok.color };
+  const keys = gateKeys(r.rewards.length);
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < keys.length)) return { text: t('label.invalid'), color: RESULT.late.color };
+  const kind = betErrorKind(r, keys[r.chosen], keys), key = kind === 'reward' ? 'bet.label.reward' : kind === 'chance' ? 'bet.label.chance' : 'bet.label.bad';
+  return { text: t(key, { pick: r.chosen + 1, pickEv: betPayout(r, r.chosen), n, ev }), color: RESULT.bad.color };
+}
+function drawBet(r, y) {                                   // brána v každém pruhu: nahoře mince a odměna, dole výseč šance a procenta; bez písmen
+  const hw = LW * 0.42, gh = 48, n = r.rewards.length;
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) * LW, left = x - hw + 8, tx = x - hw + 17, tw = Math.max(8, 2 * hw - 19);
+    ctx.fillStyle = r.result && i === r.truth ? '#1f4d2b' : '#33414f';
+    ctx.beginPath(); ctx.roundRect(x - hw, y - gh / 2, 2 * hw, gh, 6); ctx.fill();
+    ctx.fillStyle = '#f2cc0c'; ctx.beginPath(); ctx.arc(left, y - 13, 6, 0, 2 * Math.PI); ctx.fill();      // mince a odměna
+    ctx.font = '700 11px "Segoe UI", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(String(r.rewards[i]), tx, y - 13, tw);
+    ctx.fillStyle = '#30363d'; ctx.beginPath(); ctx.arc(left, y + 13, 7, 0, 2 * Math.PI); ctx.fill();         // výseč šance od 12 hodin
+    ctx.fillStyle = '#58a6ff'; ctx.beginPath(); ctx.moveTo(left, y + 13);
+    ctx.arc(left, y + 13, 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * r.chances[i] / 100); ctx.closePath(); ctx.fill();
+    ctx.font = '10px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3'; ctx.fillText(pctOf(r.chances[i] / 100), tx + 1, y + 13, tw - 1);
+  }
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
+const bet = {
+  __proto__: rowBase,
+  id: 'bet', lanesFree: true, minLanes: 3,                 // brány jsou 3 až 8: volič stojí na 2 (jiný scénář, uložené nastavení), silnice má 3 pruhy
+  get about() { return t('scenario.bet.about'); },
+  panels: ['confPanel', 'legend'], legend: [['#f2cc0c', 'legend.bet.gate'], [null, 'legend.bet.rule'], ['#3fb950', 'legend.bet.out']],
+  get extraTitle() { return t('scenario.bet.extraTitle'); },
+  get extraTip() { return t('scenario.bet.extraTip'); },
+  get matchTip() { return t('scenario.bet.tip.match'); },
+  lanes() { return Math.max(3, +$('lanes').value); },
+  newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
+  task(d, row = null, inject = row ? row.inject : rollInject([d.truth])) {
+    const state = betState(d.rewards, d.chances);
+    if (inject !== null) state.note = injectText(INJECT_NOTE, `gate_${inject + 1}`);      // úloha bez pokynu pole note nemá; jako with_note v bench.py
+    return { row, rewards: d.rewards, chances: d.chances, answer: d.answer, level: d.level, topReward: d.topReward, topChance: d.topChance, truth: d.truth, inject, state };
+  },
+  rowTask(r) { return this.task(r, r); },
+  laneOf: (r, move) => move,
+  spawnRow(g, y) { g.rows.push(this.newRow(g, y, betRow(LANES, rnd))); },
+  randomTask() { return this.task(betRow(LANES, rnd)); },
+  warmTask() { return this.task(betWarm(LANES), null, null); },
+  questions: (v = 0) => variantOf(betQuestion(LANES), v),
+  parse: a => ({ move: gateKeys(LANES).indexOf(a.bet?.choice), conf: a.bet?.confidence, probs: a.bet?.probabilities }),
+  randomMove: () => Math.floor(Math.random() * LANES),
+  tally(g, task, move) {                                   // počítají se všechny odpovědi, i pozdní; neplatná je null, rozbor je ve sdíleném bloku
+    super.tally(g, task, move);
+    g.cases.push({ rewards: task.rewards, chances: task.chances, answer: task.answer, level: task.level, topReward: task.topReward, topChance: task.topChance });
+    g.choices.push(gateKeys(LANES)[move] ?? null);
+  },
+  summary(g) {                                             // rozbor jednou na překreslení: quality i renderExtra čtou tentýž, nový až po další odpovědi
+    if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, sum: betSummary(g.cases, g.choices, gateKeys(LANES)) };
+    return g.summary.sum;
+  },
+  drawItems(g) {                                           // brány s odměnou a šancí; před průjezdem obrys volby, po něm výplaty pod branami a štítek
+    const hw = LW * 0.42;
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      drawBet(r, y);
+      ctx.globalAlpha = 1;
+      if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.rewards.length) {      // volba modelu před průjezdem
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 24, 2 * hw, 48); ctx.lineWidth = 1;
+      }
+      if (r.result) {
+        ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let i = 0; i < r.rewards.length; i++) {
+          ctx.fillStyle = i === r.truth ? '#3fb950' : '#8b9aa8';
+          ctx.fillText(`= ${betPayout(r, i)}`, (i + 0.5) * LW, y - 32, LW - 4);      // nad horním okrajem brány, aby ho nepřekryl štítek
+        }
+        const lab = betLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 52, H - 10));
+      }
+      this.drawRing(r, y, Math.min(LW * 0.26, 15));
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    }
+  },
+  describeLast(task, res) {                                // odměna × šance každé brány, výplaty, volba a správná brána
+    const gates = task.rewards.map((r, i) => `${r} × ${pctOf(task.chances[i] / 100)}`).join('   ');
+    const payouts = task.rewards.map((_, i) => betPayout(task, i)).join('   ');
+    const name = i => i >= 0 ? t('last.gate', { n: i + 1, value: betPayout(task, i) }) : t('answer.invalid');
+    return t('last.bet', { gates, payouts, pick: name(res.move), truth: name(task.truth) }) +
+      (res.probs ? '\n' + t('last.probs', { list: task.rewards.map((_, i) => `${i + 1}: ${pctOf(res.probs[`gate_${i + 1}`] ?? 0, 1)}`).join(', ') }) : '');
+  },
+  quality(g, s, inGame) {                                  // za první dlaždici ztráta výplaty z rozboru (i pozdní odpovědi)
+    const tiles = this.matchTiles(g, s, inGame, t('scenario.bet.tile.match'), t('scenario.bet.tile.rate'));
+    tiles.splice(1, 0, [g.cases.length ? pctOf(this.summary(g).regret, 1) : '—', t('scenario.bet.tile.regret'), t('scenario.bet.tip.regret')]);
+    return tiles;
+  },
+  renderExtra(g) {                                         // přesnost podle úrovně a pod ní řádek regretu a chyb, jako bench.py
+    const sum = this.summary(g);
+    const head = el('tr'); head.append(el('th', '', t('scenario.bet.col.level')), el('th', '', t('scenario.bet.col.ratio')), el('th', '', t('metric.accuracy')));
+    const rows = BET_LEVELS.map(l => {
+      const [ok, total] = sum.by_level[l], tr = el('tr');
+      tr.append(el('th', '', t(BET_LEVEL_NAME[l])), el('td', '', `${ok} / ${total}`), el('td', '', pctText(total ? ok / total : NaN)));
+      return tr;
+    });
+    const foot = el('tr'), cell = el('td', '', t('bet.line', { regret: g.cases.length ? pctOf(sum.regret, 1) : '—', ...sum.errors }));
+    cell.colSpan = 3; foot.append(cell);
+    $('conf').replaceChildren(head, ...rows, foot);
+  },
+};
+
+// ---------- scénář: tempomat ----------
+// Každá řada je jedna úloha tempomatu (cruiseRow ve sdíleném bloku): vzdálenost překážky, povrch a mlha. Pruh = stupeň rychlosti: pruh 1
+// vlevo stupeň 1 (nejpomaleji), pruh 7 vpravo stupeň 7 (nejrychleji). Rozhodnutí = index stupně 0–6, −1 neplatná odpověď; truth = answer − 1.
+// jméno třídy v TEXTS (komentář nad řádkem: test čte řádek až po „};“ na jeho konci)
+const CRUISE_CLASS_NAME = { table: 'cruise.class.table', road: 'cruise.class.road', fog: 'cruise.class.fog', both: 'cruise.class.both' };
+
+// jméno povrchu, mlhy a srážky v TEXTS (komentáře nad řádky: test čte každý řádek celý)
+const CRUISE_ROAD_NAME = { dry: 'cruise.road.dry', wet: 'cruise.road.wet', icy: 'cruise.road.icy' };
+const CRUISE_FOG_NAME = { none: 'cruise.fog.none', light: 'cruise.fog.light', dense: 'cruise.fog.dense' };
+const CRUISE_WHY = { wet: 'cruise.why.wet', icy: 'cruise.why.icy', light: 'cruise.why.light', dense: 'cruise.why.dense' };
+
+function cruiseWhy(task) {                                 // výpočet správného stupně slovy: pásmo podle vzdálenosti a srážky; tentýž jako cruiseLevel
+  const parts = [t('cruise.why.band', { m: task.m, level: bandLevel(task.m) })];
+  for (const k of [task.road, task.fog]) if (CRUISE_WHY[k]) parts.push(t(CRUISE_WHY[k]));
+  return parts.join(', ');
+}
+function cruiseLabel(r) {                                  // slovy, co se stalo; správně s výpočtem, jinak příliš rychle nebo pomalu
+  const why = cruiseWhy(r);
+  if (r.result === 'ok') return { text: t('cruise.label.ok', { level: r.answer, why }), color: RESULT.ok.color };
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 7)) return { text: t('label.invalid'), color: RESULT.late.color };
+  return { text: t(r.chosen + 1 > r.answer ? 'cruise.label.fast' : 'cruise.label.slow', { pick: r.chosen + 1, level: r.answer, why }), color: RESULT.bad.color };
+}
+
+// Řada tempomatu odspodu: povrch na silnici, políčka stupňů (správný po průjezdu zeleně), závoj mlhy, číslice se sloupečky rychlosti,
+// cedule nad políčky a modrý obrys volby před průjezdem. Číslice i cedule jsou nad závojem, mlha je nezakrývá. globalAlpha nastaví volající.
+function drawCruise(r, y) {
+  const n = 7, hw = LW * 0.42;                             // 7 pruhů natvrdo: CRUISE_TOP v testu kresby není k dispozici
+  if (r.road === 'wet') {                                  // mokro: modrý průsvitný podklad a šikmé čáry
+    ctx.fillStyle = 'rgba(56,139,253,.22)'; ctx.fillRect(0, y - 24, W, 48);
+    ctx.strokeStyle = 'rgba(88,166,255,.5)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = -10; x < W; x += 14) { ctx.moveTo(x, y + 24); ctx.lineTo(x + 10, y - 24); }
+    ctx.stroke();
+  } else if (r.road === 'icy') {                           // náledí: světle modrý podklad a ❄ u okrajů (dole, nahoře vlevo je trojský kůň)
+    ctx.fillStyle = 'rgba(190,230,255,.28)'; ctx.fillRect(0, y - 24, W, 48);
+  }
+  for (let lane = 0; lane < n; lane++) {
+    const x = (lane + 0.5) * LW;
+    ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
+    ctx.beginPath(); ctx.roundRect(x - hw, y - 17, 2 * hw, 34, 6); ctx.fill();
+  }
+  if (r.fog === 'light' || r.fog === 'dense') {            // závoj mlhy přes řadu i ceduli
+    ctx.fillStyle = r.fog === 'dense' ? 'rgba(170,180,190,.38)' : 'rgba(170,180,190,.2)'; ctx.fillRect(0, y - 46, W, 70);
+  }
+  if (r.road === 'icy') {                                  // ❄ u obou okrajů pod políčky (y+20), nad políčky a závojem; trojský kůň je vlevo nahoře
+    ctx.font = '12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#d6efff';
+    ctx.fillText('❄', 9, y + 20); ctx.fillText('❄', W - 9, y + 20);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '700 15px "Segoe UI", sans-serif';
+  for (let lane = 0; lane < n; lane++) {
+    const x = (lane + 0.5) * LW;
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(String(lane + 1), x, y - 7);
+    ctx.fillStyle = '#8b9aa8';                             // sloupečky rychlosti: počet = stupeň
+    for (let k = 0; k <= lane; k++) ctx.fillRect(x + (k - lane / 2) * 4 - 1, y + 3, 2, 9);
+  }
+  ctx.fillStyle = 'rgba(11,16,22,.9)'; ctx.fillRect(0, y - 46, W, 20);      // cedule
+  ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = '#f2cc0c';
+  ctx.fillText([t('cruise.board', { m: r.m }), t(CRUISE_ROAD_NAME[r.road]), t(CRUISE_FOG_NAME[r.fog])].join(' · '), W / 2, y - 36, W - 8);
+  if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < n) {      // volba modelu před průjezdem
+    ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 17, 2 * hw, 34); ctx.lineWidth = 1;
+  }
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
+const cruise = {
+  __proto__: rowBase,
+  id: 'cruise',                                            // pruhy jsou stupně 1–7, silnice má vždy 7, volič je zamčený jako u závory
+  get about() { return t('scenario.cruise.about'); },
+  panels: ['confPanel', 'legend'],
+  legend: [[null, 'legend.cruise.lanes'], [null, 'legend.cruise.table'], [null, 'legend.cruise.penalty'], ['#3fb950', 'legend.cruise.out']],
+  get extraTitle() { return t('scenario.cruise.extraTitle'); },
+  get extraTip() { return t('scenario.cruise.extraTip'); },
+  get matchTip() { return t('scenario.cruise.tip.match'); },
+  fixedLanes: 7, lanes: () => 7,
+  newGame() { return { ...this.baseGame(), cases: [], levels: [] }; },
+  task(d, row = null, inject = row ? row.inject : rollInject([d.truth], 7)) {
+    const state = cruiseState(d.m, d.road, d.fog);
+    if (inject !== null) state.note = injectText(INJECT_NOTE, levelKeys()[inject]);      // úloha bez pokynu pole note nemá; jako with_note v bench.py
+    return { row, m: d.m, road: d.road, fog: d.fog, answer: d.answer, cls: d.cls, place: d.place, truth: d.truth, inject, state };
+  },
+  rowTask(r) { return this.task(r, r); },
+  laneOf: (r, move) => move,
+  spawnRow(g, y) { g.rows.push(this.newRow(g, y, cruiseRow(rnd), 7)); },
+  randomTask() { return this.task(cruiseRow(rnd)); },
+  warmTask() { return this.task(cruiseWarm(), null, null); },
+  questions: (v = 0) => variantOf(cruiseQuestion(), v),
+  parse: a => ({ move: levelKeys().indexOf(a.speed?.choice), conf: a.speed?.confidence, probs: a.speed?.probabilities }),
+  randomMove: () => Math.floor(Math.random() * 7),
+  tally(g, task, move) {                                   // počítají se všechny odpovědi, i pozdní; neplatná je null (v MAE 6), rozbor je ve sdíleném bloku
+    super.tally(g, task, move);
+    g.cases.push({ m: task.m, road: task.road, fog: task.fog, answer: task.answer, cls: task.cls, place: task.place });
+    g.levels.push(move >= 0 && move < CRUISE_TOP ? move + 1 : null);
+  },
+  summary(g) {                                             // rozbor jednou na překreslení: quality i renderExtra čtou tentýž, nový až po další odpovědi
+    if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, sum: cruiseSummary(g.cases, g.levels) };
+    return g.summary.sum;
+  },
+  drawItems(g) {                                           // cedule, povrch, mlha a políčka stupňů; po průjezdu štítek s výpočtem
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      drawCruise(r, y);
+      ctx.globalAlpha = 1;
+      if (r.result !== null) { const lab = cruiseLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
+      this.drawRing(r, y, Math.min(LW * 0.26, 15));
+    }
+  },
+  describeLast(task, res) {                                // stav slovy, jak ho dostal model (i s pokynem), volba a správný stupeň
+    const name = i => i >= 0 ? t('cruise.level', { n: i + 1 }) : t('answer.invalid');
+    const state = Object.entries(task.state).map(([k, v]) => `${k} ${v}`).join(', ');
+    return t('last.cruise', { state, pick: name(res.move), truth: name(task.truth), why: cruiseWhy(task) }) +
+      (res.probs ? '\n' + t('last.probs', { list: levelKeys().map((k, i) => `${i + 1}: ${pctOf(res.probs[k] ?? 0, 1)}`).join(', ') }) : '');
+  },
+  quality(g, s, inGame) {                                  // za první dlaždici MAE ve stupních z rozboru (i pozdní odpovědi)
+    const tiles = this.matchTiles(g, s, inGame, t('scenario.cruise.tile.match'), t('scenario.cruise.tile.rate'));
+    tiles.splice(1, 0, [f(this.summary(g).scale.mae, 2), t('scenario.cruise.tile.mae'), t('scenario.cruise.tip.mae')]);
+    return tiles;
+  },
+  renderExtra(g) {                                         // přesnost podle podmínek a pod ní řádek polohy a škály a řádek chyb, jako bench.py
+    const sum = this.summary(g), s = sum.scale, frac = ([k, n]) => `${k}/${n}`;
+    const head = el('tr'); head.append(el('th', '', t('scenario.cruise.col.class')), el('th', '', t('scenario.cruise.col.ratio')), el('th', '', t('metric.accuracy')));
+    const rows = CRUISE_CLASSES.map(c => {
+      const [ok, total] = sum.by_class[c], tr = el('tr');
+      tr.append(el('th', '', t(CRUISE_CLASS_NAME[c])), el('td', '', `${ok} / ${total}`), el('td', '', pctText(total ? ok / total : NaN)));
+      return tr;
+    });
+    const line = el('tr'), errors = el('tr');
+    const lc = el('td', '', t('cruise.line', { edge: frac(sum.by_place.edge), middle: frac(sum.by_place.middle), within: pctOf(s.within), mae: f(s.mae, 2), fast: s.fast, slow: s.slow }));
+    const ec = el('td', '', t('cruise.errors', sum.errors));
+    lc.colSpan = 3; ec.colSpan = 3; line.append(lc); errors.append(ec);
+    $('conf').replaceChildren(head, ...rows, line, errors);
+  },
+};
+
+// ---------- scénář: jízdní řád ----------
+// Každá řada je zásilka s vlastní tabulkou tras a výjimkou (timetableRow ve sdíleném bloku); pruh = depo v pořadí TIMETABLE_DEPOTS.
+// Rozhodnutí = index depa, −1 neplatná odpověď. Model dostává anglická slova; divák čte jména dep a služeb jazykem stránky.
+const TIMETABLE_GAP = 6;                                   // řady po 6 polích: nad branami stojí cedule s až 12 řádky tabulky
+// jméno depa a služby pro diváka v TEXTS (komentář nad řádky: test čte řádek až po „};“ na jeho konci)
+const TIMETABLE_DEPOT_NAME = { alder: 'timetable.depot.alder', birch: 'timetable.depot.birch', cedar: 'timetable.depot.cedar', maple: 'timetable.depot.maple', oak: 'timetable.depot.oak', pine: 'timetable.depot.pine' };
+const TIMETABLE_SERVICE_NAME = { standard: 'timetable.service.standard', express: 'timetable.service.express', economy: 'timetable.service.economy', cooled: 'timetable.service.cooled' };
+function timetableDepot(d) {                              // víceřádkově: test ji vytahuje přes page_function
+  return t(TIMETABLE_DEPOT_NAME[d]);
+}
+function timetableService(s) {
+  return t(TIMETABLE_SERVICE_NAME[s]);
+}
+
+// šest barev depa dobře rozlišitelných i pro barvoslepé; brána, tečka u trasy i jméno depa na bráně
+const TIMETABLE_COLOR = { alder: '#56b4e9', birch: '#e69f00', cedar: '#009e73', maple: '#f0e442', oak: '#cc79a7', pine: '#d55e00' };
+
+// Rozvržení cedule bez kreslení a bez textů: zásilka, výjimka, řádky tras (do 6 jeden sloupec, od 7 dva, v prvním Math.ceil(n / 2)) a po průjezdu to, co rozhodlo.
+// mark: 'exception' u platné výjimky, jinak index řádku s PSČ zásilky; před průjezdem null. Správné depo je v r.answer.
+function timetableBoard(r) {
+  const n = r.rows.length, cols = n > 6 ? 2 : 1, first = cols === 2 ? Math.ceil(n / 2) : n, done = r.result != null;
+  return {
+    parcel: { zip: r.zip, service: r.service },
+    exception: r.exception ? { service: r.exception[0], depot: r.exception[1] } : null,
+    cols,
+    lines: r.rows.map(([from, to, depot], i) => ({ from, to, depot, col: i < first ? 0 : 1, line: i < first ? i : i - first })),
+    mark: !done ? null : r.rule === 'applies' ? 'exception' : timetableIndex(r.rows.map(x => x.slice(0, 2)), r.zip),
+    struck: done && r.rule === 'decoy',
+  };
+}
+// Štítek výsledku slovem; depo je vždy správné (r.answer), from a to jsou hranice řádku s PSČ zásilky, service je služba výjimky.
+function timetableLabel(r) {
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const depot = timetableDepot(r.answer), zip = r.zip;
+  const [from, to] = r.rows[timetableIndex(r.rows.map(x => x.slice(0, 2)), r.zip)];
+  const service = r.exception ? timetableService(r.exception[0]) : '';
+  if (r.result === 'ok') {
+    return { text: r.rule === 'applies' ? t('timetable.label.exception', { depot, service }) : t('timetable.label.route', { depot, from, to }), color: RESULT.ok.color };
+  }
+  const choice = TIMETABLE_DEPOTS[r.chosen] ?? null;
+  if (choice === null) return { text: t('label.invalid'), color: RESULT.late.color };
+  const pick = timetableDepot(choice), kind = timetableErrorKind(r, choice);
+  const neighbor = kind === 'neighbor' && r.rule !== 'applies';      // u platné výjimky je r.answer depo výjimky, ne depo řádku: štítek řádku by lhal
+  const key = { missed: 'timetable.label.missed', misapplied: 'timetable.label.misapplied' }[kind] ?? (neighbor ? 'timetable.label.neighbor' : 'timetable.label.bad');
+  return { text: t(key, { pick, service, depot, zip, from, to }), color: RESULT.bad.color };
+}
+
+// Řada jízdního řádu odspodu: cedule nad branami (zásilka, výjimka, řádky tras s tečkou v barvě depa), šest bran v barvě depa se jménem, modrý obrys volby před průjezdem,
+// po průjezdu zelený rámeček u správné brány a u toho, co rozhodlo, přeškrtnutá neplatná výjimka a štítek pod řadou. Rámečky a štítek jdou v plné krytosti
+// (řada po průjezdu bledne), štítek leží v y + 32, protože řada se po rozhodnutí posouvá dolů a pásmo dole od ~y + 41 už je tmavé. globalAlpha nastaví volající.
+function drawTimetable(r, y) {
+  const hw = LW * 0.44, lineH = 13, board = timetableBoard(r), alpha = ctx.globalAlpha;
+  const first = board.cols === 2 ? Math.ceil(board.lines.length / 2) : board.lines.length;
+  const h = 6 + (2 + first) * lineH, top = y - 24 - h;
+  const colW = (W - 4) / board.cols, blockW = Math.min(170, colW - 8);
+  const rowY = i => top + 3 + (2 + i) * lineH + lineH / 2;
+  ctx.fillStyle = 'rgba(11,16,22,.85)'; ctx.fillRect(2, top, W - 4, h);
+  ctx.textBaseline = 'middle'; ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center';
+  const parcel = t('timetable.parcel', { zip: board.parcel.zip, service: timetableService(board.parcel.service) });
+  const rule = board.exception ? t('timetable.exception', { service: timetableService(board.exception.service), depot: timetableDepot(board.exception.depot) }) : t('timetable.noException');
+  ctx.fillStyle = '#e6edf3'; ctx.fillText(parcel, W / 2, top + 3 + lineH / 2, W - 8);
+  ctx.fillStyle = '#f2cc0c'; ctx.fillText(rule, W / 2, top + 3 + lineH * 1.5, W - 8);
+  const ruleW = Math.min(ctx.measureText(rule).width, W - 8);
+  for (const x of board.lines) {
+    const left = 2 + x.col * colW + (colW - blockW) / 2, ly = rowY(x.line);
+    const span = `${x.from}–${x.to}`;
+    ctx.textAlign = 'start'; ctx.fillStyle = '#c9d4de'; ctx.fillText(span, left, ly, 72);
+    ctx.fillStyle = TIMETABLE_COLOR[x.depot]; ctx.fillText('●', left + 76, ly);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(timetableDepot(x.depot), left + 88, ly, blockW - 88);
+  }
+  ctx.textAlign = 'center';
+  for (let lane = 0; lane < 6; lane++) {
+    const x = (lane + 0.5) * LW, color = TIMETABLE_COLOR[TIMETABLE_DEPOTS[lane]];
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.roundRect(x - hw, y - 17, 2 * hw, 34, 6); ctx.fill();
+    ctx.fillStyle = ink(color); ctx.fillText(timetableDepot(TIMETABLE_DEPOTS[lane]), x, y, 2 * hw - 4);
+  }
+  ctx.globalAlpha = 1;
+  if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 6) {      // volba modelu před průjezdem
+    ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 17, 2 * hw, 34);
+  }
+  if (r.result !== null) {
+    ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 4; ctx.strokeRect((r.truth + 0.5) * LW - hw - 2, y - 19, 2 * hw + 4, 38);
+    ctx.lineWidth = 2;
+    if (board.mark === 'exception') ctx.strokeRect(W / 2 - ruleW / 2 - 4, top + 3 + lineH, ruleW + 8, lineH);
+    else if (board.mark !== null) {
+      const x = board.lines[board.mark];
+      ctx.strokeRect(2 + x.col * colW + (colW - blockW) / 2 - 4, rowY(x.line) - lineH / 2, blockW + 8, lineH);
+    }
+    if (board.struck) {
+      ctx.strokeStyle = '#8b9aa8'; ctx.beginPath(); ctx.moveTo(W / 2 - ruleW / 2, top + 3 + lineH * 1.5); ctx.lineTo(W / 2 + ruleW / 2, top + 3 + lineH * 1.5); ctx.stroke();
+    }
+    const lab = timetableLabel(r);
+    drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10));
+  }
+  ctx.lineWidth = 1; ctx.globalAlpha = alpha;
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
+
+const timetable = {
+  __proto__: rowBase,
+  id: 'timetable', fixedLanes: 6, lanes: () => 6,          // pruh = depo, silnice má vždy 6 pruhů, volič je zamčený jako u závory
+  gap: TIMETABLE_GAP, keep: 4.5,                           // cedule sahá asi 3 pole nad bod řady
+  get about() { return t('scenario.timetable.about'); },
+  panels: ['confPanel', 'legend'],
+  legend: [[null, 'legend.timetable.board'], [null, 'legend.timetable.exception'], [null, 'legend.timetable.gates'], ['#3fb950', 'legend.timetable.out']],
+  get extraTitle() { return t('scenario.timetable.extraTitle'); },
+  get extraTip() { return t('scenario.timetable.extraTip'); },
+  get matchTip() { return t('scenario.timetable.tip.match'); },
+  newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
+  task(d, row = null, inject = row ? row.inject : rollInject([d.truth], 6)) {
+    const state = timetableState(d);
+    if (inject !== null) state.note = injectText(INJECT_NOTE, TIMETABLE_DEPOTS[inject]);      // úloha bez pokynu pole note nemá; jako with_note v bench.py
+    return { row, rows: d.rows, order: d.order, zip: d.zip, service: d.service, exception: d.exception, answer: d.answer, size: d.size, pos: d.pos, rule: d.rule, truth: d.truth, inject, state };
+  },
+  rowTask(r) { return this.task(r, r); },
+  laneOf: (r, move) => move,
+  spawnRow(g, y) { g.rows.push(this.newRow(g, y, timetableRow(rnd), 6)); },
+  randomTask() { return this.task(timetableRow(rnd)); },
+  warmTask() { return this.task(timetableWarm(), null, null); },
+  questions: (v = 0) => variantOf(timetableQuestion(), v),
+  parse: a => ({ move: TIMETABLE_DEPOTS.indexOf(a.depot?.choice), conf: a.depot?.confidence, probs: a.depot?.probabilities }),
+  randomMove: () => Math.floor(Math.random() * 6),
+  tally(g, task, move) {                                   // počítají se všechny odpovědi, i pozdní; neplatná je null, rozbor je ve sdíleném bloku
+    super.tally(g, task, move);
+    g.cases.push({ rows: task.rows, zip: task.zip, service: task.service, exception: task.exception, answer: task.answer, size: task.size, pos: task.pos, rule: task.rule });
+    g.choices.push(TIMETABLE_DEPOTS[move] ?? null);
+  },
+  summary(g) {                                             // rozbor jednou na překreslení: quality i renderExtra čtou tentýž, nový až po další odpovědi
+    if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, sum: timetableSummary(g.cases, g.choices) };
+    return g.summary.sum;
+  },
+  drawItems(g) {                                           // cedule, brány v barvě depa, obrysy a po průjezdu rámečky a štítek (vše v drawTimetable)
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      drawTimetable(r, y);
+      ctx.globalAlpha = 1;
+      this.drawRing(r, y, Math.min(LW * 0.26, 15));
+    }
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  describeLast(task, res) {                                // zásilka, trasy a výjimka jazykem stránky (model je dostal anglicky, říká poslední řádek), volba a správné depo
+    const name = i => i >= 0 ? timetableDepot(TIMETABLE_DEPOTS[i]) : t('answer.invalid');
+    const routes = task.rows.map(([a, b, d]) => `${a}–${b} ${timetableDepot(d)}`).join(', ');
+    const exceptions = task.exception ? `${timetableService(task.exception[0])} → ${timetableDepot(task.exception[1])}` : t('timetable.none');
+    return t('last.timetable', { zip: task.zip, service: timetableService(task.service), routes, exceptions, pick: name(res.move), truth: name(task.truth) }) +
+      (res.probs ? '\n' + t('last.probs', { list: TIMETABLE_DEPOTS.map(d => `${timetableDepot(d)}: ${pctOf(res.probs[d] ?? 0, 1)}`).join(', ') }) : '');
+  },
+  quality(g, s, inGame) {                                  // za první dlaždici výjimka platí z rozboru (i pozdní odpovědi)
+    const tiles = this.matchTiles(g, s, inGame, t('scenario.timetable.tile.match'), t('scenario.timetable.tile.rate'));
+    const [k, n] = this.summary(g).by_rule.applies;
+    tiles.splice(1, 0, [n ? `${k} / ${n}` : '—', t('scenario.timetable.tile.applies'), t('scenario.timetable.tip.applies')]);
+    return tiles;
+  },
+  renderExtra(g) {                                         // přesnost podle velikosti tabulky a pod ní řádek polohy a výjimky a řádek chyb, jako bench.py
+    const sum = this.summary(g), frac = ([k, n]) => `${k}/${n}`;
+    const head = el('tr'); head.append(el('th', '', t('scenario.timetable.col.size')), el('th', '', t('scenario.timetable.col.ratio')), el('th', '', t('metric.accuracy')));
+    const rows = Object.keys(TIMETABLE_SIZES).map(c => {
+      const [ok, total] = sum.by_size[c], [lo, hi] = TIMETABLE_SIZES[c], tr = el('tr');
+      tr.append(el('th', '', t('timetable.size', { d: `${lo}–${hi}` })), el('td', '', `${ok} / ${total}`), el('td', '', pctText(total ? ok / total : NaN)));
+      return tr;
+    });
+    const fracs = { inner: frac(sum.by_position.inner), near: frac(sum.by_position.near), bound: frac(sum.by_position.bound),
+                    none: frac(sum.by_rule.none), applies: frac(sum.by_rule.applies), decoy: frac(sum.by_rule.decoy) };
+    const line = el('tr'), errors = el('tr');
+    const lc = el('td', '', t('timetable.line', fracs)), ec = el('td', '', t('timetable.errors', sum.errors));
+    lc.colSpan = 3; ec.colSpan = 3; line.append(lc); errors.append(ec);
+    $('conf').replaceChildren(head, ...rows, line, errors);
+  },
+};
+
 // ---------- scénář: veřejná sada (jen benchmark bez hry) ----------
 // Sady s desítkami tříd nebo s vlastními štítky u každé úlohy: pruhů je nejvýš 8 a auto by nemělo kudy jet,
 // proto tu není hra, jen benchmark. Rozhodnutí = index zvoleného štítku v nabídce úlohy (task.keys), −1 neplatná odpověď.
@@ -3055,6 +3752,490 @@ function ruleSummary(cases, choices, keys) {
 function ruleWarm() {
   const log = [...['color', 'shape', 'count'].flatMap(f => [[f, true], [f, true], [f, true]]), ['color', true]];
   return { log, order: ['color', 'shape', 'count'], truth: 0, cls: 'repeat', old: 2 };
+}
+// Nejkratší fronta: konstanty, počítání front, stav a otázka, stejné jako v bench.py (QUEUE_*, queue_*). Fronta je pole jmen vozidel,
+// pruh je index od nuly (pruh 1 = 0). Co jde do modelu, je anglicky.
+const laneKeys = lanes => [...Array(lanes)].map((_, i) => `lane_${i + 1}`);      // jako lane_keys v bench.py
+const QUEUE_VEHICLES = ['car', 'van', 'bus', 'truck', 'motorbike', 'tractor', 'minibus', 'pickup'];
+const QUEUE_WEIGHTS = { bus: 3, truck: 3, tractor: 3 };      // ostatní vozidla váží 1
+const QUEUE_SIZE = [1, 12];                                  // nejmenší a největší počet vozidel ve frontě
+const QUEUE_GAPS = ['gap1', 'gap2-3', 'gap4+'];              // rozdíl nejkratší a druhé nejkratší fronty: 1, 2–3, 4 a víc
+const QUEUE_COUNT_SHARE = 0.5;                               // podíl vážených úloh, kde je nejkratší podle počtu jiná
+const QUEUE_TRIES = 20000000;
+// Pruh se losuje jako dvojice (počet vozidel, z toho těžkých): počet rovnoměrně z QUEUE_SIZE, těžkých binomicky (jako v bench.py).
+const QUEUE_HEAVY = QUEUE_VEHICLES.filter(v => v in QUEUE_WEIGHTS);
+const QUEUE_LIGHT = QUEUE_VEHICLES.filter(v => !(v in QUEUE_WEIGHTS));
+const QUEUE_SHAPES = [];
+for (let size = QUEUE_SIZE[0]; size <= QUEUE_SIZE[1]; size++) for (let heavy = 0; heavy <= size; heavy++) QUEUE_SHAPES.push([size, heavy]);
+const queueComb = (n, k) => { let c = 1; for (let i = 1; i <= k; i++) c = c * (n - k + i) / i; return Math.round(c); };      // math.comb, celočíselně (malá čísla)
+const QUEUE_SHAPE_CUM = (() => {                             // průběžný součet jako itertools.accumulate, v tomtéž pořadí sčítání
+  let sum = 0;
+  return QUEUE_SHAPES.map(([size, heavy]) => sum += queueComb(size, heavy) * QUEUE_HEAVY.length ** heavy * QUEUE_LIGHT.length ** (size - heavy) / QUEUE_VEHICLES.length ** size);
+})();
+function queueFewest(values) {                               // pruhy s nejmenší hodnotou, všechny při shodě
+  const low = Math.min(...values);
+  return values.flatMap((v, i) => v === low ? [i] : []);
+}
+function queueLength(queue, weighted = false) {              // počet vozidel, s vahami součet vah
+  return weighted ? queue.reduce((s, v) => s + (QUEUE_WEIGHTS[v] ?? 1), 0) : queue.length;
+}
+function queueClass(gap) {                                   // třída rozdílu nejkratší a druhé nejkratší fronty: 1, 2-3, 4 a víc
+  if (gap < 1) throw new Error(`queueClass: gap must be at least 1, got ${gap}`);
+  return gap === 1 ? 'gap1' : gap <= 3 ? 'gap2-3' : 'gap4+';
+}
+// Pruhy s nejkratším zápisem seznamu. Délka je jako json.dumps v Pythonu (oddělovač ", "): součet délek jmen + 4 na vozidlo (dvě uvozovky, čárka, mezera);
+// JSON.stringify mezery nedává, zkratka by vyšla jinak.
+function queueText(queues) {
+  return queueFewest(queues.map(q => q.reduce((s, v) => s + v.length, 0) + 4 * q.length));
+}
+function queueCount(queues) {                                // jediný pruh s nejméně vozidly (bez vah), nebo null, když jich je víc
+  const sizes = queues.map(q => q.length), low = Math.min(...sizes);
+  return sizes.filter(s => s === low).length === 1 ? sizes.indexOf(low) : null;
+}
+function queueHeavy(queues) {                                // kontrolní zkratka: pruhy s nejméně těžkými vozidly
+  return queueFewest(queues.map(q => q.filter(v => v in QUEUE_WEIGHTS).length));
+}
+function queueTextShare(lanes) {                             // cílový podíl úloh, kde nejkratší text trefí správný pruh
+  return lanes === 2 ? 1 / 2 : 1 / 3;
+}
+function queueState(queues) {                                // stav pro model: lane_N → seznam vozidel
+  const state = {};
+  queues.forEach((q, i) => state[`lane_${i + 1}`] = [...q]);
+  return state;
+}
+function queueQuestion(lanes, weighted = false) {            // otázka choice: lane (bez vah) nebo lane_weighted (s větou o vahách)
+  const weights = weighted ? 'A truck, a bus or a tractor counts as three vehicles; any other vehicle counts as one. ' : '';
+  const instructions = `A car comes to a toll gate with ${lanes} lanes. Each lane_N lists the vehicles waiting in that lane. ${weights}Choose the lane with the shortest queue.`;
+  const criteria = {};
+  for (let i = 0; i < lanes; i++) criteria[`lane_${i + 1}`] = `Lane ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : '');
+  return { [weighted ? 'lane_weighted' : 'lane']: { type: 'choice', instructions, criteria } };
+}
+// Losování jako random v Pythonu (kroky a pořadí volání, ne stejná čísla): cumWeights = itertools.accumulate, pickCum = jeden prvek rng.choices
+// s cum_weights, shuffleWith = rng.shuffle; classTally = class_tally. Používají je i sázka, tempomat a jízdní řád.
+function cumWeights(weights) {
+  let sum = 0;
+  return weights.map(w => sum += w);
+}
+function pickCum(rand, list, cum) {                          // bisect_right(cum, rand() * součet, 0, list.length - 1), jako random.choices v CPythonu
+  const x = rand() * cum[cum.length - 1];
+  let lo = 0, hi = list.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (x < cum[mid]) hi = mid; else lo = mid + 1;
+  }
+  return list[lo];
+}
+function shuffleWith(rand, a) {                              // rng.shuffle: od konce, j = floor(rand() * (i + 1)); mění pole na místě
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function classTally(order, tops, choices, keys) {            // přesnost po třídách: { třída: [správně, celkem] } v pořadí order; tops = [[index správné možnosti, třída]]
+  const counts = {};
+  order.forEach(c => counts[c] = [0, 0]);
+  tops.forEach(([top, cls], i) => {
+    if (choices[i] === keys[top]) counts[cls][0]++;
+    counts[cls][1]++;
+  });
+  return counts;
+}
+// Úloha Nejkratší fronty dané třídy: port queue_case z bench.py, stejné kroky a pořadí volání rand, náhoda z předané funkce (stránka dává rnd);
+// jiné úlohy než bench.py, protože Python má jiný generátor náhody. Předem se losuje, jestli má nejkratší text trefit správný pruh (mimo gap4+),
+// s vahami, jestli má být nejkratší podle počtu jiná, a s vahami při 3 a více pruzích mimo gap4+, jestli má trefit pruh s nejméně těžkými vozidly.
+// Při 2 pruzích se těžká nehlídají (viz docstring queue_case). Pruh se losuje jako (počet, z toho těžkých), jména vozidel až po číselných kontrolách.
+// tries stránka nepředává, parametr je kvůli testu meze. Vrací { queues, answer, cls, text, count }.
+function queueCase(rand, lanes, cls, weighted = false, tries = QUEUE_TRIES) {
+  if (!(Number.isInteger(lanes) && lanes >= 2 && lanes <= 8) || !QUEUE_GAPS.includes(cls)) throw new Error(`queueCase: unsupported lanes ${lanes} or class ${cls}`);
+  const hit = cls !== 'gap4+' ? rand() < queueTextShare(lanes) : null;
+  const differ = weighted ? rand() < QUEUE_COUNT_SHARE : null;
+  const heavy = weighted && lanes >= 3 && cls !== 'gap4+' ? rand() < queueTextShare(lanes) : null;
+  let drawn = null, answer, text;
+  for (let t = 0; t < tries && drawn === null; t++) {
+    const shapes = [...Array(lanes)].map(() => pickCum(rand, QUEUE_SHAPES, QUEUE_SHAPE_CUM));
+    const sizes = shapes.map(([size]) => size), low = Math.min(...sizes);
+    if (sizes.filter(s => s === low).length > 1) continue;  // jediný pruh s nejméně vozidly
+    const lengths = weighted ? shapes.map(([size, n]) => size + 2 * n) : sizes;      // těžké vozidlo váží 3
+    const order = lengths.map((_, i) => i).sort((a, b) => lengths[a] - lengths[b]);
+    const gap = lengths[order[1]] - lengths[order[0]];
+    if (gap === 0 || queueClass(gap) !== cls) continue;
+    const top = order[0];
+    if (weighted && (sizes.indexOf(low) !== top) !== differ) continue;
+    if (heavy !== null && queueFewest(shapes.map(([, n]) => n)).includes(top) !== heavy) continue;
+    const lanesDrawn = shapes.map(([size, n]) => [...Array(n)].map(() => pickOf(rand, QUEUE_HEAVY)).concat([...Array(size - n)].map(() => pickOf(rand, QUEUE_LIGHT))));
+    const shortest = queueFewest(lanesDrawn.map(lane => lane.reduce((s, v) => s + v.length, 0) + 4 * lane.length));      // délka json.dumps(seznam)
+    if (hit !== null && shortest.includes(top) !== hit) continue;
+    drawn = lanesDrawn;
+    answer = top;
+    text = shortest;
+  }
+  if (drawn === null) throw new Error(`queueCase: no ${cls} task for ${lanes} lanes after ${tries} tries`);
+  drawn.forEach(lane => shuffleWith(rand, lane));          // těžká vozidla na náhodná místa ve frontě
+  const queues = drawn, count = queueCount(queues);
+  // záruky se kontrolují znovu z hotových front; porušení je chyba generátoru a nic se neopravuje potichu
+  const lengths = queues.map(q => queueLength(q, weighted)), rest = lengths.filter((_, i) => i !== answer).sort((a, b) => a - b);
+  const texts = queueText(queues);
+  if (queues.length !== lanes || lengths[answer] >= rest[0] || queueClass(rest[0] - lengths[answer]) !== cls
+      || texts.length !== text.length || texts.some((v, i) => v !== text[i]) || (!weighted && count !== answer) || (weighted && count === null))
+    throw new Error('queueCase: generated task breaks its guarantees');
+  return { queues, answer, cls, text, count };
+}
+function queueRow(lanes, weighted, rand) {                 // třída se losuje před úlohou, jako queue_cases; truth = index nejkratšího pruhu
+  const c = queueCase(rand, lanes, pickOf(rand, QUEUE_GAPS), weighted);
+  return { ...c, truth: c.answer };
+}
+// Rozbor chyb, stejné definice jako queue_errors v bench.py. Úloha c = { queues, answer, cls, text, count }, keys = klíče pruhů. Správná volba vrací null.
+// invalid: není řetězec z keys; count (jen s vahami): zvolený je jediný pruh s nejméně vozidly; text: zvolený je některý z pruhů s nejkratším zápisem; other: zbytek.
+function queueErrorKind(c, choice, keys, weighted) {
+  if (typeof choice !== 'string' || !keys.includes(choice)) return 'invalid';
+  if (choice === keys[c.answer]) return null;
+  if (weighted && c.count !== null && choice === keys[c.count]) return 'count';
+  if (c.text.some(i => choice === keys[i])) return 'text';
+  return 'other';
+}
+function queueErrors(cases, choices, keys, weighted) {
+  const counts = weighted ? { count: 0, text: 0, other: 0, invalid: 0 } : { text: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = queueErrorKind(c, choices[i], keys, weighted); if (kind) counts[kind]++; });
+  return counts;
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. lanes - 1 pruhů po 12 motorkách (nejdelší jméno vozidla) a poslední pruh s 11,
+// takže stav je skoro nejdelší. Správně je poslední pruh s vahami i bez (motorka váží 1).
+function queueWarm(lanes) {
+  const queues = [...Array(lanes)].map((_, i) => Array(i === lanes - 1 ? 11 : 12).fill('motorbike'));
+  return { queues, answer: lanes - 1, cls: 'gap1', text: queueText(queues), count: lanes - 1, truth: lanes - 1 };
+}
+// Sázka na pruh: konstanty, generátor, stav a otázka, stejné jako v bench.py (BET_*, bet_top, bet_second, bet_case, bet_cases, bet_state, bet_question).
+// Výplata brány ev = odměna × šance v procentech, počítá se v celých číslech. Náhoda z předané funkce rand, stejné kroky a pořadí losování jako
+// v Pythonu; jiné úlohy než bench.py, protože Python má jiný generátor náhody. Co jde do modelu, je anglicky.
+const BET_LEVELS = ['same', 'round', 'general'];
+const BET_REWARDS = Array.from({ length: 38 }, (_, i) => 20 + 10 * i);          // range(20, 400, 10)
+const BET_SAME_CHANCES = Array.from({ length: 8 }, (_, i) => 20 + 10 * i);      // range(20, 100, 10)
+const BET_CHANCES = Array.from({ length: 18 }, (_, i) => 10 + 5 * i);           // range(10, 100, 5)
+const BET_MARGIN = 105, BET_SHORTCUT_SHARE = 1 / 3, BET_TRIES = 10000;          // správná brána má mít aspoň o 5 % vyšší ev než druhá
+function betTop(values) {                                  // index jediného maxima, při shodě na maximu null
+  const best = Math.max(...values);
+  return values.filter(v => v === best).length === 1 ? values.indexOf(best) : null;
+}
+function betSecond(rewards) {                              // brány s druhou hodnotou sestupně seřazených odměn, při shodě všechny, vzestupně
+  const second = [...rewards].sort((a, b) => b - a)[1];
+  return rewards.map((r, i) => r === second ? i : -1).filter(i => i >= 0);
+}
+// Úloha dané úrovně: port bet_case. V general se předem losuje, jestli má být správná brána s nejvyšší odměnou, nejvyšší šancí a při 4 a více
+// branách s druhou nejvyšší odměnou; úloha se přijme, jen když se zkratky trefují přesně tak. Vyčerpané pokusy a porušená záruka vyhodí výjimku.
+function betCase(rand, gates, level) {
+  if (!(Number.isInteger(gates) && gates >= 3 && gates <= 8) || !BET_LEVELS.includes(level)) throw new Error(`betCase: unsupported task for ${gates} gates and level ${level}`);
+  let want = null;
+  if (level === 'general') {
+    const top = rand() < BET_SHORTCUT_SHARE;
+    const chance = rand() < BET_SHORTCUT_SHARE;
+    const second = gates >= 4 ? !top && rand() < 1 / 2 : null;
+    want = [top, chance, second];
+  }
+  let found = null;
+  for (let t = 0; t < BET_TRIES && found === null; t++) {
+    let chances;
+    if (level === 'same') chances = Array(gates).fill(pickOf(rand, BET_SAME_CHANCES));
+    else if (level === 'round') {
+      chances = Array(gates).fill(50);
+      chances[Math.floor(rand() * gates)] = 100;
+    } else chances = [...Array(gates)].map(() => pickOf(rand, BET_CHANCES));
+    const rewards = [...Array(gates)].map(() => pickOf(rand, BET_REWARDS));
+    const ev = rewards.map((r, i) => r * chances[i]);
+    const order = [...Array(gates).keys()].sort((a, b) => ev[b] - ev[a]);
+    const answer = order[0];
+    if (100 * ev[answer] < BET_MARGIN * ev[order[1]]) continue;
+    const topReward = betTop(rewards), topChance = betTop(chances);
+    if (level === 'round' && topChance === answer) continue;
+    if (level === 'general') {
+      if (topReward === null || topChance === null) continue;
+      if ((topReward === answer) !== want[0] || (topChance === answer) !== want[1]) continue;
+      if (want[2] !== null && betSecond(rewards).includes(answer) !== want[2]) continue;
+    }
+    found = { rewards, chances, answer, level, topReward, topChance };
+  }
+  if (found === null) throw new Error(`betCase: no ${level} task for ${gates} gates after ${BET_TRIES} tries`);
+  if (level !== 'general' && found.topReward !== found.answer) throw new Error('betCase: generated task breaks its guarantees');
+  return found;
+}
+function betRow(gates, rand) {                             // úroveň se losuje před úlohou, jako bet_cases; truth = index správné brány
+  const c = betCase(rand, gates, pickOf(rand, BET_LEVELS));
+  return { ...c, truth: c.answer };
+}
+function betState(rewards, chances) {                      // stav pro model: gate_N → odměna a šance v procentech
+  const state = {};
+  rewards.forEach((r, i) => state[`gate_${i + 1}`] = { reward: r, chance_pct: chances[i] });
+  return state;
+}
+function betQuestion(gates) {                              // otázka choice: brána s nejvyšší očekávanou výplatou
+  const instructions = 'Each gate pays its reward with the given chance in percent, otherwise nothing. Choose the gate with the highest expected payout (reward times chance).';
+  return { bet: { type: 'choice', instructions, criteria: memoryQuestion(gates).recall.criteria } };
+}
+function betEv(reward, chance) {                           // jen pro stránku, bench.py ji nemá: očekávaná výplata pro diváka (kresba, štítek)
+  return reward * chance / 100;
+}
+// Druh chyby jednoho kroku bet_summary: neplatná volba (není řetězec z keys) = invalid, správná = null, jediná brána s nejvyšší odměnou = reward,
+// jinak jediná brána s nejvyšší šancí = chance, jinak other. Úloha c = { rewards, chances, answer, level, topReward, topChance }.
+function betErrorKind(c, choice, keys) {
+  if (typeof choice !== 'string' || !keys.includes(choice)) return 'invalid';
+  if (choice === keys[c.answer]) return null;
+  if (c.topReward !== null && choice === keys[c.topReward]) return 'reward';
+  if (c.topChance !== null && choice === keys[c.topChance]) return 'chance';
+  return 'other';
+}
+// Stejný jako bet_summary (s class_tally) v bench.py; úloha c = { rewards, chances, answer, level, topReward, topChance }. Neplatná volba: regret 1.
+// Bez úloh je regret NaN (Python by dělil nulou), stránka ukáže „—“.
+function betSummary(cases, choices, keys) {
+  const by_level = classTally(BET_LEVELS, cases.map(c => [c.answer, c.level]), choices, keys);
+  const errors = { reward: 0, chance: 0, other: 0, invalid: 0 };
+  let regret = 0;
+  cases.forEach((c, i) => {
+    const kind = betErrorKind(c, choices[i], keys);
+    if (kind === 'invalid') { errors.invalid++; regret += 1; return; }
+    const ev = c.rewards.map((r, j) => r * c.chances[j]);
+    regret += (ev[c.answer] - ev[keys.indexOf(choices[i])]) / ev[c.answer];
+    if (kind) errors[kind]++;
+  });
+  return { by_level, regret: regret / cases.length, errors };
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. Brána 1 vyplatí 390 × 100 % = 39 000, ostatní 390 × 95 % = 37 050 (o 5,3 % méně,
+// marže BET_MARGIN platí). Stav je nejdelší možný: odměny mají tři číslice, šance 100 je nejvýš jednou, ostatní dvě číslice.
+function betWarm(gates) {
+  return { rewards: Array(gates).fill(390), chances: [100, ...Array(gates - 1).fill(95)], answer: 0, level: 'general', topReward: null, topChance: 0, truth: 0 };
+}
+// Tempomat: konstanty, tabulka pásem, stav a otázka, stejné jako v bench.py (CRUISE_*, band_level, band_range, near_edge, neighbor_level,
+// cruise_level, level_keys, choice_level, cruise_state, cruise_question). Úloha je { m, road, fog, answer, cls, place }: vzdálenost překážky
+// v m, povrch, mlha, správný stupeň 1–7, třída a poloha. CRUISE_WEIGHTS: třída → [[stupeň ze vzdálenosti, srážka povrch, srážka mlha], váha]
+// v pořadí slovníku Pythonu (pořadí rozhoduje o losování). Stránka má jen podobu otázky choice. Co jde do modelu, je anglicky.
+const CRUISE_TOP = 7;                                      // nejvyšší stupeň (škála 1–7)
+const CRUISE_BANDS = [20, 40, 60, 100, 150, 220];          // hranice pásem: pod 20 m stupeň 1, 20–39 m 2, …, 220 m a víc 7
+const CRUISE_DIST = [8, 300];                              // nejkratší a nejdelší vzdálenost překážky v m
+const CRUISE_EDGE = 3;                                     // u hranice: b − 3 ≤ m ≤ b + 2 pro některou hranici b
+const CRUISE_ROAD = { dry: 0, wet: 1, icy: 2 };            // o kolik stupňů níž
+const CRUISE_FOG = { none: 0, light: 1, dense: 2 };
+const CRUISE_CLASSES = ['table', 'road', 'fog', 'both'];   // platí žádná podmínka, jen povrch, jen mlha, obě
+const CRUISE_PLACES = ['edge', 'middle'];
+const CRUISE_ONE = [[[2, 1], 1], [[3, 1], 1], [[3, 2], 4], [[4, 1], 12], [[4, 2], 22], [[5, 1], 6], [[5, 2], 11], [[6, 1], 1], [[6, 2], 17], [[7, 1], 2], [[7, 2], 22]];
+const CRUISE_WEIGHTS = {                                   // váhy kombinací z prototypu, jako CRUISE_WEIGHTS v bench.py
+  table: [[[1, 0, 0], 20], [[2, 0, 0], 10], [[3, 0, 0], 10], [[4, 0, 0], 20], [[5, 0, 0], 10], [[6, 0, 0], 10], [[7, 0, 0], 20]],
+  road: CRUISE_ONE.map(([[level, p], w]) => [[level, p, 0], w]),
+  fog: CRUISE_ONE.map(([[level, f], w]) => [[level, 0, f], w]),
+  both: [[[3, 1, 1], 1], [[4, 1, 1], 25], [[4, 1, 2], 1], [[4, 2, 1], 1], [[5, 1, 1], 1], [[5, 1, 2], 1], [[5, 2, 1], 1], [[5, 2, 2], 24],
+         [[6, 1, 1], 1], [[6, 1, 2], 16], [[6, 2, 1], 9], [[6, 2, 2], 1], [[7, 1, 1], 1], [[7, 1, 2], 16], [[7, 2, 1], 9], [[7, 2, 2], 1]],
+};
+const bandLevel = m => 1 + CRUISE_BANDS.filter(b => m >= b).length;      // stupeň podle vzdálenosti, bez srážek
+function bandRange(level) {                                // nejmenší a největší vzdálenost pásma, oříznutá na CRUISE_DIST
+  return [level === 1 ? CRUISE_DIST[0] : CRUISE_BANDS[level - 2], level === CRUISE_TOP ? CRUISE_DIST[1] : CRUISE_BANDS[level - 1] - 1];
+}
+const nearEdge = m => CRUISE_BANDS.some(b => b - CRUISE_EDGE <= m && m <= b + CRUISE_EDGE - 1);
+function neighborLevel(m) {                                // stupeň pásma za nejbližší hranicí (omyl „sousední pásmo“); hranice jsou sudé, shoda nenastane
+  const b = CRUISE_BANDS.reduce((a, x) => Math.abs(m - x + 0.5) < Math.abs(m - a + 0.5) ? x : a);
+  return m >= b ? bandLevel(b - 1) : bandLevel(b);
+}
+const cruiseLevel = (m, road, fog) => bandLevel(m) - CRUISE_ROAD[road] - CRUISE_FOG[fog];      // správný stupeň, bez ořezu
+const CRUISE_INS = 'Choose the cruise control speed level, from 1 (slowest) to 7 (fastest). Start from obstacle_m, the distance in meters to the nearest obstacle ahead: under 20 m is level 1, 20 to 39 m level 2, 40 to 59 m level 3, 60 to 99 m level 4, 100 to 149 m level 5, 150 to 219 m level 6, 220 m or more level 7. Then go one level lower on a wet road and two levels lower on an icy road. Then go one level lower in light fog and two levels lower in dense fog.';
+const levelKeys = () => [...Array(CRUISE_TOP)].map((_, i) => `level_${i + 1}`);
+function choiceLevel(choice) {                             // stupeň ze zvolené možnosti; cokoli mimo levelKeys() (i ne-řetězec) je null
+  const keys = levelKeys();
+  return typeof choice === 'string' && keys.includes(choice) ? keys.indexOf(choice) + 1 : null;
+}
+const cruiseState = (m, road, fog) => ({ obstacle_m: m, road, fog });      // klíče vždy všechny tři, v tomto pořadí
+function cruiseQuestion() {                                // popisy stupňů jako cruise_question v bench.py
+  const criteria = {};
+  for (let k = 1; k <= CRUISE_TOP; k++) criteria[`level_${k}`] = `Level ${k}` + (k === 1 ? ' (slowest)' : k === CRUISE_TOP ? ' (fastest)' : '');
+  return { speed: { type: 'choice', instructions: CRUISE_INS, criteria } };
+}
+// Generátor Tempomatu: stejné kroky a pořadí losování jako cruise_case a cruise_cases v bench.py, náhoda z předané funkce rand (stránka dává rnd, test vlastní).
+// Jiné úlohy než bench.py, protože Python má jiný generátor náhody. Nezamítá: kombinaci losuje podle vah třídy, pak vzdálenost z pásma se správnou polohou.
+function cruiseCase(rand, cls, place) {
+  if (!Object.hasOwn(CRUISE_WEIGHTS, cls) || !CRUISE_PLACES.includes(place)) throw new Error(`cruiseCase: unsupported class ${cls} or place ${place}`);
+  const combos = CRUISE_WEIGHTS[cls];
+  const [level, p, f] = pickCum(rand, combos.map(([k]) => k), cumWeights(combos.map(([, w]) => w)));
+  const [lo, hi] = bandRange(level);
+  const ms = [];
+  for (let x = lo; x <= hi; x++) if (nearEdge(x) === (place === 'edge')) ms.push(x);
+  const m = pickOf(rand, ms);
+  const road = Object.keys(CRUISE_ROAD).find(k => CRUISE_ROAD[k] === p);
+  const fog = Object.keys(CRUISE_FOG).find(k => CRUISE_FOG[k] === f);
+  const answer = cruiseLevel(m, road, fog);
+  if (!(answer >= 1 && answer <= CRUISE_TOP) || bandLevel(m) !== level) throw new Error('cruiseCase: generated task breaks its guarantees');
+  return { m, road, fog, answer, cls, place };
+}
+function cruiseRow(rand) {                                 // třída před polohou, jako argumenty v cruise_cases
+  const c = cruiseCase(rand, pickOf(rand, CRUISE_CLASSES), pickOf(rand, CRUISE_PLACES));
+  return { ...c, truth: c.answer - 1 };
+}
+function cruiseErrors(cases, levels) {                     // druhy chyb jako cruise_errors; levels[i] je stupeň 1–7, nebo null (neplatná)
+  const errors = { distance: 0, omitted: 0, flat: 0, neighbor: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => {
+    const level = levels[i];
+    if (level === null || level === undefined) { errors.invalid++; return; }
+    if (level === c.answer) return;
+    const band = bandLevel(c.m), p = CRUISE_ROAD[c.road], f = CRUISE_FOG[c.fog];
+    if (level === band) errors.distance++;
+    else if (level === band - p || level === band - f) errors.omitted++;
+    else if (level === band - (p > 0) - (f > 0)) errors.flat++;
+    else if (nearEdge(c.m) && level === neighborLevel(c.m) - p - f) errors.neighbor++;
+    else errors.other++;
+  });
+  return errors;
+}
+function cruiseSummary(cases, levels) {                    // port cruise_summary: přesnost podle třídy a polohy, škála a druhy chyb
+  const by_class = {}, by_place = {};
+  CRUISE_CLASSES.forEach(c => { by_class[c] = [0, 0]; });
+  CRUISE_PLACES.forEach(p => { by_place[p] = [0, 0]; });
+  let within = 0, mae = 0, fast = 0, slow = 0;
+  cases.forEach((c, i) => {
+    const level = levels[i] === undefined ? null : levels[i];
+    const ok = level === c.answer ? 1 : 0;
+    for (const tally of [by_class[c.cls], by_place[c.place]]) { tally[0] += ok; tally[1] += 1; }
+    if (level === null) { mae += CRUISE_TOP - 1; return; }
+    mae += Math.abs(level - c.answer);
+    if (Math.abs(level - c.answer) <= 1) within++;
+    if (level > c.answer) fast++;
+    if (level < c.answer) slow++;
+  });
+  const n = cases.length;
+  return { by_class, by_place, scale: { within: within / n, mae: mae / n, fast, slow }, errors: cruiseErrors(cases, levels) };
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. 150 m má tři číslice a leží na hranici pásma, dense je nejdelší slovo mlhy
+// (povrch má vždy tři písmena), tedy nejdelší stav; pásmo 6 − 2 − 2 = 2.
+function cruiseWarm() {
+  return { m: 150, road: 'icy', fog: 'dense', answer: 2, cls: 'both', place: 'edge', truth: 1 };
+}
+// Jízdní řád: konstanty, tabulka tras, řešitel, stav a otázka, stejné jako v bench.py (TIMETABLE_*, timetable_*). Řádek tabulky je [zip_from, zip_to, depo],
+// tabulka je seřazená podle PSČ, výjimka je [služba, depo] nebo null. Stránka má jen výchozí podobu stavu sorted; podoba shuffled je jen v bench.py.
+// timetable_row se tu jmenuje timetableIndex (timetableRow je generátor řady). Co jde do modelu, je anglicky.
+const TIMETABLE_DEPOTS = ['alder', 'birch', 'cedar', 'maple', 'oak', 'pine'];
+const TIMETABLE_SERVICES = ['standard', 'express', 'economy', 'cooled'];
+const TIMETABLE_EXC_SERVICES = ['express', 'economy', 'cooled'];
+const TIMETABLE_ZIP = [10000, 99999], TIMETABLE_MIN_WIDTH = 300;
+const TIMETABLE_SIZES = { small: [3, 5], medium: [6, 8], large: [9, 12] };      // pořadí tříd rozhoduje o losování
+const TIMETABLE_POSITIONS = ['inner', 'near', 'bound'];
+const TIMETABLE_RULES = ['none', 'applies', 'decoy'];
+const TIMETABLE_NEAR = 9, TIMETABLE_INNER = 100, TIMETABLE_TRIES = 1000;
+const TIMETABLE_POSITION_RULES = ['none', 'decoy'];
+// Port random.sample(range(lo, hi), k) metodou množiny. CPython (Lib/random.py, sample) volí podle setsize = 21 (při k > 5 navíc
+// 4 ** ceil(log(3k, 4)), pro k = 11 tedy 85). Populace tu má 89 999 čísel a k je nejvýš 11, takže Python jde vždy touto větví:
+// losuje j = randbelow(n), dokud není nové. Výsledek je v pořadí losování, timetableTable ho pak seřadí.
+function sampleRange(rand, lo, hi, k) {
+  const n = hi - lo, chosen = new Set(), out = [];
+  for (let i = 0; i < k; i++) {
+    let j = Math.floor(rand() * n);
+    while (chosen.has(j)) j = Math.floor(rand() * n);
+    chosen.add(j);
+    out.push(lo + j);
+  }
+  return out;
+}
+function timetableTable(rand, n) {
+  let starts = null, ends = null;
+  for (let t = 0; t < TIMETABLE_TRIES; t++) {
+    const cuts = sampleRange(rand, TIMETABLE_ZIP[0] + 1, TIMETABLE_ZIP[1] + 1, n - 1).sort((a, b) => a - b);
+    const s = [TIMETABLE_ZIP[0]].concat(cuts);
+    const e = s.slice(1).map(x => x - 1).concat([TIMETABLE_ZIP[1]]);
+    if (Math.min(...s.map((x, i) => e[i] - x + 1)) >= TIMETABLE_MIN_WIDTH) { starts = s; ends = e; break; }
+  }
+  if (!starts) throw new Error(`timetableTable: no table of ${n} rows after ${TIMETABLE_TRIES} tries`);
+  const depots = [];
+  for (let i = 0; i < n; i++) depots.push(pickOf(rand, TIMETABLE_DEPOTS.filter(d => !depots.length || d !== depots[depots.length - 1])));
+  return starts.map((s, i) => [s, ends[i], depots[i]]);
+}
+function timetableIndex(spans, z) {
+  const hit = [];
+  spans.forEach(([a, b], i) => { if (a <= z && z <= b) hit.push(i); });
+  if (hit.length !== 1) throw new Error(`timetableIndex: zip ${z} is in ${hit.length} rows`);
+  return hit[0];
+}
+function timetableSolve(state) {
+  const { parcel, routes } = state;
+  for (const e of state.exceptions) if (e.service === parcel.service) return e.depot;
+  return routes[timetableIndex(routes.map(r => [r.zip_from, r.zip_to]), parcel.zip)].depot;
+}
+function timetableState(c) {
+  return { parcel: { zip: c.zip, service: c.service },
+           routes: c.rows.map(([a, b, d]) => ({ zip_from: a, zip_to: b, depot: d })),
+           exceptions: c.exception ? [{ service: c.exception[0], depot: c.exception[1] }] : [] };
+}
+function timetableQuestion() {
+  return { depot: { type: 'choice',
+    instructions: "Route the parcel to a depot. Each row of routes covers the ZIP codes from zip_from to zip_to, both included, and sends those parcels to its depot. exceptions override routes: a parcel whose service matches an exception goes to that exception's depot instead. Choose the depot for the parcel.",
+    criteria: Object.fromEntries(TIMETABLE_DEPOTS.map(d => [d, 'Depot ' + d[0].toUpperCase() + d.slice(1)])) } };
+}
+// Úloha Jízdního řádu dané třídy: port timetable_case z bench.py, stejné kroky a pořadí volání rand, náhoda z předané funkce (stránka dává rnd);
+// jiné úlohy než bench.py, protože Python má jiný generátor náhody. Poloha a strana se berou jen u hranice se sousedem, depo výjimky není depo trasy
+// ani sousedů, decoy má jinou nestandardní službu. Zamíchání se losuje vždy, aby obě podoby měly ze stejného semínka stejné úlohy.
+// Kontrola záruk je nad hotovou úlohou, porušení vyhodí chybu, nic se neopravuje potichu. Vrací { rows, order, zip, service, exception, answer, size, pos, rule }.
+function timetableCase(rand, size, pos, rule) {
+  if (!Object.hasOwn(TIMETABLE_SIZES, size) || !TIMETABLE_POSITIONS.includes(pos) || !TIMETABLE_RULES.includes(rule))
+    throw new Error(`timetableCase: unknown class ${size}, ${pos}, ${rule}`);
+  const rows = timetableTable(rand, pickInt(rand, ...TIMETABLE_SIZES[size]));
+  const n = rows.length;
+  const i = Math.floor(rand() * n);
+  const [a, b, route] = rows[i];
+  let z;
+  if (pos === 'inner') z = pickInt(rand, a + TIMETABLE_INNER, b - TIMETABLE_INNER);
+  else {
+    const side = pickOf(rand, [['low', i > 0], ['high', i < n - 1]].filter(([, ok]) => ok).map(([s]) => s));
+    const k = pos === 'bound' ? 0 : pickInt(rand, 1, TIMETABLE_NEAR);
+    z = side === 'low' ? a + k : b - k;
+  }
+  const near = new Set([i - 1, i + 1].filter(j => j >= 0 && j < n).map(j => rows[j][2]));
+  let service, exception;
+  if (rule === 'none') { service = pickOf(rand, TIMETABLE_SERVICES); exception = null; }
+  else {
+    const es = pickOf(rand, TIMETABLE_EXC_SERVICES);
+    exception = [es, pickOf(rand, TIMETABLE_DEPOTS.filter(d => d !== route && !near.has(d)))];
+    service = rule === 'applies' ? es : pickOf(rand, TIMETABLE_EXC_SERVICES.filter(s => s !== es));
+  }
+  const order = shuffleWith(rand, [...Array(n).keys()]);
+  const answer = rule === 'applies' ? exception[1] : route;
+  const c = { rows, order, zip: z, service, exception, answer, size, pos, rule };
+  const edges = [];
+  if (i > 0) edges.push(z - a);
+  if (i < n - 1) edges.push(b - z);
+  const least = Math.min(...edges);
+  const real = Math.min(z - a, b - z) >= TIMETABLE_INNER ? 'inner' : least === 0 ? 'bound' : least >= 1 && least <= TIMETABLE_NEAR ? 'near' : null;
+  let ok = rows[0][0] === TIMETABLE_ZIP[0] && rows[n - 1][1] === TIMETABLE_ZIP[1]
+    && Math.min(...rows.map(([s, e]) => e - s + 1)) >= TIMETABLE_MIN_WIDTH && real === pos
+    && (exception === null || (exception[1] !== route && !near.has(exception[1])));
+  for (let k = 0; ok && k < n - 1; k++) ok = rows[k][1] + 1 === rows[k + 1][0] && rows[k][2] !== rows[k + 1][2];
+  ok = ok && timetableIndex(rows.map(r => r.slice(0, 2)), z) === i && timetableSolve(timetableState(c)) === answer;
+  if (!ok) throw new Error('timetableCase: broken guarantee');
+  return c;
+}
+function timetableRow(rand) {                                // velikost, poloha a výjimka se losují v pořadí timetable_cases; truth = index správného depa
+  const c = timetableCase(rand, pickOf(rand, Object.keys(TIMETABLE_SIZES)), pickOf(rand, TIMETABLE_POSITIONS), pickOf(rand, TIMETABLE_RULES));
+  return { ...c, truth: TIMETABLE_DEPOTS.indexOf(c.answer) };
+}
+function timetableErrorKind(c, choice) {                     // jeden krok timetable_errors; c = { rows, zip, exception, answer, rule }; správná volba dá null
+  if (typeof choice !== 'string' || !TIMETABLE_DEPOTS.includes(choice)) return 'invalid';
+  if (choice === c.answer) return null;
+  const i = timetableIndex(c.rows.map(r => r.slice(0, 2)), c.zip);
+  if (c.rule === 'applies' && choice === c.rows[i][2]) return 'missed';
+  if (c.rule === 'decoy' && choice === c.exception[1]) return 'misapplied';
+  if ([i - 1, i + 1].some(j => j >= 0 && j < c.rows.length && c.rows[j][2] === choice)) return 'neighbor';
+  return 'other';
+}
+function timetableErrors(cases, choices) {
+  const counts = { neighbor: 0, missed: 0, misapplied: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = timetableErrorKind(c, choices[i]); if (kind) counts[kind]++; });
+  return counts;
+}
+function timetableSummary(cases, choices) {                  // port timetable_summary: velikost a výjimka ze všech úloh, poloha jen z úloh s výjimkou v TIMETABLE_POSITION_RULES
+  const picked = cases.map((c, i) => [c, choices[i]]).filter(([c]) => TIMETABLE_POSITION_RULES.includes(c.rule));
+  return { by_size: classTally(Object.keys(TIMETABLE_SIZES), cases.map(c => [TIMETABLE_DEPOTS.indexOf(c.answer), c.size]), choices, TIMETABLE_DEPOTS),
+           by_position: classTally(TIMETABLE_POSITIONS, picked.map(([c]) => [TIMETABLE_DEPOTS.indexOf(c.answer), c.pos]), picked.map(([, ch]) => ch), TIMETABLE_DEPOTS),
+           by_rule: classTally(TIMETABLE_RULES, cases.map(c => [TIMETABLE_DEPOTS.indexOf(c.answer), c.rule]), choices, TIMETABLE_DEPOTS),
+           errors: timetableErrors(cases, choices) };
+}
+// Jen pro stránku, bench.py ji nemá: pevná zahřívací úloha bez náhody. Stav je nejdelší možný: 12 řádků, pětipísmenná depa a výjimka se sedmipísmennou službou.
+// PSČ 55555 leží v řádku 6 (depo cedar, sousedé birch a maple), služba economy výjimku express nespustí, takže platí řádek trasy (decoy, inner, large).
+function timetableWarm() {
+  const names = ['alder', 'birch', 'cedar', 'maple'];
+  const rows = Array.from({ length: 12 }, (_, k) => [10000 + 7500 * k, 17499 + 7500 * k, names[k % 4]]);
+  return { rows, order: rows.map((_, k) => k), zip: 55555, service: 'economy', exception: ['express', 'alder'], answer: 'cedar',
+           size: 'large', pos: 'inner', rule: 'decoy', truth: TIMETABLE_DEPOTS.indexOf('cedar') };
 }
 // ==== sdíleno s Pythonem: konec ====
 
@@ -4007,11 +5188,11 @@ let ladder = null;                                         // { i: úroveň, fro
 
 function syncControls() {                                  // co jde měnit jen v některém scénáři nebo režimu
   $('lanes').disabled = running || !SC.lanesFree;
-  for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);     // dva kroky dopředu: od 3 pruhů
-  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;
   const lanes = $('lanes');                                // závora a skryté pravidlo: zamčený volič ukazuje pevný počet pruhů, volba uživatele se vrátí
   if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }
   else if (lanes.dataset.free !== undefined) { lanes.value = lanes.dataset.free; delete lanes.dataset.free; }
+  for (const o of lanes.options) o.disabled = +o.value < (SC.minLanes ?? 2);     // dva kroky dopředu: od 3 pruhů; nejdřív návrat volby, pak minimum
+  if (+lanes.value < (SC.minLanes ?? 2)) lanes.value = SC.minLanes;
   $('extra').disabled = running || !SC.hasExtra;
   $('speed').disabled = running && $('mode').value === 'ladder';
   $('mirror').disabled = $('inject').disabled = running || !!SC.benchOnly;      // veřejná sada: zrcadla ani trojský kůň nejsou
@@ -4070,7 +5251,7 @@ async function selectScenario() {
   const benchBack = () => { if (benchBefore !== null) { $('benchn').value = benchBefore; benchBefore = null; } };
   const notLoaded = r => apiError('', r.status, () => t('run.datasetFailed'));      // věta stránky: chyba ji nese i jako funkci say a stav ji po přepnutí jazyka složí znovu
   try {
-    if (v === 'obstacles' || v === 'numbers' || v === 'signs' || v === 'memory' || v === 'barrier' || v === 'lookahead' || v === 'rule') { SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule }[v]; DS = null; benchBack(); }
+    if (v === 'obstacles' || v === 'numbers' || v === 'signs' || v === 'memory' || v === 'barrier' || v === 'lookahead' || v === 'rule' || v === 'queue' || v === 'queueWeighted' || v === 'bet' || v === 'cruise' || v === 'timetable') { SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule, queue, queueWeighted, bet, cruise, timetable }[v]; DS = null; benchBack(); }
     else if (v.startsWith('public/')) {
       const r = await req('/datasets/' + v);
       if (!r.ok) throw notLoaded(r);

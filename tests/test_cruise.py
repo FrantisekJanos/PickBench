@@ -5,7 +5,9 @@ import json
 import math
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -20,6 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 BANDS = (20, 40, 60, 100, 150, 220)
@@ -522,6 +525,118 @@ class Cli(unittest.TestCase):
         self.assertTrue(all(b'"type": "score"' in body for body in self.sent))
         self.assertTrue(any(b'"brake"' in body for body in self.sent))
         self.assertTrue(all(b'"criteria": ["' in body for body in self.sent))              # pole názvů stupňů, jak chce Ollama
+
+
+def cruise_body():
+    return page_source().split("\nconst cruise = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; tabulka pásem, generátor a rozbor hlídá tests/test_parity.py (Cruise)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_matches_bench(self):                          # zrcadlo: obrácené pořadí stupňů a ALT.speed, jako bench.variant
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(bench.cruise_question()) + ";" + (
+            "process.stdout.write(JSON.stringify([0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(Q)), v))));")
+        for v, js in enumerate(run_page_js(code)):
+            self.assertEqual(json.dumps(js), json.dumps(bench.variant(bench.cruise_question(), v)), v)
+
+
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="cruise" data-i18n="opt.scenario.cruise"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("|| v === 'cruise'"), 1)      # bez „) {“: jízdní řád podmínku prodlouží
+        self.assertEqual(page.count("// ---------- scénář: tempomat ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(cruiseWarm(), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, cruiseRow(rnd), 7)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(cruiseRow(rnd)); },"), 1)
+        body = cruise_body()
+        for call in ("rollInject([d.truth], 7)", "cruiseState(d.m, d.road, d.fog)", "injectText(INJECT_NOTE, levelKeys()[inject])",
+                     "variantOf(cruiseQuestion(), v)", "a.speed?.choice", "cruiseSummary(g.cases, g.levels)", "laneOf: (r, move) => move,",
+                     "panels: ['confPanel'"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    def test_lanes_are_fixed(self):                                # pruh = stupeň: vždy 7, volič zamčený a po přepnutí jinam se vrátí volba uživatele
+        page, body = page_source(), cruise_body()
+        self.assertIn("  fixedLanes: 7, lanes: () => 7,", body)
+        self.assertNotIn("lanesFree", body)
+        self.assertEqual(page.count("  if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }"), 1)
+        self.assertEqual(page.count("for (let n = 2; n <= 8; n++) $('lanes').add(new Option(n, n));"), 1)       # volba 7 ve voliči je
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_level(self):             # počítají se všechny odpovědi; neplatná je null (v MAE 6)
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", cruise_body(), re.S).group(0)[1:-1]
+        top = re.search(r"\nconst CRUISE_TOP = [^\n]*\n", page_source()).group(0)          # tally čte CRUISE_TOP ze sdíleného bloku
+        code = top + "const base = { tally() {} }; const o = { __proto__: base," + tally + "};" + (
+            "const g = { cases: [], levels: [] }, task = { m: 97, road: 'icy', fog: 'none', answer: 2, cls: 'road', place: 'middle', truth: 1, state: {} };"
+            "[1, 6, -1, 0].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"m": 97, "road": "icy", "fog": "none", "answer": 2, "cls": "road", "place": "middle"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 4, "levels": [2, 7, None, 1]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_why_names_the_band_and_the_penalties(self):           # výpočet ve štítku je tentýž, jakým se počítá správná odpověď
+        from test_parity import run_js
+        consts = re.search(r"\nconst CRUISE_WHY = [^\n]*\n", page_source()).group(0)
+        code = "(() => {" + consts + page_function("cruiseWhy") + "return arg.map(([m, road, fog]) => cruiseWhy({ m, road, fog })); })()"
+        hand = [[97, "icy", "none"], [130, "wet", "dense"], [19, "dry", "none"], [150, "icy", "dense"], [220, "dry", "light"]]
+        self.assertEqual(run_js(code, hand), ["97 m → stupeň 4, náledí −2", "130 m → stupeň 5, mokro −1, hustá mlha −2", "19 m → stupeň 1",
+                                              "150 m → stupeň 6, náledí −2, hustá mlha −2", "220 m → stupeň 7, slabá mlha −1"])
+        self.assertEqual(run_js(code, hand[:1], "en"), ["97 m → level 4, icy road −2"])
+        tasks = [[m, road, fog, answer] for m, road, fog, answer, *_ in bench.cruise_cases(300, seed=3)]
+        for (m, road, fog, answer), why in zip(tasks, run_js(code, tasks)):
+            band = int(re.match(r"\d+ m → stupeň (\d)", why).group(1))
+            self.assertEqual(band - sum(int(k) for k in re.findall(r"−(\d)", why)), answer, why)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):                        # štítek: správně s výpočtem, příliš rychle / pomalu, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "CRUISE_WHY"))
+        code = "(() => {" + consts + page_function("cruiseWhy") + page_function("cruiseLabel") + (
+            "const r = (result, chosen) => ({ m: 97, road: 'icy', fog: 'none', answer: 2, truth: 1, result, chosen });"
+            "return [r('ok', 1), r('bad', 3), r('bad', 0), r('bad', -1), r('late', undefined)].map(cruiseLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ stupeň 2: 97 m → stupeň 4, náledí −2", "✗ příliš rychle: stupeň 4, správně 2 (97 m → stupeň 4, náledí −2)",
+                                                   "✗ příliš pomalu: stupeň 1, správně 2 (97 m → stupeň 4, náledí −2)", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ too fast: level 4, correct 2 (97 m → level 4, icy road −2)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_row_shows_the_board_the_levels_and_the_pick(self):    # cedule přes t(), číslice 1–7, obrys jen u zvoleného stupně neprojeté řady
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("CRUISE_ROAD_NAME", "CRUISE_FOG_NAME"))
+        code = "(() => { const texts = [], strokes = [], W = 480, LW = W / 7, H = 600;" + consts + page_function("drawCruise") + (
+            "const ctx = new Proxy({ fillText(s) { texts.push(String(s)); }, strokeRect(x) { strokes.push(Math.round(x)); } },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const row = extra => ({ m: 97, road: 'icy', fog: 'none', truth: 1, result: null, chosen: undefined, ...extra });"
+            "drawCruise(row({ chosen: 3 }), 300); const a = texts.splice(0), sa = strokes.splice(0);"
+            "drawCruise(row({ chosen: -1 }), 300); drawCruise(row(), 300); const none = strokes.splice(0); texts.splice(0);"
+            "drawCruise(row({ result: 'ok', chosen: 1, road: 'dry', fog: 'dense', m: 230 }), 300);"
+            "return { a, sa, none, b: texts, sb: strokes }; })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([s for s in cs["a"] if s in list("1234567")], list("1234567"))
+        self.assertEqual([s for s in cs["a"] + cs["b"] if re.search(r"[^\W\d_]", s)],
+                         ["⚠ překážka za 97 m · náledí · bez mlhy", "⚠ překážka za 230 m · sucho · hustá mlha"])     # jiný text s písmeny kresba nepíše
+        self.assertIn("⚠ obstacle 97 m ahead · icy road · no fog", en["a"])
+        self.assertEqual((len(cs["sa"]), cs["none"], cs["sb"]), (1, [], []))                                  # po průjezdu obrys zmizí
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_legend_numbers_match_the_bands(self):                  # legenda opakuje tabulku zadání: hranice z CRUISE_BANDS, srážky z CRUISE_ROAD a CRUISE_FOG
+        from test_parity import run_js
+        b = bench.CRUISE_BANDS
+        want = [b[0], 1] + [x for k in range(len(b) - 1) for x in (b[k], b[k + 1] - 1, k + 2)] + [b[-1], bench.CRUISE_TOP]
+        for lang in ("cs", "en"):
+            table, penalty = run_js("[t('legend.cruise.table'), t('legend.cruise.penalty')]", None, lang)
+            self.assertEqual([int(x) for x in re.findall(r"\d+", table)], want, lang)
+            self.assertEqual([int(x) for x in re.findall(r"\d+", penalty)], [bench.CRUISE_ROAD["wet"], bench.CRUISE_ROAD["icy"],
+                                                                             bench.CRUISE_FOG["light"], bench.CRUISE_FOG["dense"]], lang)
+        body = cruise_body()
+        self.assertIn("  panels: ['confPanel', 'legend'],", body)
+        self.assertIn("  legend: [[null, 'legend.cruise.lanes'], [null, 'legend.cruise.table'], [null, 'legend.cruise.penalty'], ['#3fb950', 'legend.cruise.out']],", body)
 
 
 if __name__ == "__main__":

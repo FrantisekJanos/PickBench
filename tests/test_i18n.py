@@ -352,7 +352,9 @@ DYNAMIC = ("tip.", "col.", "result.", "gap.", "state.")
 # Celé klíče, které se skládají za běhu a doslova ve skriptu nestojí: klíč → kde. Starší scénáře drží doslova seznam v legacyCells.
 COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.memory": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.barrier": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.lookahead": "cellsOf: known('scenario.' + v.scenario, …)",
-            "scenario.rule": "cellsOf: known('scenario.' + v.scenario, …)"}
+            "scenario.rule": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.queue": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.queueWeighted": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.bet": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.cruise": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.timetable": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -361,7 +363,7 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
         "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
-        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo"]
+        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -566,7 +568,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 8)                                      # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo
+        self.assertEqual(len(blocks), 12)                                     # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -594,7 +596,7 @@ class PageTexts(unittest.TestCase):
         for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
             self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
-        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.lookahead", "scenario.memory", "scenario.rule", "scenario.signs"])
+        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.lookahead", "scenario.memory", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.timetable"])
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("výjim", self.texts[key]["cs"], key)
             self.assertIn("bans and exceptions", self.texts[key]["en"], key)
@@ -649,7 +651,7 @@ class PageTexts(unittest.TestCase):
         self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))"), ["✗ slepá ulička v řadě 1", "✗ slepá ulička v řadě 4"])
         self.assertEqual(node("[1, 4].map(n => t('lookahead.deadEnd', { n }))", lang="en"), ["✗ dead end in row 1", "✗ dead end in row 4"])
         for key in ("tip.speed", "row.tip.rate"):                                                          # dva kroky dopředu: bloky po 6 polích
-            self.assertTrue(self.texts[key]["cs"].endswith("rychlost ÷ 6."), key)
+            self.assertIn("dopředu jsou bloky po 6 polích" if key == "row.tip.rate" else "dopředu přijíždějí bloky po 6 polích", self.texts[key]["cs"], key)
 
     def test_rule_texts_match_bench_and_name_the_scenario(self):              # třídy a řádek pod tabulkou jako bench.py, popisek voliče, popisky se scénáři s řadami
         names = dict(re.findall(r"(\w+): '(rule\.class\.\w+)'", piece(r"^const RULE_CLASS_NAME = \{.*?\};$")))
@@ -667,6 +669,81 @@ class PageTexts(unittest.TestCase):
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("skryt", self.texts[key]["cs"], key)
             self.assertIn("hidden rule", self.texts[key]["en"], key)
+
+    def test_queue_texts_match_bench_and_name_the_scenario(self):             # rozdíl a řádky chyb jako bench.py, popisek voliče, popisky se scénáři s řadami
+        for code in ("cs", "en"):
+            for key in ("gap", "errors", "errorsWeighted"):
+                self.assertEqual(self.texts["queue." + key][code], i18n.TEXTS["bench.queue." + key][code], (key, code))
+            self.assertIn(self.texts["opt.scenario.queue"][code] + ": ", self.texts["tip.scenario"][code], code)
+            for about in ("scenario.queue.about", "scenario.queueWeighted.about"):
+                self.assertIn(self.texts["scenario.queue.extraTitle"][code], self.texts[about][code], (about, code))
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad", "tip.speed", "row.tip.rate"):
+            self.assertIn("nejkratší front", self.texts[key]["cs"], key)
+            self.assertIn("shortest queue", self.texts[key]["en"], key)
+        for key in ("tip.speed", "row.tip.rate"):                                                          # brány fronty po 6 polích
+            self.assertIn("po 6 polích", self.texts[key]["cs"].split("nejkratší fronty", 1)[1], key)
+        self.assertEqual(node("['1', '2–3', '4+'].map(d => t('queue.gap', { d }))"), ["rozdíl 1", "rozdíl 2–3", "rozdíl 4+"])
+
+    def test_bet_texts_match_bench_and_name_the_scenario(self):               # úrovně a řádek pod tabulkou jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = dict(re.findall(r"(\w+): '(bet\.level\.\w+)'", piece(r"^const BET_LEVEL_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["same", "round", "general"])                                     # pořadí BET_LEVELS
+        for code in ("cs", "en"):
+            for level, key in names.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.bet." + level][code], (key, code))
+                self.assertIn(self.texts[key][code], self.texts["scenario.bet.extraTip"][code], (key, code))
+            self.assertEqual(self.texts["bet.line"][code], i18n.TEXTS["bench.bet.line"][code], code)
+            self.assertIn(self.texts["opt.scenario.bet"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.bet.extraTitle"][code], self.texts["scenario.bet.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("sázk", self.texts[key]["cs"], key)
+            self.assertIn("bet on a lane", self.texts[key]["en"], key)
+        legend = re.search(r"\blegend: \[(.*?)\],\n", script().split("\nconst bet = {", 1)[1].split("\n};\n", 1)[0]).group(1)
+        self.assertEqual(re.findall(r"'(legend\.bet\.\w+)'", legend), ["legend.bet.gate", "legend.bet.rule", "legend.bet.out"])
+        for key in ("legend.bet.gate", "legend.bet.rule", "legend.bet.out", "bet.label.ok", "bet.label.reward", "bet.label.chance", "bet.label.bad"):
+            self.assertIn(key, self.texts)
+        self.assertIn("×", self.texts["legend.bet.rule"]["cs"])
+
+    def test_cruise_texts_match_bench_and_name_the_scenario(self):            # třídy, řádek polohy a škály a řádek chyb jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = dict(re.findall(r"(\w+): '(cruise\.class\.\w+)'", piece(r"^const CRUISE_CLASS_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["table", "road", "fog", "both"])                                    # pořadí CRUISE_CLASSES
+        for code in ("cs", "en"):
+            for cls, key in names.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.cruise." + cls][code], (key, code))
+                self.assertIn(self.texts[key][code] + " = ", self.texts["scenario.cruise.extraTip"][code], (key, code))
+            for key in ("line", "errors"):
+                self.assertEqual(self.texts["cruise." + key][code], i18n.TEXTS["bench.cruise." + key][code], (key, code))
+            self.assertIn(self.texts["opt.scenario.cruise"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.cruise.extraTitle"][code], self.texts["scenario.cruise.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("tempomat", self.texts[key]["cs"], key)
+            self.assertIn("cruise control", self.texts[key]["en"], key)
+        self.assertEqual(node("[1, 7].map(n => t('cruise.level', { n }))"), ["stupeň 1", "stupeň 7"])
+        self.assertEqual(node("[1, 7].map(n => t('cruise.level', { n }))", lang="en"), ["level 1", "level 7"])
+
+    def test_timetable_texts_match_bench_and_name_the_scenario(self):         # velikost, řádky pod tabulkou jako bench.py, jména dep a služeb, popisky se scénáři
+        depots = dict(re.findall(r"(\w+): '(timetable\.depot\.\w+)'", piece(r"^const TIMETABLE_DEPOT_NAME = \{.*?\};$")))
+        self.assertEqual(list(depots), ["alder", "birch", "cedar", "maple", "oak", "pine"])                # pořadí TIMETABLE_DEPOTS
+        services = re.findall(r"(\w+): 'timetable\.service\.\w+'", piece(r"^const TIMETABLE_SERVICE_NAME = \{.*?\};$"))
+        self.assertEqual(services, ["standard", "express", "economy", "cooled"])
+        self.assertEqual([self.texts[k]["en"] for k in depots.values()], ["Alder", "Birch", "Cedar", "Maple", "Oak", "Pine"])
+        for code in ("cs", "en"):
+            for key in ("size", "line", "errors"):
+                self.assertEqual(self.texts["timetable." + key][code], i18n.TEXTS["bench.timetable." + key][code], (key, code))
+            self.assertIn(self.texts["opt.scenario.timetable"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.timetable.extraTitle"][code], self.texts["scenario.timetable.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("jízdní", self.texts[key]["cs"], key)                                              # „jízdní řád“ i „jízdního řádu“
+            self.assertIn("timetable", self.texts[key]["en"], key)
+        ends = {"tip.speed": ("U jízdního řádu také po 6 polích, rychlost ÷ 6.", "For the timetable also every 6 cells, speed ÷ 6."),
+                "row.tip.rate": ("U jízdního řádu také, požadováno = rychlost ÷ 6.", "For the timetable too, required = speed ÷ 6.")}
+        for key, (cs, en) in ends.items():                                                                 # jízdní řád: řady po 6 polích
+            self.assertTrue(self.texts[key]["cs"].endswith(cs), key)
+            self.assertTrue(self.texts[key]["en"].endswith(en), key)
+        self.assertEqual(node("[[3, 5], [9, 12]].map(([lo, hi]) => t('timetable.size', { d: `${lo}–${hi}` }))"), ["3–5 řádků", "9–12 řádků"])
+        self.assertEqual(node("t('timetable.parcel', { zip: 81335, service: 'x' })"), "📦 PSČ 81335 · x")
+        self.assertEqual(node("t('timetable.parcel', { zip: 81335, service: 'x' })", lang="en"), "📦 ZIP 81335 · x")
+        for key in ("board", "exception", "gates", "out"):
+            self.assertIn("legend.timetable." + key, self.texts)
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
@@ -1153,6 +1230,30 @@ class Results(unittest.TestCase):
         pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
         self.assertEqual(node(pick, rows), [["skryté pravidlo", 3]])
         self.assertEqual(node(pick, rows, lang="en"), [["hidden rule", 3]])
+
+    def test_queue_row_reads_in_both_languages(self):                         # nový scénář nemá řádky z doby před data.vals, jen klíče scenario.queue*
+        rows = [{"vals": {**VALS, "scenario": "queue", "lanes": 4}}, {"vals": {**VALS, "scenario": "queueWeighted", "lanes": 6}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["nejkratší fronta", 4], ["nejkratší fronta (vážená)", 6]])
+        self.assertEqual(node(pick, rows, lang="en"), [["shortest queue", 4], ["shortest queue (weighted)", 6]])
+
+    def test_bet_row_reads_in_both_languages(self):                           # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.bet
+        rows = [{"vals": {**VALS, "scenario": "bet", "lanes": 5}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["sázka na pruh", 5]])
+        self.assertEqual(node(pick, rows, lang="en"), [["bet on a lane", 5]])
+
+    def test_cruise_row_reads_in_both_languages(self):                        # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.cruise
+        rows = [{"vals": {**VALS, "scenario": "cruise", "lanes": 7}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["tempomat", 7]])
+        self.assertEqual(node(pick, rows, lang="en"), [["cruise control", 7]])
+
+    def test_timetable_row_reads_in_both_languages(self):                     # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.timetable
+        rows = [{"vals": {**VALS, "scenario": "timetable", "lanes": 6}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["jízdní řád", 6]])
+        self.assertEqual(node(pick, rows, lang="en"), [["timetable", 6]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
@@ -1869,7 +1970,10 @@ class PageStatic(unittest.TestCase):
         live = ("$('speed')", "$('mode')", "isRealtime(")
         for word in live:
             self.assertEqual(body("drawStats").count(word), 0, word)
-        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo",
+        for part in ("scénář: překážky", "scénář: e-maily", "scénář: číselné duely", "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta",
+                     "scénář: sázka na pruh",
+                     "scénář: tempomat",
+                     "scénář: jízdní řád",
                      "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:
