@@ -527,6 +527,55 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka, ge
         for v, js in enumerate(run_page_js(code)):
             self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), v)     # varianta 1 obrácené pořadí dep, 2 ALT.depot
 
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="timetable" data-i18n="opt.scenario.timetable"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: jízdní řád ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(timetableWarm(), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, timetableRow(rnd), 6)); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(timetableRow(rnd)); },"), 1)
+        body = timetable_body()
+        for call in ("rollInject([d.truth], 6)", "timetableState(d)", "injectText(INJECT_NOTE, TIMETABLE_DEPOTS[inject])",
+                     "variantOf(timetableQuestion(), v)", "a.depot?.choice", "timetableSummary(", "panels: ['confPanel', 'legend']"):
+            self.assertIn(call, body)                                                             # definice ze sdíleného bloku, ne opsané
+
+    def test_lanes_are_fixed(self):                                # pruh = depo: vždy 6, volič zamčený, řady po 6 polích
+        page = page_source()
+        body = timetable_body()
+        self.assertIn("  id: 'timetable', fixedLanes: 6, lanes: () => 6,", body)
+        self.assertIn("  gap: TIMETABLE_GAP, keep: 4.5,", body)
+        self.assertEqual(page.count("const TIMETABLE_GAP = 6;"), 1)
+        self.assertEqual(page.count("if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }"), 1)     # jádro beze změny
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", timetable_body(), re.S).group(0)[1:-1]
+        code = ("const TIMETABLE_DEPOTS = ['alder', 'birch', 'cedar', 'maple', 'oak', 'pine'];"
+                "const base = { tally() {} }; const o = { __proto__: base," + tally + "};"
+                "const g = { cases: [], choices: [] }, task = { rows: [[10000, 99999, 'oak']], zip: 12345, service: 'cooled', exception: null,"
+                " answer: 'oak', size: 'small', pos: 'inner', rule: 'none', truth: 4, state: {} };"
+                "[4, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"rows": [[10000, 99999, "oak"]], "zip": 12345, "service": "cooled", "exception": None, "answer": "oak",
+                "size": "small", "pos": "inner", "rule": "none"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["oak", "alder", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_names_depots_in_the_page_language(self):
+        from test_parity import run_js
+        page = page_source()
+        method = re.search(r"\n  describeLast\(task, res\) \{.*?\n  \},", timetable_body(), re.S).group(0)[1:-1]
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("TIMETABLE_DEPOT_NAME", "TIMETABLE_SERVICE_NAME"))
+        code = "(() => {" + consts + page_function("timetableDepot") + page_function("timetableService") + "const o = {" + method + "};" + (
+            "return o.describeLast({ rows: [[10000, 81333, 'birch'], [81334, 99999, 'maple']], zip: 81335, service: 'express',"
+            " exception: ['economy', 'cedar'], truth: 3 }, { move: 2 }); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual(cs.split("\n"), ["zásilka: PSČ 81335, služba expresní", "trasy:   10000–81333 Bříza, 81334–99999 Javor",
+                                          "výjimky: úsporná → Cedr", "zvoleno: Cedr  (správně: Javor)",
+                                          "model:   depa a služby dostává anglicky (alder, birch, …; standard, express, …)"])
+        self.assertEqual(en.split("\n")[3], "chosen:     Cedar  (correct: Maple)")
+
 
 if __name__ == "__main__":
     unittest.main()
