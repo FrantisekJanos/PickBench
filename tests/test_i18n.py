@@ -354,7 +354,8 @@ COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "
             "scenario.barrier": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.lookahead": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.rule": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.queue": "cellsOf: known('scenario.' + v.scenario, …)",
             "scenario.queueWeighted": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.bet": "cellsOf: known('scenario.' + v.scenario, …)",
-            "scenario.cruise": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.timetable": "cellsOf: known('scenario.' + v.scenario, …)"}
+            "scenario.cruise": "cellsOf: known('scenario.' + v.scenario, …)", "scenario.timetable": "cellsOf: known('scenario.' + v.scenario, …)",
+            "scenario.tictactoe": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
 DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
@@ -363,7 +364,7 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
         "scénář: e-maily", "sdíleno",
         "jádro: hra", "jádro: rozhodování", "jádro: kreslení",      # části, které žádný úkol nejmenoval: český text v nich nikdy nebyl
-        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád"]
+        "scénář: zákazy a výjimky", "scénář: paměťová stopa", "scénář: závora", "scénář: dva kroky dopředu", "scénář: skryté pravidlo", "scénář: nejkratší fronta", "scénář: sázka na pruh", "scénář: tempomat", "scénář: jízdní řád", "scénář: tah na výhru"]
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
@@ -568,7 +569,7 @@ class PageTexts(unittest.TestCase):
 
     def test_last_decision_lines_keep_their_columns(self):                    # „Poslední rozhodnutí“: popisky jednoho výpisu končí ve stejném sloupci, v obou jazycích
         blocks = [key for key, entry in self.texts.items() if key.startswith("last.") and "\n" in entry["cs"]]
-        self.assertEqual(len(blocks), 12)                                     # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád
+        self.assertEqual(len(blocks), 13)                                     # e-maily, číselné duely, veřejná sada, zákazy a výjimky, paměťová stopa, závora, dva kroky dopředu, skryté pravidlo, nejkratší fronta, sázka na pruh, tempomat, jízdní řád, tah na výhru
         for key in blocks:
             for code in ("cs", "en"):
                 lines = self.texts[key][code].split("\n")
@@ -596,7 +597,7 @@ class PageTexts(unittest.TestCase):
         for code in ("cs", "en"):                                             # popisek voliče Scénář jmenuje volbu
             self.assertIn(self.texts["opt.scenario.signs"][code] + ": ", self.texts["tip.scenario"][code], code)
             self.assertIn(self.texts["scenario.signs.extraTitle"][code], self.texts["scenario.signs.about"][code], code)
-        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.lookahead", "scenario.memory", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.timetable"])
+        self.assertEqual(sorted(COMPOSED), ["scenario.barrier", "scenario.bet", "scenario.cruise", "scenario.lookahead", "scenario.memory", "scenario.queue", "scenario.queueWeighted", "scenario.rule", "scenario.signs", "scenario.tictactoe", "scenario.timetable"])
         for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
             self.assertIn("výjim", self.texts[key]["cs"], key)
             self.assertIn("bans and exceptions", self.texts[key]["en"], key)
@@ -736,14 +737,34 @@ class PageTexts(unittest.TestCase):
             self.assertIn("timetable", self.texts[key]["en"], key)
         ends = {"tip.speed": ("U jízdního řádu také po 6 polích, rychlost ÷ 6.", "For the timetable also every 6 cells, speed ÷ 6."),
                 "row.tip.rate": ("U jízdního řádu také, požadováno = rychlost ÷ 6.", "For the timetable too, required = speed ÷ 6.")}
-        for key, (cs, en) in ends.items():                                                                 # jízdní řád: řady po 6 polích
-            self.assertTrue(self.texts[key]["cs"].endswith(cs), key)
-            self.assertTrue(self.texts[key]["en"].endswith(en), key)
+        for key, (cs, en) in ends.items():                                                                 # jízdní řád: řady po 6 polích (za větou je už věta tahu na výhru)
+            self.assertIn(cs, self.texts[key]["cs"], key)
+            self.assertIn(en, self.texts[key]["en"], key)
         self.assertEqual(node("[[3, 5], [9, 12]].map(([lo, hi]) => t('timetable.size', { d: `${lo}–${hi}` }))"), ["3–5 řádků", "9–12 řádků"])
         self.assertEqual(node("t('timetable.parcel', { zip: 81335, service: 'x' })"), "📦 PSČ 81335 · x")
         self.assertEqual(node("t('timetable.parcel', { zip: 81335, service: 'x' })", lang="en"), "📦 ZIP 81335 · x")
         for key in ("board", "exception", "gates", "out"):
             self.assertIn("legend.timetable." + key, self.texts)
+
+    def test_tictactoe_texts_match_bench_and_name_the_scenario(self):         # třídy a dva řádky pod tabulkou jako bench.py, popisek voliče, popisky se scénáři s řadami
+        names = dict(re.findall(r"(\w+): '(tictactoe\.class\.\w+)'", piece(r"^const TICTACTOE_CLASS_NAME = \{.*?\};$")))
+        self.assertEqual(list(names), ["win", "block", "win_over_block", "fork"])                         # pořadí TICTACTOE_CLASSES
+        bench_key = {"win": "win", "block": "block", "win_over_block": "winOverBlock", "fork": "fork"}
+        labels = re.findall(r"(\w+): 'tictactoe\.label\.\w+'", piece(r"^const TICTACTOE_ERROR_LABEL = \{.*?\};$"))
+        self.assertEqual(labels, ["block_not_win", "missed_win", "missed_block", "wrong_side", "single_threat", "occupied", "other"])   # TICTACTOE_ERRORS bez invalid
+        for code in ("cs", "en"):
+            for cls, key in names.items():
+                self.assertEqual(self.texts[key][code], i18n.TEXTS["bench.tictactoe." + bench_key[cls]][code], (key, code))
+                self.assertIn(self.texts[key][code] + " = ", self.texts["scenario.tictactoe.extraTip"][code], (key, code))
+            for key in ("line", "errors"):
+                self.assertEqual(self.texts["tictactoe." + key][code], i18n.TEXTS["bench.tictactoe." + key][code], (key, code))
+            self.assertIn(self.texts["opt.scenario.tictactoe"][code] + ": ", self.texts["tip.scenario"][code], code)
+            self.assertIn(self.texts["scenario.tictactoe.extraTitle"][code], self.texts["scenario.tictactoe.about"][code], code)
+        for key in ("tip.lanes", "tip.mN", "col.errors.tip", "col.late.tip", "col.goodput.tip", "row.tip.bad"):     # popisky, které výčtem jmenují scénáře s řadami
+            self.assertIn("na výhru", self.texts[key]["cs"], key)
+            self.assertIn("winning move", self.texts[key]["en"], key)
+        for key in ("tip.speed", "row.tip.rate"):                                                          # desky po 6 polích
+            self.assertTrue(self.texts[key]["cs"].endswith("rychlost ÷ 6."), key)
 
     def test_statistics_and_storage_texts_count_in_the_right_number(self):    # anglicky jednotné i množné číslo, česky beze změny
         calls = [["tile.trojan.label", {"n": 1}], ["tile.trojan.label", {"n": 12}], ["chart.head", {"n": 1, "max": "40"}], ["chart.head", {"n": 150, "max": "40"}],
@@ -1254,6 +1275,12 @@ class Results(unittest.TestCase):
         pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
         self.assertEqual(node(pick, rows), [["jízdní řád", 6]])
         self.assertEqual(node(pick, rows, lang="en"), [["timetable", 6]])
+
+    def test_tictactoe_row_reads_in_both_languages(self):                     # nový scénář nemá řádky z doby před data.vals, jen klíč scenario.tictactoe
+        rows = [{"vals": {**VALS, "scenario": "tictactoe", "lanes": 3}}]
+        pick = "arg.map(d => cellsOf(d)).map(c => [c.scenario, c.lanes])"
+        self.assertEqual(node(pick, rows), [["tah na výhru", 3]])
+        self.assertEqual(node(pick, rows, lang="en"), [["winning move", 3]])
 
     def test_row_saved_before_the_change_reads_in_both_languages(self):
         self.assertEqual(node("cellsOf(arg)", {"cells": OLD}), OLD)                                     # česky doslova tak, jak je uložená
@@ -1974,6 +2001,7 @@ class PageStatic(unittest.TestCase):
                      "scénář: sázka na pruh",
                      "scénář: tempomat",
                      "scénář: jízdní řád",
+                     "scénář: tah na výhru",
                      "scénář: veřejná sada (jen benchmark bez hry)"):
             text = "\n".join(line for _, line in regions()[part])
             for word in live:

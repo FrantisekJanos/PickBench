@@ -5,7 +5,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -20,6 +22,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node, registr scénářů
 
 LANG_ENV = "PICKBENCH_LANG"
 CELLS = ("r1c1", "r1c2", "r1c3", "r2c1", "r2c2", "r2c3", "r3c1", "r3c2", "r3c3")
@@ -606,6 +609,79 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--tictactoe:  ", text)
             self.assertIn("\n--board, --cells:  ", text)
             self.assertIn({"rows": "--board", "cells": "--cells"}[bench.TICTACTOE_FORM] + ".\n", text)
+
+
+def tictactoe_body():
+    return page_source().split("\nconst tictactoe = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; pravidla, koše, generátor a rozbor hlídá tests/test_parity.py (Tictactoe)
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="tictactoe" data-i18n="opt.scenario.tictactoe"></option>'), 1)
+        self.assertRegex(REGISTRY, r", tictactoe[,\s]")                        # registr selectScenario (zapsaný jen v test_barrier)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: tah na výhru ----------"), 1)
+        # zahřívací úloha je pevná a bez pokynu: nebere z rnd, jinak by se řady posunuly podle řidiče
+        self.assertEqual(page.count("  warmTask() { return this.task(tictactoeWarm(), null, null); },"), 1)
+        self.assertEqual(page.count("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, tictactoeRow(rnd))); },"), 1)
+        self.assertEqual(page.count("  randomTask() { return this.task(tictactoeRow(rnd)); },"), 1)
+        body = tictactoe_body()
+        for call in ("rollInject(tictactoeTaken(d), 9)", "rowBase.newRow(g, y, d, 9, tictactoeTaken(d))", "tictactoeState(d)",
+                     "injectText(INJECT_NOTE, TICTACTOE_CELLS[inject])", "variantOf(tictactoeQuestion(), v)", "a.cell_cells?.choice",
+                     "tictactoeSummary(", "tictactoeErrorKind(", "laneOf: (r, move) => move % 3,"):
+            self.assertIn(call, body + page_function("tictactoeLabel"))                         # definice ze sdíleného bloku, ne opsané
+
+    def test_road_has_three_lanes(self):                           # sloupec desky = pruh; zamčený volič ukáže 3, po přepnutí se vrátí volba uživatele
+        self.assertIn("  id: 'tictactoe', fixedLanes: 3, lanes: () => 3,", tictactoe_body())
+        self.assertNotIn("lanesFree", tictactoe_body())
+        self.assertEqual(page_source().count("  if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }"), 1)
+
+    def test_new_row_keeps_the_old_call_and_takes_the_cells_to_avoid(self):      # jádro: newRow s pátým parametrem; ostatní scénáře volají jako dřív
+        page = page_source()
+        self.assertEqual(page.count("  newRow: (g, y, data, options = LANES, truths = [data.truth]) => ({ id: g.nextId++,"), 1)
+        self.assertEqual(page.count("inject: rollInject(truths, options), fooled: false, ...data }),"), 1)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_inject_never_targets_an_occupied_cell(self):          # pickWrong se seznamem z tictactoeTaken: jen volná špatná pole
+        code = (page_function("pickWrong") + "const TICTACTOE_EMPTY = '.';" + re.search(r"\nconst tictactoeTaken = [^\n]*\n", page_source()).group(0)
+                + "const d = { board: 'X...X.OXO', truth: 1 }, out = new Set();"
+                "for (let k = 0; k < 200; k++) out.add(pickWrong(tictactoeTaken(d), k / 200, 9));"
+                "process.stdout.write(JSON.stringify([...out].sort()));")
+        self.assertEqual(run_page_js(code), [2, 3, 5])           # volná pole desky ze specu bez správného r1c2
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_column_is_the_lane_and_labels_name_the_result(self):
+        body = tictactoe_body()
+        lane = re.search(r"\n  laneOf: (\(r, move\) => [^,]*),", body).group(1)
+        shared = re.search(r"// Tah na výhru \(piškvorky 3×3\): konstanty.*?\nconst TICTACTOE_WARM", page_source(), re.S).group(0)[:-len("\nconst TICTACTOE_WARM")]
+        names = re.search(r"\nconst TICTACTOE_CLASS_NAME = [^\n]*\n", page_source()).group(0) + re.search(r"\nconst TICTACTOE_ERROR_LABEL = [^\n]*\n", page_source()).group(0)
+        code = (shared + names + "const RESULT = { ok: { color: 'g' }, bad: { color: 'r' }, late: { color: 'x' } }, t = (k, v) => k;"
+                + page_function("tictactoeLabel") + f"const laneOf = {lane};"
+                + "const r = (chosen, result) => ({ board: 'X...X.OXO', you: 'O', answer: 1, cls: 'block', chosen, result });"
+                "process.stdout.write(JSON.stringify([[0, 1, 4, 8].map(m => laneOf(null, m)),"
+                " [r(1, 'ok'), r(2, 'bad'), r(0, 'bad'), r(-1, 'bad'), r(undefined, 'late')].map(x => tictactoeLabel(x))]));")
+        lanes, labels = run_page_js(code)
+        self.assertEqual(lanes, [0, 1, 1, 2])
+        self.assertEqual(labels, [{"text": "✓ tictactoe.class.block", "color": "g"}, {"text": "tictactoe.label.missedBlock", "color": "r"},
+                                  {"text": "tictactoe.label.occupied", "color": "r"}, {"text": "label.invalid", "color": "x"},
+                                  {"text": "label.late", "color": "x"}])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null
+        tally = re.search(r"\n  tally\(g, task, move\) \{.*?\n  \},", tictactoe_body(), re.S).group(0)[1:-1]
+        code = ("const TICTACTOE_CELLS = " + json.dumps(list(CELLS)) + "; const base = { tally() {} }; const o = { __proto__: base," + tally + "};"
+                "const g = { cases: [], choices: [] }, task = { board: 'X...X.OXO', you: 'O', answer: 1, cls: 'block', truth: 1, state: {} };"
+                "[1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"board": "X...X.OXO", "you": "O", "answer": 1, "cls": "block"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["r1c2", "r1c1", None]})
+
+    def test_marks_are_drawn_not_written(self):                    # X a O jsou kresba: na plátno jde text jen přes t()
+        part = page_source().split("// ---------- scénář: tah na výhru ----------", 1)[1].split("\n// ---------- ", 1)[0]
+        self.assertNotIn("fillText(r.you", part)
+        self.assertNotIn("fillText(mark", part)
+        self.assertEqual(part.count("fillText("), 1)               # jen cedulka „hraješ“ přes t('tictactoe.youPlay')
+        self.assertIn("ctx.fillText(label, ", part)
 
 
 if __name__ == "__main__":
