@@ -860,6 +860,19 @@ const TEXTS = {
   'legend.bandit.tally': { cs: 'Čárky nad budkou = dosavadní průjezdy: zelená výhra, šedočervená prohra. 5/9 = 5 výher z 9 průjezdů.', en: 'Tally marks above a booth = the earlier drives: green a win, grey-red a loss. 5/9 = 5 wins out of 9 drives.' },
   'legend.bandit.rule': { cs: 'Pravidlo: budku s méně než 3 průjezdy vyzkoušej („nová“), jinak vezmi nejvyšší podíl výher, při shodě tu s méně průjezdy.', en: 'Rule: try a booth with fewer than 3 drives ("new"), otherwise take the highest share of wins, and on a tie the one with fewer drives.' },
   'legend.bandit.reveal': { cs: 'Po průjezdu se pod budkou šedě odkryje skutečná šance, hvězdička = nejvyšší. Každé mýto je nová úloha.', en: 'After the car passes, the real chance shows up in grey under each booth, the star = the highest. Every toll is a new task.' },
+  // scénář mýtné brány: štítky pod řadou a texty v canvasu
+  'bandit.new': { cs: 'nová', en: 'new' },
+  'bandit.chance': { cs: 'šance {pct}', en: 'chance {pct}' },
+  'bandit.label.okExplore': { cs: '✓ průzkum: brána {gate} (průjezdů: {n}, méně než 3)', en: '✓ explore: gate {gate} ({n} {n|drive|drives}, fewer than 3)' },
+  'bandit.label.okExploit': { cs: '✓ nejvyšší podíl: {truth} = {truthPct}', en: '✓ best share: {truth} = {truthPct}' },
+  'bandit.label.okTie': { cs: '✓ shoda {truthPct}: méně průjezdů ({truth} proti {other})', en: '✓ tie at {truthPct}: fewer drives ({truth} against {other})' },
+  'bandit.label.noExplore': { cs: '✗ bez průzkumu: zvolil {pick}, platí brána {gate} (průjezdů: {n})', en: '✗ no exploration: picked {pick}, right: gate {gate} ({n} {n|drive|drives})' },
+  'bandit.label.tieMore': { cs: '✗ shoda: zvolil víc průjezdů ({pick}), platí {truth}', en: '✗ tie: picked more drives ({pick}), right: {truth}' },
+  'bandit.label.overExplore': { cs: '✗ zbytečný průzkum: zvolil {pick}, platí {truth}', en: '✗ needless exploration: picked {pick}, right: {truth}' },
+  'bandit.label.mostWins': { cs: '✗ nejvíc výher: {pick}, platí {truth}', en: '✗ most wins: {pick}, right: {truth}' },
+  'bandit.label.fewestLosses': { cs: '✗ nejméně proher: {pick}, platí {truth}', en: '✗ fewest losses: {pick}, right: {truth}' },
+  'bandit.label.lowestRate': { cs: '✗ nejnižší podíl: {pick}, platí {truth}', en: '✗ lowest share: {pick}, right: {truth}' },
+  'bandit.label.other': { cs: '✗ zvolil {pick} ({pickPct}), platí {truth} ({truthPct})', en: '✗ picked {pick} ({pickPct}), right: {truth} ({truthPct})' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
   'public.canvas1': { cs: 'Veřejná sada:', en: 'Public dataset:' },
@@ -3189,6 +3202,77 @@ const tictactoe = {
 const BANDIT_CLASS_NAME = { explore: 'bandit.class.explore', exploit: 'bandit.class.exploit', tie: 'bandit.class.tie' };
 const banditFrac = g => `${g[0]}/${g[1]}`;                 // výhry/průjezdy brány [w, n, šance]
 const banditPct = g => g[1] ? pctOf(g[0] / g[1]) : '—';    // podíl výher jen pro diváka; 0/0 nemá podíl
+// štítek chyby podle druhu z banditErrorKind (komentář nad řádkem: test čte řádek až po „};“ na jeho konci)
+const BANDIT_LABEL = { no_explore: 'bandit.label.noExplore', tie_more: 'bandit.label.tieMore', over_explore: 'bandit.label.overExplore', most_wins: 'bandit.label.mostWins', fewest_losses: 'bandit.label.fewestLosses', lowest_rate: 'bandit.label.lowestRate', other: 'bandit.label.other' };
+
+// Čárky průjezdů po pěti (čtyři svislé, pátá šikmo přes ně), nejdřív výhry, pak prohry: [{ group, pos, win }], pos 4 = šikmá čárka.
+const banditTally = (wins, drives) => [...Array(drives)].map((_, k) => ({ group: Math.floor(k / 5), pos: k % 5, win: k < wins }));
+const BANDIT_MARK = 4, BANDIT_GROUP = 19;                 // rozestup čárek a skupin v px: 16 průjezdů = 3 skupiny a čárka, asi 73 px (budka má 80 px)
+
+// Štítek projeté řady: výsledek slovem a jeho barva (zelená správně, červená chyba, šedá neplatná a nestihl), čísla jako výhry/průjezdy.
+function banditLabel(r) {
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  const k = r.gates.length;
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < k)) return { text: t('label.invalid'), color: RESULT.late.color };
+  const truth = r.gates[r.answer], pick = r.gates[r.chosen];
+  const v = { pick: banditFrac(pick), pickPct: banditPct(pick), truth: banditFrac(truth), truthPct: banditPct(truth), gate: r.answer + 1, n: truth[1] };
+  if (r.chosen === r.answer) {
+    if (r.cls === 'explore') return { text: t('bandit.label.okExplore', v), color: RESULT.ok.color };
+    if (r.cls === 'exploit') return { text: t('bandit.label.okExploit', v), color: RESULT.ok.color };
+    const other = BANDIT_SHORTCUTS.tie_more(r.gates.map(([w, n]) => [w, n]))[0];
+    return { text: t('bandit.label.okTie', { ...v, other: banditFrac(r.gates[other]) }), color: RESULT.ok.color };
+  }
+  return { text: t(BANDIT_LABEL[banditErrorKind(r, r.chosen)], v), color: RESULT.bad.color };
+}
+
+// Pět cípů hvězdičky u nejvyšší skryté šance (kresba, ne znak).
+function drawBanditStar(x, y, rad) {
+  ctx.fillStyle = '#e3b341'; ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? 0.45 : 1;
+    ctx[i ? 'lineTo' : 'moveTo'](x + rad * k * Math.cos(a), y + rad * k * Math.sin(a));
+  }
+  ctx.closePath(); ctx.fill();
+}
+
+// Jedna řada mýta: nad budkou čárky průjezdů a pod nimi „výhry/průjezdy“ a podíl; budka pod 3 průjezdy má čárkovaný rámeček a štítek
+// „nová“. Zvolená budka silný obrys a zvednutou závoru (od odpovědi), ostatní závory dole. Po průjezdu pod budkou skrytá šance šedě,
+// u nejvyšší hvězdička; správná budka zezelená. Průhlednost volajícího se násobí a na konci vrací.
+function drawBandit(r, y) {
+  const hw = LW * 0.42, best = Math.max(...r.gates.map(g => g[2])), alpha = ctx.globalAlpha;
+  const picked = Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < r.gates.length && r.result !== 'late';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  r.gates.forEach(([w, n, chance], lane) => {
+    const x = (lane + 0.5) * LW, fresh = n < BANDIT_EXPLORE;
+    ctx.globalAlpha = alpha * (r.result ? 0.55 : 1);
+    ctx.fillStyle = r.result && lane === r.answer ? '#1f4d2b' : '#33414f';      // budka
+    ctx.beginPath(); ctx.roundRect(x - hw, y - 16, 2 * hw, 32, 6); ctx.fill();
+    if (fresh) { ctx.strokeStyle = '#d29922'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.strokeRect(x - hw, y - 62, 2 * hw, 44); ctx.setLineDash([]); }
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    const x0 = x - hw + 6;
+    for (const m of banditTally(w, n)) {                   // čárky nad budkou
+      const gx = x0 + m.group * BANDIT_GROUP;
+      ctx.strokeStyle = m.win ? '#3fb950' : '#a86b6b'; ctx.beginPath();
+      if (m.pos < 4) { ctx.moveTo(gx + m.pos * BANDIT_MARK, y - 58); ctx.lineTo(gx + m.pos * BANDIT_MARK, y - 44); }
+      else { ctx.moveTo(gx - 2, y - 46); ctx.lineTo(gx + 3 * BANDIT_MARK + 2, y - 56); }
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3';
+    ctx.fillText(fresh ? `${banditFrac([w, n])}  ${t('bandit.new')}` : `${banditFrac([w, n])}  ${banditPct([w, n])}`, x, y - 30, 2 * hw - 4);
+    ctx.strokeStyle = '#e6edf3'; ctx.lineWidth = 3; ctx.beginPath();     // závora: dole vodorovně přes pruh, zvednutá šikmo nahoru
+    const up = picked && lane === r.chosen;
+    ctx.moveTo(x - hw, y + 18); ctx.lineTo(up ? x - hw + 10 : x + hw, up ? y - 2 : y + 18); ctx.stroke();
+    ctx.globalAlpha = alpha;
+    if (r.result) {                                         // po průjezdu: skrytá šance šedě, u nejvyšší hvězdička
+      ctx.font = '600 10px "Segoe UI", sans-serif'; ctx.fillStyle = '#8b9aa8';
+      ctx.fillText(t('bandit.chance', { pct: pctOf(chance / 100) }), x, y + 28, 2 * hw - 4);
+      if (chance === best) drawBanditStar(x + hw - 7, y - 8, 6);
+    }
+    if (picked && lane === r.chosen) { ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect(x - hw, y - 16, 2 * hw, 32); }
+  });
+  ctx.lineWidth = 1; ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+}
 
 const bandit = {
   __proto__: rowBase,
@@ -3223,6 +3307,14 @@ const bandit = {
     const r = g.rows.find(r => Math.abs(r.y - this.passAt) < 0.8);
     const ghost = r && !(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES && r.result !== 'late');
     return { lane: g.visLane + (g.lane - g.visLane) * 0.35, alpha: ghost ? 0.45 : 1 };
+  },
+  drawItems(g) {                                           // řady mýta (drawBandit), kroužek výsledku a štítek pod projetou řadou
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      drawBandit(r, y);
+      this.drawRing(r, y, Math.min(LW * 0.26, 15));
+      if (r.result !== null) { const lab = banditLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 46, H - 10)); }
+    }
   },
   describeLast(task, res) {                                // průjezdy a výhry, jak je dostal model (podíl ne), pak volba
     const name = i => i >= 0 ? t('last.gate', { n: i + 1, value: banditFrac(task.gates[i]) }) : t('answer.invalid');

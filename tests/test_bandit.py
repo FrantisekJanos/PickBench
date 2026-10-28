@@ -589,5 +589,71 @@ class Page(unittest.TestCase):              # scénář ve stránce; pravidlo, g
         self.assertEqual(en.split("\n")[1], "chosen:  gate 2 (4/4)  (correct: gate 4 (1/2))")
 
 
+class Drawing(unittest.TestCase):           # kresba řady mýta, čárky, štítky; kresba odpovídá souhrnu, který dostal model
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_marks_follow_the_totals_and_fit_the_lane(self):
+        page = page_source()
+        consts = re.search(r"\nconst banditTally = [^\n]*\n", page).group(0) + re.search(r"\nconst BANDIT_MARK = [^\n]*\n", page).group(0)
+        code = consts + ("process.stdout.write(JSON.stringify({ t: [[5, 9], [0, 2], [16, 16], [0, 0]].map(([w, n]) => banditTally(w, n)),"
+                         " width: 3 * BANDIT_GROUP + 3 * BANDIT_MARK + 4 }));")
+        got = run_page_js(code)
+        five_nine = got["t"][0]
+        self.assertEqual(len(five_nine), 9)
+        self.assertEqual([m["win"] for m in five_nine], [True] * 5 + [False] * 4)              # nejdřív výhry, pak prohry
+        self.assertEqual([(m["group"], m["pos"]) for m in five_nine], [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (1, 0), (1, 1), (1, 2), (1, 3)])
+        self.assertEqual((len(got["t"][1]), got["t"][3]), (2, []))
+        self.assertEqual(max(m["group"] for m in got["t"][2]), 3)                              # 16 průjezdů = 3 skupiny po pěti a jedna čárka
+        self.assertLessEqual(got["width"] + 6, 96 * 0.84)                                     # vejde se do budky i při 5 pruzích (pruh 96 px)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek: tři správné třídy, bez průzkumu, shoda víc průjezdů, zbytečný průzkum, zkratka, jiné, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "BANDIT_LABEL", "banditFrac", "banditPct"))
+        code = "(() => {" + consts + page_function("banditLabel") + (
+            "const EXPLORE = [[5, 9, 45], [4, 4, 90], [0, 6, 35], [1, 2, 70]], EXPLOIT = [[6, 10, 70], [3, 4, 60], [5, 9, 50], [1, 3, 40]],"
+            " TIE = [[2, 4, 50], [4, 8, 55], [1, 5, 20], [3, 9, 30]];"
+            "const r = (gates, answer, cls, result, chosen) => ({ gates, answer, cls, result, chosen });"
+            "return [r(EXPLORE, 3, 'explore', 'ok', 3), r(EXPLOIT, 1, 'exploit', 'ok', 1), r(TIE, 0, 'tie', 'ok', 0), r(EXPLORE, 3, 'explore', 'bad', 1),"
+            " r(TIE, 0, 'tie', 'bad', 1), r(EXPLOIT, 1, 'exploit', 'bad', 3), r(EXPLOIT, 1, 'exploit', 'bad', 0), r(EXPLOIT, 1, 'exploit', 'bad', 2),"
+            " r(EXPLORE, 3, 'explore', 'bad', -1), r(EXPLORE, 3, 'explore', 'late', undefined)].map(banditLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], [
+            "✓ průzkum: brána 4 (průjezdů: 2, méně než 3)", "✓ nejvyšší podíl: 3/4 = 75 %", "✓ shoda 50 %: méně průjezdů (2/4 proti 4/8)",
+            "✗ bez průzkumu: zvolil 4/4, platí brána 4 (průjezdů: 2)", "✗ shoda: zvolil víc průjezdů (4/8), platí 2/4",
+            "✗ zbytečný průzkum: zvolil 1/3, platí 3/4", "✗ nejvíc výher: 6/10, platí 3/4", "✗ zvolil 5/9 (56 %), platí 3/4 (75 %)",
+            "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual([x["text"] for x in en][:3], ["✓ explore: gate 4 (2 drives, fewer than 3)", "✓ best share: 3/4 = 75%", "✓ tie at 50%: fewer drives (2/4 against 4/8)"])
+        self.assertEqual([x["color"] for x in cs], ["#3fb950"] * 3 + ["#f85149"] * 5 + ["#8b9aa8"] * 2)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_row_shows_totals_new_booth_pick_and_after_the_pass_the_chances(self):
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("banditTally", "BANDIT_MARK", "banditFrac", "banditPct"))
+        code = "(() => { const texts = [], strokes = [], stars = [], LW = 100;" + consts + page_function("drawBandit") + (
+            "function drawBanditStar(x) { stars.push(Math.round(x)); }"
+            "const ctx = new Proxy({ fillText(s) { texts.push(s); }, strokeRect(x, y, w) { strokes.push([Math.round(x), Math.round(w)]); } },"
+            " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const gates = [[5, 9, 45], [4, 4, 90], [0, 6, 35], [1, 2, 70]];"
+            "drawBandit({ gates, answer: 3, cls: 'explore', result: null, chosen: 1 }, 300); const before = texts.splice(0), outline = strokes.splice(0);"
+            "drawBandit({ gates, answer: 3, cls: 'explore', result: 'bad', chosen: 1 }, 300);"
+            "return { before, outline, after: texts, stars }; })()")
+        got = run_js(code, None)
+        self.assertEqual(got["before"], ["5/9  56 %", "4/4  100 %", "0/6  0 %", "1/2  nová"])
+        self.assertIn([108, 84], got["outline"])                                               # zvolená budka 2: modrý obrys
+        self.assertIn([308, 84], got["outline"])                                               # budka 4 (2 průjezdy): čárkovaný rámeček
+        self.assertEqual([s for s in got["before"] if s.startswith("šance")], [])              # před průjezdem šance nejsou vidět
+        self.assertEqual([s for s in got["after"] if s.startswith("šance")], ["šance 45 %", "šance 90 %", "šance 35 %", "šance 70 %"])
+        self.assertEqual(got["stars"], [185])                                                  # hvězdička jen u nejvyšší skryté šance (brána 2, vpravo v budce)
+
+    def test_drawing_writes_only_through_t(self):
+        source = page_function("drawBandit") + page_function("banditLabel") + page_function("drawBanditStar")
+        self.assertEqual(source.count("fillText("), 2)                                       # „výhry/průjezdy  podíl | nová“ a šance; písmena jen přes t()
+        self.assertIn("t('bandit.new')", source)
+        self.assertIn("t('bandit.chance', { pct: pctOf(chance / 100) })", source)
+        self.assertNotIn("fillText(", page_function("drawBanditStar"))                        # hvězdička kresbou, ne znakem
+
+
 if __name__ == "__main__":
     unittest.main()
