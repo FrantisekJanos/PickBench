@@ -49,6 +49,8 @@
   .tablewrap { overflow-x:auto; }
   canvas#chart { width:100%; height:110px; display:block; }
   canvas#cal { width:100%; height:210px; display:block; }
+  canvas#hwChart { width:100%; height:110px; display:block; }
+  canvas#sweepChart { width:100%; height:170px; display:block; }
   main > section:last-child { min-width:0; }
   #queue { width:250px; display:flex; flex-direction:column; gap:8px; max-height:min(600px, calc(100vh - 96px)); overflow:hidden; }
   .card b, .card .body { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -216,7 +218,7 @@
     <div class="panel">
       <h2 id="calTitle" data-i18n="ui.calTitle"></h2>
       <canvas id="cal" width="900" height="210"></canvas>
-      <div class="controls" style="margin-top:6px"><label><span data-i18n="ui.calThreshold"></span> <span id="calTv"></span>
+      <div class="controls" style="margin-top:6px"><label><span><span data-i18n="ui.calThreshold"></span> <span id="calTv"></span></span>
         <input id="calT" type="range" min="0.5" max="0.99" step="0.01" value="0.8"></label></div>
       <small id="calCover"></small>
     </div>
@@ -6111,11 +6113,12 @@ function drawCal() {                                       // pásma jistoty po 
   const max = Math.max(1, ...bins.map(b => Math.max(b.ok, b.bad)));
   const h = (n, room) => n ? Math.max(3, room * Math.sqrt(n / max)) : 0;      // odmocninové měřítko, aby byly vidět i malé počty
   x.font = '11px "Segoe UI", sans-serif'; x.fillStyle = '#8b9aa8';
-  x.fillText(S.cal.length ? t('cal.head', { ece: pctOf(calib(S.cal).ece, 1), n: S.cal.length }) : t('cal.none'), 4, 12);
+  const brierText = t('cal.brier', { brier: f(brier(S.cal), 3) }), headRoom = c.width - 4 - x.measureText(brierText).width - 16 - 4;      // záhlaví vlevo se před Brierovým skóre vpravo stáhne (v úzkém panelu by do něj vjelo)
+  x.fillText(S.cal.length ? t('cal.head', { ece: pctOf(calib(S.cal).ece, 1), n: S.cal.length }) : t('cal.none'), 4, 12, Math.max(40, headRoom));
   x.fillText(t('cal.axis'), 4, c.height - 4);
   const T = +$('calT').value, tx = pad + T * N * bw;        // práh jistoty: svislá čára, nad ní Brierovo skóre vpravo nahoře
   x.strokeStyle = '#e69f00'; x.setLineDash([4, 4]); x.beginPath(); x.moveTo(tx, 18); x.lineTo(tx, c.height - 30); x.stroke(); x.setLineDash([]);
-  x.textAlign = 'end'; x.fillText(t('cal.brier', { brier: f(brier(S.cal), 3) }), c.width - 4, 12); x.textAlign = 'start';
+  x.textAlign = 'end'; x.fillText(brierText, c.width - 4, 12); x.textAlign = 'start';
   $('calTv').textContent = pctOf(T);
   const cv = coverageAt(S.cal, S.n, T);
   $('calCover').textContent = S.n ? t('cal.cover', { threshold: pctOf(T), covered: cv.covered, n: cv.n, coverage: pctOf(cv.coverage), acc: pctOf(cv.acc), handed: cv.handed }) : '';

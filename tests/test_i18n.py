@@ -994,6 +994,35 @@ class PageTexts(unittest.TestCase):
             self.assertIn("{brier}", page_text("cal.brier"), code)
         self.assertEqual(self.texts["col.brier"]["cs"], "Brier")
 
+    def test_calibration_threshold_value_stays_on_the_line_of_its_label(self):      # štítek je sloupec (label: flex column): název a hodnota prahu v jednom řádku, posuvník pod nimi
+        page = PAGE.read_text(encoding="utf-8")
+        self.assertIn('<label><span><span data-i18n="ui.calThreshold"></span> <span id="calTv"></span></span>', page)
+
+    def test_panel_charts_take_the_panel_width(self):                     # plátno s width="900" bez CSS by z úzkého panelu přeteklo (graf hardwaru, průchod 2–8)
+        page = PAGE.read_text(encoding="utf-8")
+        for canvas, height in (("chart", 110), ("cal", 210), ("hwChart", 110), ("sweepChart", 170)):
+            self.assertIn(f"canvas#{canvas} {{ width:100%; height:{height}px; display:block; }}", page, canvas)
+            self.assertIn(f'<canvas id="{canvas}" width="900" height="{height}"', page, canvas)      # výška v CSS = výška plátna, text se nedeformuje
+
+    def test_calibration_head_leaves_room_for_the_brier_score(self):        # anglické záhlaví je dlouhé: v úzkém panelu vjelo do Brierova skóre vpravo nahoře
+        got = node_run("""
+const calls = [], ctx = { fillText: (s, x, y, w) => calls.push({ s: String(s), x, y, w, align: ctx.textAlign }), measureText: s => ({ width: 6 * String(s).length }),
+  fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, setLineDash() {}, textAlign: 'start' };
+const els = { cal: { clientWidth: 560, width: 0, height: 210, getContext: () => ctx }, calT: { value: '0.9' }, calTv: {}, calCover: {} }, $ = id => els[id];
+const S = { cal: [...Array(20)].map((_, i) => [0.92, i < 8]), n: 20 };
+%s
+%s
+%s
+%s
+const out = {};
+for (const lang of ['cs', 'en']) { LANG = lang; calls.length = 0; drawCal();
+  const head = calls.find(c => c.y === 12 && c.align === 'start'), right = calls.find(c => c.y === 12 && c.align === 'end');
+  out[lang] = { headEnd: head.x + Math.min(head.w ?? Infinity, ctx.measureText(head.s).width), brierStart: right.x - ctx.measureText(right.s).width, width: 560 }; }
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^function brier\(.*?\}$"), piece(r"^function coverageAt\(.*?^\}$"), piece(r"^function calib\(.*?^\}$"), piece(r"^function drawCal\(.*?^\}$")))
+        for lang in ("cs", "en"):
+            self.assertLess(got[lang]["headEnd"] + 8, got[lang]["brierStart"], lang)
+
     def test_sweep_texts_match_bench(self):                                # trend pod grafem průchodu jako řádek bench.py --sweep-lanes
         for code in ("cs", "en"):
             page_text, tool = (lambda key: self.texts[key][code]), (lambda key: i18n.TEXTS[key][code])
