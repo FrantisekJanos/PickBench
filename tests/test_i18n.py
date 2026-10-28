@@ -1850,6 +1850,45 @@ process.stdout.write(JSON.stringify(out));
         self.assertEqual(texts["hosted.hw"]["cs"], "Model běží u poskytovatele: GPU tohoto počítače se při něm neměří a energie na rozhodnutí není. "
                                                    "Místo ní je v panelu Rychlost rozhodování cena ($ za 1000 rozhodnutí).")
         self.assertEqual([x["warn"] for x in got["none"] + got["hosted"]], [""] * 6)
+    def test_idle_measurement_cancels_and_needs_enough_samples(self):
+        got = node_run("""
+let running = false, planRunning = false, hwOff = false, hwIdle = null, hwIdleUntil = 0, hwIdleSamples = [];
+const HW_MIN_SAMPLES = 5, HW_IDLE_S = 10;
+const els = {}, $ = id => els[id] ??= { textContent: '', disabled: false };
+const renderHw = () => {};
+%s
+%s
+%s
+const out = {}, g = w => ({ available: true, power_w: w });
+const measure = (samples, cancel) => {                    // jedno měření: kliknutí, vzorky po sekundě, případně zásah zvenku
+  hwIdle = null; measureIdle();
+  const started = hwIdleUntil;
+  samples.forEach((w, i) => { if (cancel && i === cancel.at) cancel.set(); idleSample(g(w), i === samples.length - 1 ? started : 0); });
+  return { started: !!started, hwIdleUntil, idle: hwIdle, text: $('hwIdleText').textContent, disabled: $('hwIdle').disabled };
+};
+out.mean = measure([10, 20, 30, 40, 50, 60], null);                  // poslední vzorek přijde v čase konce měření
+out.few = measure([10, 20, 30], null);
+running = true; hwIdleUntil = 0; measureIdle(); out.blockedRunning = hwIdleUntil; running = false;
+planRunning = true; measureIdle(); out.blockedPlan = hwIdleUntil; syncIdle(); out.btnPlan = $('hwIdle').disabled; planRunning = false;
+out.cancelRun = measure([10, 20, 30], { at: 1, set: () => { running = true; } }); running = false;
+out.cancelPlan = measure([10, 20, 30], { at: 1, set: () => { planRunning = true; } }); planRunning = false;
+syncIdle(); out.btnFree = $('hwIdle').disabled;
+process.stdout.write(JSON.stringify(out));
+""" % (piece(r"^function measureIdle\(.*?^\}$"), piece(r"^function syncIdle\(.*?^\}$"), piece(r"^function idleSample\(.*?^\}$")))
+        self.assertEqual(got["mean"]["idle"], {"watts": 35, "samples": 6})         # od 5 vzorků je to průměr
+        self.assertEqual(got["mean"]["text"], "Klidový příkon 35.0 W (6 vzorků).")
+        self.assertTrue(got["few"]["started"])
+        self.assertIsNone(got["few"]["idle"])                                 # méně než 5 vzorků: žádná hodnota
+        self.assertEqual(got["few"]["hwIdleUntil"], 0)
+        self.assertEqual(got["mean"]["hwIdleUntil"], 0)
+        self.assertEqual(got["blockedRunning"], 0)                            # za běhu měření nezačne
+        self.assertEqual(got["blockedPlan"], 0)                               # ani mezi kroky fronty
+        self.assertTrue(got["btnPlan"])
+        for key in ("cancelRun", "cancelPlan"):
+            self.assertEqual(got[key]["hwIdleUntil"], 0)                      # běh i fronta měření zruší
+            self.assertIsNone(got[key]["idle"])
+            self.assertEqual(got[key]["text"], "")
+        self.assertFalse(got["btnFree"])
 
 
 # ---------- znění angličtiny ----------

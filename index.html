@@ -6504,7 +6504,7 @@ function renderPlan() {                                    // texty jdou do str�
     return li;
   }));
   for (const id of ['sqAdd', 'sqReset', 'sqClear', 'sqRun']) $(id).disabled = planRunning || !initDone;
-  $('sqStop').disabled = !planRunning; syncLang();
+  $('sqStop').disabled = !planRunning; syncLang(); syncIdle();
   $('clear').disabled = resultsLocked();                   // fronta zapisuje výsledky; smazání uprostřed by rozbilo dávku
   for (const b of $('results').querySelectorAll('.rowdel button')) b.disabled = resultsLocked();      // stejně tlačítka v řádcích
   syncRun();                                               // za běhu fronty se ručně nespouští; před koncem načítání nic
@@ -6718,7 +6718,7 @@ function stopPlan() {                                      // ukončí běžíc�
 }
 
 $('hwIdle').onclick = measureIdle;
-$('sqRun').onclick = runPlan;$('sqStop').onclick = stopPlan; $('sweep').onclick = sweepAdd;
+$('sqRun').onclick = runPlan; $('sqStop').onclick = stopPlan; $('sweep').onclick = sweepAdd;
 $('calT').oninput = () => drawCal();                       // práh mění jen výpočet pod grafem, ne běh
 $('lastBatch').onchange = renderResults;
 document.addEventListener('visibilitychange', () => {       // Wake Lock se při skrytí záložky ruší; po návratu si ho fronta vezme znovu
@@ -6739,14 +6739,14 @@ const HW_IDLE_S = 10;                                      // změření klidu: 
 let hwIdle = null;                                         // { watts, samples } klidového příkonu; platí do obnovení stránky
 let hwIdleUntil = 0, hwIdleSamples = [];                   // probíhající měření klidu (čas konce v ms) a jeho vzorky příkonu
 function measureIdle() {
-  if (running || hwOff || hwIdleUntil) return;
+  if (running || planRunning || hwOff || hwIdleUntil) return;
   hwIdleUntil = performance.now() + HW_IDLE_S * 1000; hwIdleSamples = [];
   $('hwIdleText').textContent = t('hw.idle.measuring', { s: HW_IDLE_S }); syncIdle();
 }
-function syncIdle() { $('hwIdle').disabled = running || hwOff || !!hwIdleUntil; }
+function syncIdle() { $('hwIdle').disabled = running || planRunning || hwOff || !!hwIdleUntil; }
 function idleSample(g, now) {                              // ze vzorku /gpu; běh měření ruší (vzorky pod zátěží nejsou klid)
   if (!hwIdleUntil) return;
-  if (running) { hwIdleUntil = 0; $('hwIdleText').textContent = ''; syncIdle(); return; }
+  if (running || planRunning) { hwIdleUntil = 0; $('hwIdleText').textContent = ''; syncIdle(); return; }
   if (g && g.available && Number.isFinite(g.power_w)) hwIdleSamples.push(g.power_w);
   if (now < hwIdleUntil) return;
   hwIdleUntil = 0;
@@ -6923,7 +6923,7 @@ function syncRun() {                                       // Start a Spustit be
 function setRunning(on) {
   running = on;
   if (!on) { hwLoad = false; hwLow = null; }
-  syncRun(); syncLang(); $('stop').disabled = !on;
+  syncRun(); syncLang(); syncIdle(); $('stop').disabled = !on;
   ['driver', 'model', 'mode', 'scenario', 'mirror', 'inject', 'seed', 'runlen', 'deadline'].forEach(id => $(id).disabled = on);
   syncControls();
   watchHidden();                                           // krok fronty ve hře, který začíná ve skryté záložce; na konci běhu časovač zruší
