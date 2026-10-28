@@ -4,7 +4,9 @@ import io
 import json
 import os
 import random
+import re
 import runpy
+import shutil
 import sys
 import time
 import unittest
@@ -19,6 +21,7 @@ import bench
 import i18n
 from test_bench import fake_post, obedient
 from test_golden import Clock, fake_urlopen
+from test_barrier import REGISTRY, page_function, page_source, run_page_js      # kus skriptu stránky v node
 
 LANG_ENV = "PICKBENCH_LANG"
 KEY = "depot"                                         # klíč otázky (Volby po pokusu V5)
@@ -506,6 +509,23 @@ class Cli(unittest.TestCase):
             self.assertIn("\n--timetable:  ", text)
             self.assertIn("\n--sorted, --shuffled:  ", text)
             self.assertIn(bench.TIMETABLE_FORM + ".", text)
+
+
+def timetable_body():
+    return page_source().split("\nconst timetable = {", 1)[1].split("\n};\n", 1)[0]
+
+
+class Page(unittest.TestCase):              # scénář ve stránce; tabulka, generátor a rozbor hlídá tests/test_parity.py (Timetable)
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_variant_matches_bench(self):
+        page = page_source()
+        alt = re.search(r"\nconst ALT = \{.*?\n\};\n", page, re.S).group(0)
+        lanes = re.search(r"\nconst ALT_LANES = [^\n]*\n", page).group(0)
+        q = bench.timetable_question()
+        code = alt + lanes + page_function("variantOf") + "const Q = " + json.dumps(q) + ";" + (
+            "process.stdout.write(JSON.stringify([0, 1, 2].map(v => variantOf(JSON.parse(JSON.stringify(Q)), v))));")
+        for v, js in enumerate(run_page_js(code)):
+            self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), v)     # varianta 1 obrácené pořadí dep, 2 ALT.depot
 
 
 if __name__ == "__main__":

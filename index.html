@@ -1118,6 +1118,7 @@ const ALT = {                                              // jinak formulované
   lane_weighted: 'The toll gate has {lanes} lanes; lane_N holds the vehicles that wait in lane N. A truck, a bus and a tractor each count as three vehicles, every other vehicle as one. Pick the lane whose queue is the shortest.',
   bet: 'Every gate pays out its reward with the chance given in percent and pays nothing otherwise. Pick the gate whose expected payout, the reward multiplied by the chance, is the largest.',
   speed: 'The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.',
+  depot: "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
 };
 const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
@@ -3888,6 +3889,65 @@ function cruiseSummary(cases, levels) {                    // port cruise_summar
 // (povrch má vždy tři písmena), tedy nejdelší stav; pásmo 6 − 2 − 2 = 2.
 function cruiseWarm() {
   return { m: 150, road: 'icy', fog: 'dense', answer: 2, cls: 'both', place: 'edge', truth: 1 };
+}
+// Jízdní řád: konstanty, tabulka tras, řešitel, stav a otázka, stejné jako v bench.py (TIMETABLE_*, timetable_*). Řádek tabulky je [zip_from, zip_to, depo],
+// tabulka je seřazená podle PSČ, výjimka je [služba, depo] nebo null. Stránka má jen výchozí podobu stavu sorted; podoba shuffled je jen v bench.py.
+// timetable_row se tu jmenuje timetableIndex (timetableRow je generátor řady). Co jde do modelu, je anglicky.
+const TIMETABLE_DEPOTS = ['alder', 'birch', 'cedar', 'maple', 'oak', 'pine'];
+const TIMETABLE_SERVICES = ['standard', 'express', 'economy', 'cooled'];
+const TIMETABLE_EXC_SERVICES = ['express', 'economy', 'cooled'];
+const TIMETABLE_ZIP = [10000, 99999], TIMETABLE_MIN_WIDTH = 300;
+const TIMETABLE_SIZES = { small: [3, 5], medium: [6, 8], large: [9, 12] };      // pořadí tříd rozhoduje o losování
+const TIMETABLE_POSITIONS = ['inner', 'near', 'bound'];
+const TIMETABLE_RULES = ['none', 'applies', 'decoy'];
+const TIMETABLE_NEAR = 9, TIMETABLE_INNER = 100, TIMETABLE_TRIES = 1000;
+const TIMETABLE_POSITION_RULES = ['none', 'decoy'];
+// Port random.sample(range(lo, hi), k) metodou množiny. CPython (Lib/random.py, sample) volí podle setsize = 21 (při k > 5 navíc
+// 4 ** ceil(log(3k, 4)), pro k = 11 tedy 85). Populace tu má 89 999 čísel a k je nejvýš 11, takže Python jde vždy touto větví:
+// losuje j = randbelow(n), dokud není nové. Výsledek je v pořadí losování, timetableTable ho pak seřadí.
+function sampleRange(rand, lo, hi, k) {
+  const n = hi - lo, chosen = new Set(), out = [];
+  for (let i = 0; i < k; i++) {
+    let j = Math.floor(rand() * n);
+    while (chosen.has(j)) j = Math.floor(rand() * n);
+    chosen.add(j);
+    out.push(lo + j);
+  }
+  return out;
+}
+function timetableTable(rand, n) {
+  let starts = null, ends = null;
+  for (let t = 0; t < TIMETABLE_TRIES; t++) {
+    const cuts = sampleRange(rand, TIMETABLE_ZIP[0] + 1, TIMETABLE_ZIP[1] + 1, n - 1).sort((a, b) => a - b);
+    const s = [TIMETABLE_ZIP[0]].concat(cuts);
+    const e = s.slice(1).map(x => x - 1).concat([TIMETABLE_ZIP[1]]);
+    if (Math.min(...s.map((x, i) => e[i] - x + 1)) >= TIMETABLE_MIN_WIDTH) { starts = s; ends = e; break; }
+  }
+  if (!starts) throw new Error(`timetableTable: no table of ${n} rows after ${TIMETABLE_TRIES} tries`);
+  const depots = [];
+  for (let i = 0; i < n; i++) depots.push(pickOf(rand, TIMETABLE_DEPOTS.filter(d => !depots.length || d !== depots[depots.length - 1])));
+  return starts.map((s, i) => [s, ends[i], depots[i]]);
+}
+function timetableIndex(spans, z) {
+  const hit = [];
+  spans.forEach(([a, b], i) => { if (a <= z && z <= b) hit.push(i); });
+  if (hit.length !== 1) throw new Error(`timetableIndex: zip ${z} is in ${hit.length} rows`);
+  return hit[0];
+}
+function timetableSolve(state) {
+  const { parcel, routes } = state;
+  for (const e of state.exceptions) if (e.service === parcel.service) return e.depot;
+  return routes[timetableIndex(routes.map(r => [r.zip_from, r.zip_to]), parcel.zip)].depot;
+}
+function timetableState(c) {
+  return { parcel: { zip: c.zip, service: c.service },
+           routes: c.rows.map(([a, b, d]) => ({ zip_from: a, zip_to: b, depot: d })),
+           exceptions: c.exception ? [{ service: c.exception[0], depot: c.exception[1] }] : [] };
+}
+function timetableQuestion() {
+  return { depot: { type: 'choice',
+    instructions: "Route the parcel to a depot. Each row of routes covers the ZIP codes from zip_from to zip_to, both included, and sends those parcels to its depot. exceptions override routes: a parcel whose service matches an exception goes to that exception's depot instead. Choose the depot for the parcel.",
+    criteria: Object.fromEntries(TIMETABLE_DEPOTS.map(d => [d, 'Depot ' + d[0].toUpperCase() + d.slice(1)])) } };
 }
 // ==== sdíleno s Pythonem: konec ====
 

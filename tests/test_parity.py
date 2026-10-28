@@ -1413,5 +1413,78 @@ class Cruise(unittest.TestCase):
         self.assertGreaterEqual(len(json.dumps(bench.cruise_state(warm["m"], warm["road"], warm["fog"]))), longest)   # horní odhad délky dotazu
 
 
+def timetable_js(case):
+    """Úloha bench.py (n-tice timetable_case) jako objekt úlohy stránky."""
+    rows, order, z, service, exception, answer, size, pos, rule = case
+    return {"rows": [list(r) for r in rows], "order": list(order), "zip": z, "service": service,
+            "exception": list(exception) if exception else None, "answer": answer, "size": size, "pos": pos, "rule": rule}
+
+
+# timetableTable stránky se stejnou náhodou jako ROWS_JS: seed, lanes = počet řádků, n tabulek.
+TIMETABLE_TABLE_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "timetableTable(rand, arg.lanes)")
+assert TIMETABLE_TABLE_JS != ROWS_JS
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Timetable(unittest.TestCase):
+    def test_constants_and_question_match_bench(self):
+        import bench
+        js = run_js("({ depots: TIMETABLE_DEPOTS, services: TIMETABLE_SERVICES, exc: TIMETABLE_EXC_SERVICES, zip: TIMETABLE_ZIP, width: TIMETABLE_MIN_WIDTH,"
+                    " sizes: TIMETABLE_SIZES, positions: TIMETABLE_POSITIONS, rules: TIMETABLE_RULES, near: TIMETABLE_NEAR, inner: TIMETABLE_INNER,"
+                    " positionRules: TIMETABLE_POSITION_RULES, tries: TIMETABLE_TRIES, question: timetableQuestion() })", None)
+        self.assertEqual((js["depots"], js["services"], js["exc"]),
+                         (list(bench.TIMETABLE_DEPOTS), list(bench.TIMETABLE_SERVICES), list(bench.TIMETABLE_EXC_SERVICES)))
+        self.assertEqual((js["zip"], js["width"], js["near"], js["inner"], js["tries"]),
+                         (list(bench.TIMETABLE_ZIP), bench.TIMETABLE_MIN_WIDTH, bench.TIMETABLE_NEAR, bench.TIMETABLE_INNER, bench.TIMETABLE_TRIES))
+        self.assertEqual(json.dumps(js["sizes"]), json.dumps({k: list(v) for k, v in bench.TIMETABLE_SIZES.items()}))     # i pořadí tříd
+        self.assertEqual((js["positions"], js["rules"], js["positionRules"]),
+                         (list(bench.TIMETABLE_POSITIONS), list(bench.TIMETABLE_RULES), list(bench.TIMETABLE_POSITION_RULES)))
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.timetable_question()))          # bajtově, i pořadí dep
+
+    def test_index_and_solver_by_hand(self):                       # jako tests/test_timetable.py (Basics.test_row_and_solve_by_hand)
+        import bench
+        from test_timetable import ROWS
+        spans = [[a, b] for a, b, _ in ROWS]
+        got = run_js("[10000, 81333, 81334, 87678, 87679, 99999].map(z => timetableIndex(arg, z))"
+                     ".concat([[arg, 9999], [arg, 100000], [[[10000, 50000], [50000, 99999]], 50000]]"
+                     ".map(([s, z]) => { try { timetableIndex(s, z); return null; } catch (e) { return e.message; } }))", spans)
+        self.assertEqual(got, [0, 0, 1, 1, 2, 2, "timetableIndex: zip 9999 is in 0 rows", "timetableIndex: zip 100000 is in 0 rows",
+                               "timetableIndex: zip 50000 is in 2 rows"])
+        state = {"parcel": {"zip": 81334, "service": "express"},
+                 "routes": [{"zip_from": a, "zip_to": b, "depot": d} for a, b, d in ROWS], "exceptions": []}
+        states = [state, {**state, "parcel": {"zip": 81333, "service": "express"}}, {**state, "exceptions": [{"service": "express", "depot": "oak"}]},
+                  {**state, "exceptions": [{"service": "cooled", "depot": "oak"}]}, {**state, "routes": state["routes"][::-1]}]
+        self.assertEqual(run_js("arg.map(timetableSolve)", states), [bench.timetable_solve(s) for s in states])
+        self.assertEqual(run_js("arg.map(timetableSolve)", states), ["maple", "birch", "oak", "maple", "maple"])      # kraje včetně, výjimka přebíjí
+
+    def test_table_keeps_the_guarantees(self):                     # jako tests/test_timetable.py (Basics.test_table_covers_the_range_without_gaps)
+        import bench
+        for n in range(3, 13):
+            for rows in run_js(TIMETABLE_TABLE_JS, {"seed": n, "lanes": n, "n": 30}):
+                with self.subTest(n=n, rows=rows):
+                    self.assertEqual(len(rows), n)
+                    self.assertEqual((rows[0][0], rows[-1][1]), (10000, 99999))
+                    self.assertTrue(all(rows[i][1] + 1 == rows[i + 1][0] for i in range(n - 1)))
+                    self.assertGreaterEqual(min(b - a + 1 for a, b, _ in rows), 300)
+                    self.assertTrue(all(rows[i][2] != rows[i + 1][2] for i in range(n - 1)))
+                    self.assertTrue({d for _, _, d in rows} <= set(bench.TIMETABLE_DEPOTS))
+        crawl = "let x = 0; const rand = () => (x = (x + 1e-6) % 1);"      # sousední řezy: interval užší než 300 v každém pokusu
+        self.assertEqual(run_js("(() => {" + crawl + " try { timetableTable(rand, 5); return null; } catch (e) { return e.message; } })()", None),
+                         "timetableTable: no table of 5 rows after 1000 tries")
+
+    def test_state_matches_bench(self):
+        import bench
+        from test_timetable import APPLIES, DECOY
+        cases = bench.timetable_cases(90, seed=3) + [DECOY, APPLIES, DECOY[:4] + (None, "maple", "small", "near", "none")]
+        for case, state in zip(cases, run_js("arg.map(timetableState)", [timetable_js(c) for c in cases])):
+            self.assertEqual(json.dumps(state), json.dumps(bench.timetable_state(case, "sorted")), case)      # bajtově, i pořadí klíčů
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky; apostrofy → dvojité uvozovky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r'^  depot: "([^"\\]*)",$', alt, re.M), [bench.ALT["depot"]])
+
+
 if __name__ == "__main__":
     unittest.main()
