@@ -88,6 +88,35 @@ class Metrics(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class CalibrationAndLength(unittest.TestCase):          # Brierovo skóre, pokrytí nad prahem a třídy délky: metrics.py a stránka počítají stejně
+    def cases(self):
+        rng = random.Random(1)
+        out = [{"cal": [], "n": 0, "t": 0.5}, {"cal": [[0.8, True]], "n": 3, "t": 0.8}]      # prázdno; jistota rovná prahu
+        for _ in range(20):
+            cal = [[rng.choice([0.5, 0.6, 0.8, 0.9, 1.0, round(rng.random(), 3)]), rng.random() < 0.6] for _ in range(rng.randint(1, 30))]
+            out.append({"cal": cal, "n": len(cal) + rng.randint(0, 5), "t": rng.choice([0.5, 0.8, 0.9, 1.0])})
+        return out
+
+    def test_brier_and_coverage(self):
+        cases = self.cases()
+        got = run_js("arg.map(c => ({ b: brier(c.cal), c: coverageAt(c.cal, c.n, c.t) }))", cases)
+        for case, js in zip(cases, got):
+            pairs = [tuple(p) for p in case["cal"]]
+            same(self, {"b": metrics.brier(pairs), "c": metrics.coverage(pairs, case["n"], case["t"])}, js, str(case)[:60])
+
+    def test_length_classes(self):
+        rng = random.Random(2)
+        cases = [[], [3], [3, 8], [4, 4, 4, 4], [5, 1, 9, 3, 7, 2]] + [[rng.randint(1, 40) for _ in range(rng.randint(1, 50))] for _ in range(20)]
+        got = run_js("[LENGTH_CLASSES, arg.map(lengthClasses)]", cases)
+        self.assertEqual(got[0], list(metrics.LENGTH_CLASSES))
+        for lengths, js in zip(cases, got[1]):
+            same(self, metrics.length_classes(lengths), js, str(lengths)[:60])
+
+    def test_block_stays_pure(self):                      # sdílený blok nesmí sahat na stránku (vzor ostatních tříd tohoto souboru)
+        self.assertNotIn("$(", shared_js().split("function brier")[1])
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
 class PublicValidator(unittest.TestCase):
     def test_python_and_js_agree_on_every_case(self):
         import bench

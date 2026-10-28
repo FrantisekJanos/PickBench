@@ -5060,6 +5060,25 @@ function patternWarm() {
   return { moves: ['scissors', 'scissors', 'paper', ...Array(10).fill('scissors')], next: 'scissors', cls: 'p1', shape: 'A', run: 10, warm: 3, truth: 2 };
 }
 
+// Brierovo skóre a práh jistoty (metrics.brier, metrics.coverage): cal = [[jistota, správně?]] jen z odpovědí s jistotou,
+// n = počet všech úloh (bez jistoty jdou pod práh). Jistota rovná prahu je nad prahem. Bez dat null.
+function brier(cal) { return cal.length ? cal.reduce((s, [c, ok]) => s + (c - (ok ? 1 : 0)) ** 2, 0) / cal.length : null; }
+function coverageAt(cal, n, threshold) {
+  const above = cal.filter(([c]) => c >= threshold), ok = above.filter(([, hit]) => hit).length;
+  return { threshold, n, covered: above.length, coverage: n ? above.length / n : null, acc: above.length ? ok / above.length : null, handed: n - above.length };
+}
+// Třídy délky textu (metrics.length_classes): seřadit podle (délka, pořadí v sadě), třetiny po pořadí (hranice ⌊n/3⌋ a ⌊2n/3⌋).
+const LENGTH_CLASSES = ['short', 'medium', 'long'];
+function lengthClasses(lengths) {
+  const n = lengths.length, order = lengths.map((_, i) => i).sort((a, b) => lengths[a] - lengths[b] || a - b);
+  const classes = Array(n).fill(null), ranges = { short: null, medium: null, long: null };
+  order.forEach((i, rank) => {
+    const cls = LENGTH_CLASSES[rank < Math.floor(n / 3) ? 0 : rank < Math.floor(2 * n / 3) ? 1 : 2];
+    classes[i] = cls;
+    ranges[cls] = ranges[cls] ? [ranges[cls][0], lengths[i]] : [lengths[i], lengths[i]];      // pořadí je vzestupné
+  });
+  return { classes, ranges };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
