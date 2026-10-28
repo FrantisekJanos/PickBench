@@ -475,14 +475,15 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka pá
             " { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
             "const row = extra => ({ m: 97, road: 'icy', fog: 'none', truth: 1, result: null, chosen: undefined, ...extra });"
             "drawCruise(row({ chosen: 3 }), 300); const a = texts.splice(0), sa = strokes.splice(0);"
+            "drawCruise(row({ chosen: -1 }), 300); drawCruise(row(), 300); const none = strokes.splice(0); texts.splice(0);"
             "drawCruise(row({ result: 'ok', chosen: 1, road: 'dry', fog: 'dense', m: 230 }), 300);"
-            "return { a, sa, b: texts, sb: strokes }; })()")
+            "return { a, sa, none, b: texts, sb: strokes }; })()")
         cs, en = run_js(code, None), run_js(code, None, "en")
         self.assertEqual([s for s in cs["a"] if s in list("1234567")], list("1234567"))
         self.assertEqual([s for s in cs["a"] + cs["b"] if re.search(r"[^\W\d_]", s)],
                          ["⚠ překážka za 97 m · náledí · bez mlhy", "⚠ překážka za 230 m · sucho · hustá mlha"])     # jiný text s písmeny kresba nepíše
         self.assertIn("⚠ obstacle 97 m ahead · icy road · no fog", en["a"])
-        self.assertEqual((len(cs["sa"]), cs["sb"]), (1, []))                                  # po průjezdu obrys zmizí
+        self.assertEqual((len(cs["sa"]), cs["none"], cs["sb"]), (1, [], []))                                  # po průjezdu obrys zmizí
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_legend_numbers_match_the_bands(self):                  # legenda opakuje tabulku zadání: hranice z CRUISE_BANDS, srážky z CRUISE_ROAD a CRUISE_FOG

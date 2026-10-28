@@ -2646,7 +2646,7 @@ function cruiseLabel(r) {                                  // slovy, co se stalo
 // Řada tempomatu odspodu: povrch na silnici, políčka stupňů (správný po průjezdu zeleně), závoj mlhy, číslice se sloupečky rychlosti,
 // cedule nad políčky a modrý obrys volby před průjezdem. Číslice i cedule jsou nad závojem, mlha je nezakrývá. globalAlpha nastaví volající.
 function drawCruise(r, y) {
-  const n = 7, hw = LW * 0.42;
+  const n = 7, hw = LW * 0.42;                             // 7 pruhů natvrdo: CRUISE_TOP v testu kresby není k dispozici
   if (r.road === 'wet') {                                  // mokro: modrý průsvitný podklad a šikmé čáry
     ctx.fillStyle = 'rgba(56,139,253,.22)'; ctx.fillRect(0, y - 24, W, 48);
     ctx.strokeStyle = 'rgba(88,166,255,.5)'; ctx.lineWidth = 1; ctx.beginPath();
@@ -2654,8 +2654,6 @@ function drawCruise(r, y) {
     ctx.stroke();
   } else if (r.road === 'icy') {                           // náledí: světle modrý podklad a ❄ u okrajů (dole, nahoře vlevo je trojský kůň)
     ctx.fillStyle = 'rgba(190,230,255,.28)'; ctx.fillRect(0, y - 24, W, 48);
-    ctx.font = '14px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#d6efff';
-    ctx.fillText('❄', 9, y + 15); ctx.fillText('❄', W - 9, y + 15);
   }
   for (let lane = 0; lane < n; lane++) {
     const x = (lane + 0.5) * LW;
@@ -2664,6 +2662,10 @@ function drawCruise(r, y) {
   }
   if (r.fog === 'light' || r.fog === 'dense') {            // závoj mlhy přes řadu i ceduli
     ctx.fillStyle = r.fog === 'dense' ? 'rgba(170,180,190,.38)' : 'rgba(170,180,190,.2)'; ctx.fillRect(0, y - 46, W, 70);
+  }
+  if (r.road === 'icy') {                                  // ❄ u obou okrajů pod políčky (y+20), nad políčky a závojem; trojský kůň je vlevo nahoře
+    ctx.font = '12px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#d6efff';
+    ctx.fillText('❄', 9, y + 20); ctx.fillText('❄', W - 9, y + 20);
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '700 15px "Segoe UI", sans-serif';
   for (let lane = 0; lane < n; lane++) {
