@@ -2852,7 +2852,7 @@ function drawTimetable(r, y) {
   const rowY = i => top + 3 + (2 + i) * lineH + lineH / 2;
   ctx.fillStyle = 'rgba(11,16,22,.85)'; ctx.fillRect(2, top, W - 4, h);
   ctx.textBaseline = 'middle'; ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center';
-  const parcel = t('timetable.parcel', board.parcel);
+  const parcel = t('timetable.parcel', { zip: board.parcel.zip, service: timetableService(board.parcel.service) });
   const rule = board.exception ? t('timetable.exception', { service: timetableService(board.exception.service), depot: timetableDepot(board.exception.depot) }) : t('timetable.noException');
   ctx.fillStyle = '#e6edf3'; ctx.fillText(parcel, W / 2, top + 3 + lineH / 2, W - 8);
   ctx.fillStyle = '#f2cc0c'; ctx.fillText(rule, W / 2, top + 3 + lineH * 1.5, W - 8);

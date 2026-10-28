@@ -628,6 +628,8 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka, ge
         for part in ("timetableBoard(r)", "timetableLabel(r)", "drawRowLabel(", "t('timetable.parcel'", "t('timetable.exception'",
                      "t('timetable.noException')", "timetableDepot(", "TIMETABLE_COLOR[", "strokeRect("):
             self.assertIn(part, draw)
+        self.assertIn("service: timetableService(board.parcel.service)", draw)                  # služba na cedulce přeložená, ne anglické slovo modelu
+        self.assertNotIn("t('timetable.parcel', board.parcel)", draw)
         self.assertIn("legend: [[null, 'legend.timetable.board'], [null, 'legend.timetable.exception'], [null, 'legend.timetable.gates'], ['#3fb950', 'legend.timetable.out']],",
                       timetable_body())
 
