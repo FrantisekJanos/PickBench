@@ -48,7 +48,7 @@ async () => {
   const log = [];
 
   await sleep(1500); snap();                                // po načtení, s prvním stavem GPU
-  for (const scenario of ['numbers', 'signs', 'memory', 'barrier', 'lookahead', 'rule', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
+  for (const scenario of ['numbers', 'signs', 'memory', 'barrier', 'lookahead', 'rule', 'queue', 'queueWeighted', 'bet', 'cruise', 'timetable', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
   await use({ scenario: 'neni-v-nabidce.json' }); snap();
 
   // benchmark bez hry: Pravidla a Náhodně, všechny scénáře, limit, trojský kůň
@@ -59,6 +59,11 @@ async () => {
   log.push((await run('bench', { scenario: 'barrier', lanes: 3, inject: true })).why);
   log.push((await run('bench', { scenario: 'lookahead', lanes: 2, inject: true })).why);
   log.push((await run('bench', { scenario: 'rule', inject: true })).why);
+  log.push((await run('bench', { scenario: 'queue', lanes: 3, inject: true })).why);
+  log.push((await run('bench', { scenario: 'queueWeighted', lanes: 8, inject: true })).why);
+  log.push((await run('bench', { scenario: 'bet', lanes: 2, inject: true })).why);           // volič na 2: stránka musí vzít 3 brány
+  log.push((await run('bench', { scenario: 'cruise', inject: true })).why);
+  log.push((await run('bench', { scenario: 'timetable', inject: true })).why);
   for (const scenario of [...emails.slice(0, 2), ...publics]) log.push((await run('bench', { scenario, benchn: 10, deadline: 50 })).why);
   Math.random = () => 0;                                    // řidič Náhodně volí vždy první možnost: stejné texty při každé prohlídce
   log.push((await run('bench', { driver: 'random', inject: true })).why);
@@ -67,6 +72,11 @@ async () => {
   log.push((await run('bench', { driver: 'random', scenario: 'barrier', lanes: 2, inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'lookahead', lanes: 5, inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'rule', inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'queue', lanes: 2, inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'queueWeighted', lanes: 4, inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'bet', lanes: 8, inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'cruise', inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'timetable', inject: true })).why);
   if (emails.length) log.push((await run('bench', { driver: 'random', scenario: emails[0], benchn: 10, inject: true })).why);
   for (const scenario of publics) log.push((await run('bench', { driver: 'random', scenario, benchn: 10 })).why);
 
@@ -81,6 +91,16 @@ async () => {
   log.push((await run('game', { scenario: 'lookahead', lanes: 8, runlen: 12, inject: true })).why);
   log.push((await run('game', { driver: 'random', scenario: 'lookahead', lanes: 3, runlen: 24, inject: true })).why);      // Náhodně volí vždy left: náraz u kraje i slepé uličky (24: blok zabere ~6 polí)
   log.push((await run('game', { driver: 'random', scenario: 'rule', runlen: 16, inject: true })).why);      // Náhodně volí vždy bránu 1
+  log.push((await run('game', { scenario: 'queue', lanes: 4, runlen: 18, inject: true })).why);           // fronty po 6 polích: 3 řady
+  log.push((await run('game', { driver: 'random', scenario: 'queueWeighted', lanes: 3, runlen: 18, inject: true })).why);      // Náhodně volí vždy pruh 1
+  log.push((await run('game', { scenario: 'bet', lanes: 5, runlen: 12, inject: true })).why);
+  log.push((await run('game', { driver: 'random', scenario: 'bet', lanes: 3, runlen: 12, inject: true })).why);
+  log.push((await run('game', { scenario: 'cruise', runlen: 12, inject: true })).why);
+  log.push((await run('game', { driver: 'random', scenario: 'cruise', runlen: 12, inject: true })).why);      // Náhodně volí vždy stupeň 1: příliš pomalu
+  log.push((await run('game', { scenario: 'timetable', runlen: 18, inject: true })).why);
+  log.push((await run('game', { driver: 'random', scenario: 'timetable', runlen: 18, inject: true })).why);  // Náhodně volí vždy Olši
+  log.push((await run('game', { driver: 'random', scenario: 'queue', lanes: 8, runlen: 18 })).why);
+  log.push((await run('game', { scenario: 'queueWeighted', lanes: 2, runlen: 18 })).why);
   if (emails.length) {
     log.push((await run('game', { scenario: emails[0], runlen: 12 })).why);
     log.push((await run('game', { driver: 'random', scenario: emails[0], runlen: 16, inject: true })).why);
@@ -122,6 +142,11 @@ async () => {
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'barrier', lanes: 4, mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'lookahead', lanes: 6, mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'rule', mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'queue', lanes: 5, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'queueWeighted', lanes: 3, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'bet', lanes: 4, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'cruise', mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'timetable', mirror: true, inject: true })).why);
     if (emails.length) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: emails[0], benchn: 8, inject: true })).why);
     for (const scenario of publics) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario, benchn: 6 })).why);
   }
