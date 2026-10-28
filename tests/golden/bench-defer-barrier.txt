@@ -1,0 +1,6 @@
+24 křižovatek, 5 pravidel s pořadím, 83 % jeď; sada je pro všechny modely stejná
+
+model                  průměr   medián     p95    min     max  rozh./s  správně  jistota    ECE  tokenů
+m1                       11ms     12ms    17ms    5ms    17ms     87.6      42%      73%    33%     161   (pravidlo 1 5/10, pravidlo 2 0/0, pravidlo 3 0/0, pravidlo 4 2/5, pravidlo 5 3/9)
+                    práh jistoty 70%: pokrytí 50% (12/24), přesnost nad prahem 33%, předat člověku nebo pravidlům 12; Brier 0.405
+                    falešný průjezd 4/4, zbytečné stání 10/20, neplatné 0; shodné 4/8, přebitý semafor 1/5, semafor přebil značku 2/2, poslední pravidlo 3/9; AUROC 0.00, nejlepší práh 0.03 → vyvážená 50%

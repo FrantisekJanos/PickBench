@@ -343,6 +343,13 @@ TEXTS = {
                            "en": "--deadline-ms must be a positive number (the deadline in milliseconds)."},
     "bench.err.limits": {"cs": "--max-usd a --max-hosted musí být nezáporná čísla.", "en": "--max-usd and --max-hosted must be non-negative numbers."},
     "bench.err.allRefused": {"cs": "server odmítl všechny dotazy (HTTP 400)", "en": "the server refused all requests (HTTP 400)"},
+    "bench.err.defer": {"cs": "--defer chce práh jistoty větší než 0 a nejvýš 1, třeba 0.8.",
+                        "en": "--defer needs a confidence threshold above 0 and at most 1, such as 0.8."},
+    # --defer: řádek pod modelem; procenta přicházejí hotová, {covered}/{n} úloh nad prahem, {handed} pod prahem, {brier} = „0.142“ nebo „—“.
+    "bench.defer": {"cs": "práh jistoty {threshold}: pokrytí {coverage} ({covered}/{n}), přesnost nad prahem {acc}, "
+                          "předat člověku nebo pravidlům {handed}; Brier {brier}",
+                    "en": "confidence threshold {threshold}: coverage {coverage} ({covered}/{n}), accuracy above the threshold {acc}, "
+                          "hand over to a person or the rules {handed}; Brier {brier}"},
     # hwbench.py. Záhlaví sedmi tabulek a CSV: buňka = klíč. Šířku sloupce určuje délka záhlaví (hwbench.line), anglické slovo proto
     # smí být delší; dec./s je tatáž zkratka jako v bench.py. Slova jsou tatáž jako v panelu Hardware a ve výsledcích stránky.
     "hw.col.model": {"cs": "model", "en": "model"},

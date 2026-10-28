@@ -1,6 +1,6 @@
 Srovnání rozhodovacích modelů na stejné sadě úloh (bez hry).
 
-Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -165,6 +165,9 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             Když server už zahřívací dotaz odmítne (HTTP 400), řádek řekne „nevešlo se“ a důvod doslova od serveru;
             Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
 --deadline-ms L:  přibude sloupec goodput = podíl rozhodnutí správných a zároveň do L ms.
+--defer T:  pod řádkem modelu řádek prahu jistoty T (víc než 0 a nejvýš 1, třeba 0.8): pokrytí = podíl úloh s jistotou aspoň T
+            (ty by rozhodl model), přesnost nad prahem, kolik úloh předat člověku nebo pravidlům (odpověď bez jistoty se předává)
+            a Brierovo skóre = průměr (jistota − správně)² přes odpovědi s jistotou, 0 = dokonalé.
 --lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
 U --emails se pod řádkem modelu vypíše macro-F1 (průměr F1 přes kategorie) a počet neplatných odpovědí.
 

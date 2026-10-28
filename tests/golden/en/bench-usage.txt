@@ -1,6 +1,6 @@
 Compares decision models on the same set of tasks (without the game).
 
-Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -165,6 +165,9 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
             Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
 --deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--defer T:  below the model row, a line for the confidence threshold T (above 0 and at most 1, such as 0.8): coverage = the share of tasks
+            with a confidence of at least T (the model would decide them), accuracy above the threshold, how many tasks to hand over to a
+            person or the rules (an answer without a confidence is handed over) and the Brier score = the mean (confidence − correct)², 0 = perfect.
 --lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
 With --emails, the line below the model row gives macro-F1 (the mean of F1 over the categories) and the number of invalid answers.
 

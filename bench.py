@@ -1,6 +1,6 @@
 """Srovnání rozhodovacích modelů na stejné sadě úloh (bez hry).
 
-Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -165,6 +165,9 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             Když server už zahřívací dotaz odmítne (HTTP 400), řádek řekne „nevešlo se“ a důvod doslova od serveru;
             Ollama 0.35.1 tak podle své hlášky odmítá mimo jiné nabídku mimo 2–26 možností.
 --deadline-ms L:  přibude sloupec goodput = podíl rozhodnutí správných a zároveň do L ms.
+--defer T:  pod řádkem modelu řádek prahu jistoty T (víc než 0 a nejvýš 1, třeba 0.8): pokrytí = podíl úloh s jistotou aspoň T
+            (ty by rozhodl model), přesnost nad prahem, kolik úloh předat člověku nebo pravidlům (odpověď bez jistoty se předává)
+            a Brierovo skóre = průměr (jistota − správně)² přes odpovědi s jistotou, 0 = dokonalé.
 --lang cs|en:  jazyk výstupu; bez volby platí proměnná prostředí PICKBENCH_LANG, jinak cs.
 U --emails se pod řádkem modelu vypíše macro-F1 (průměr F1 přes kategorie) a počet neplatných odpovědí.
 
@@ -182,7 +185,7 @@ Během měření nesmí běžet hra v prohlížeči (dotazy by se praly o kartu)
 """
 USAGE_EN = """Compares decision models on the same set of tasks (without the game).
 
-Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L] [--defer T] model1 model2 ...
           python bench.py [N] --numbers [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --signs [--pairs] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --memory [--count] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
@@ -347,6 +350,9 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             When the server refuses even the warm-up request (HTTP 400), the row says "did not fit" and gives the reason in the server's own words;
             Ollama 0.35.1, for example, refuses a list of fewer than 2 or more than 26 options, as its own message says.
 --deadline-ms L:  adds the goodput column = the share of decisions that are correct and also within L ms.
+--defer T:  below the model row, a line for the confidence threshold T (above 0 and at most 1, such as 0.8): coverage = the share of tasks
+            with a confidence of at least T (the model would decide them), accuracy above the threshold, how many tasks to hand over to a
+            person or the rules (an answer without a confidence is handed over) and the Brier score = the mean (confidence − correct)², 0 = perfect.
 --lang cs|en:  output language; without the option the environment variable PICKBENCH_LANG applies, otherwise cs.
 With --emails, the line below the model row gives macro-F1 (the mean of F1 over the categories) and the number of invalid answers.
 
@@ -3239,7 +3245,7 @@ def measure(model, items, question, mirror=False, targets=None, deadline=None):
         "other": share(inj_n - resisted - fooled, inj_n), "clean_acc": share(clean_ok, clean_n)}
     return {"model": model, "avg": statistics.mean(lat), "p50": lat[n // 2], "p95": lat[int(n * 0.95)],
             "min": lat[0], "max": lat[-1], "acc": hits[0] / n, "conf": statistics.mean(conf) if conf else float("nan"),
-            "ece": ece(pairs), "tokens": tokens,
+            "ece": ece(pairs), "brier": metrics.brier(pairs), "cal": pairs, "tasks": n, "tokens": tokens,
             "stab": agree / n if mirror else None, "variant_acc": [h / n for h in hits], "inject": inject,
             "deadline": deadline, "goodput": metrics.goodput(timed, deadline)}, choices
 
@@ -3314,7 +3320,7 @@ def measure_noul(model, items, question, mirror=False, targets=None, deadline=No
         "other": share(inj_n - resisted - fooled, inj_n), "clean_acc": share(clean_ok, clean_n)}
     return {"model": model, "avg": statistics.mean(lat), "p50": lat[n // 2], "p95": lat[int(n * 0.95)],
             "min": lat[0], "max": lat[-1], "acc": hits[0] / n, "conf": statistics.mean(conf) if conf else float("nan"),
-            "ece": ece(pairs), "tokens": tokens,
+            "ece": ece(pairs), "brier": metrics.brier(pairs), "cal": pairs, "tasks": n, "tokens": tokens,
             "stab": agree / n if mirror else None, "variant_acc": [h / n for h in hits], "inject": inject,
             "deadline": deadline, "goodput": metrics.goodput(timed, deadline)}, probs
 
@@ -3361,7 +3367,7 @@ def measure_score(model, items, question, mirror=False, targets=None, deadline=N
         "other": share(inj_n - resisted - fooled, inj_n), "clean_acc": share(clean_ok, clean_n)}
     return {"model": model, "avg": statistics.mean(lat), "p50": lat[n // 2], "p95": lat[int(n * 0.95)],
             "min": lat[0], "max": lat[-1], "acc": hits[0] / n, "conf": statistics.mean(conf) if conf else float("nan"),
-            "ece": ece(pairs), "tokens": tokens,
+            "ece": ece(pairs), "brier": metrics.brier(pairs), "cal": pairs, "tasks": n, "tokens": tokens,
             "stab": agree / n if mirror else None, "variant_acc": [h / n for h in hits], "inject": inject,
             "deadline": deadline, "goodput": metrics.goodput(timed, deadline)}, levels
 
@@ -3450,7 +3456,7 @@ def run_public(model, ds, cases, deadline=None):
     quality = metrics.classification(pairs, ds["oos"])
     return {"model": model, "fit": True, "n": len(pairs), "avg": statistics.mean(lat), "p50": lat[n // 2], "p90": lat[int(n * 0.9)],
             "p95": lat[int(n * 0.95)], "min": lat[0], "max": lat[-1], "acc": quality["acc"],
-            "conf": statistics.mean(conf) if conf else float("nan"), "ece": ece(cal), "tokens": tokens,
+            "conf": statistics.mean(conf) if conf else float("nan"), "ece": ece(cal), "brier": metrics.brier(cal), "cal": cal, "tasks": len(pairs), "tokens": tokens,
             "stab": None, "variant_acc": None, "inject": None, "deadline": deadline, "goodput": metrics.goodput(timed, deadline),
             "quality": quality, "refused": refused}
 
@@ -3778,6 +3784,7 @@ def parse_args(argv):
     p.add_argument("--mirror", action="store_true")
     p.add_argument("--inject", action="store_true")
     p.add_argument("--deadline-ms", type=float)
+    p.add_argument("--defer", type=float)                        # práh jistoty 0–1: řádek pokrytí, přesnosti nad prahem a Brierova skóre
     p.add_argument("rest", nargs="*")
     a = p.parse_intermixed_args(argv)                # volby smí stát mezi N a modely
     a.n = int(a.rest.pop(0)) if a.rest and a.rest[0].isdigit() else None
@@ -3814,7 +3821,7 @@ def header(mirror=False, deadline=None):
     return "".join(format(text, width) for text, width in cols)
 
 
-def print_row(r, note):
+def print_row(r, note, defer=None):
     stab = f"{pct(r['stab']):>10}" if r["stab"] is not None else ""
     good = f"{pct(r['goodput']):>9}" if r["deadline"] is not None else ""
     pad = " " * 20
@@ -3833,6 +3840,10 @@ def print_row(r, note):
         j = r["inject"]
         print(pad + i18n.t("bench.trojan", n=j["n"], resisted=pct(j["resisted"]), fooled=pct(j["fooled"]), other=pct(j["other"]),
                            clean=pct(j["clean_acc"])), flush=True)
+    if defer is not None:                            # --defer: pokrytí a přesnost nad prahem jistoty, Brierovo skóre
+        c = metrics.coverage(r["cal"], r["tasks"], defer)
+        print(pad + i18n.t("bench.defer", threshold=pct(defer), coverage=pct(c["coverage"]), covered=c["covered"], n=c["n"], acc=pct(c["acc"]),
+                           handed=c["handed"], brier="—" if r["brier"] is None else f"{r['brier']:.3f}"), flush=True)
 
 
 def sign_names():
@@ -4044,7 +4055,7 @@ def print_bandit(r):
     print(" " * 20 + i18n.t("bench.bandit.loss", **{name: f"{value:.1f}" for name, value in r["loss"].items()}), flush=True)
 
 
-def print_public(r, worst=5):
+def print_public(r, worst=5, defer=None):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
         if r.get("reason"):                          # důvod doslova od serveru; bez něj jen stav
@@ -4053,7 +4064,7 @@ def print_public(r, worst=5):
             text = i18n.t("bench.didNotFit", labels=r["labels"])
         print(f"{r['model']:<20}{text}", flush=True)
         return
-    print_row(r, "")
+    print_row(r, "", defer)
     q, pad = r["quality"], " " * 20
     if q["oos"]:
         o = q["oos"]
@@ -4126,11 +4137,14 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesBarrier"))
     if args.deadline_ms is not None and not args.deadline_ms > 0:
         sys.exit(i18n.t("bench.err.deadline"))
+    if args.defer is not None and not 0 < args.defer <= 1:       # i NaN
+        sys.exit(i18n.t("bench.err.defer"))
     if args.max_usd is not None or args.max_hosted is not None:
         if (args.max_usd is not None and not 0 <= args.max_usd < float("inf")) or (args.max_hosted is not None and args.max_hosted < 0):
             sys.exit(i18n.t("bench.err.limits"))
         providers.BUDGET = providers.Budget(args.max_usd, args.max_hosted)       # strop útraty tohoto spuštění
     head = header(args.mirror, args.deadline_ms)
+    row = lambda r, note: print_row(r, note, args.defer)        # řádek modelu, s --defer i s řádkem prahu jistoty
     if args.public:
         try:
             ds = load_public(args.public)
@@ -4147,7 +4161,7 @@ def main(argv):
         print(head)
         for m in args.models:
             with hosted_model(m):
-                print_public(run_public(m, ds, cases, args.deadline_ms))
+                print_public(run_public(m, ds, cases, args.deadline_ms), defer=args.defer)
     elif args.emails:
         try:
             ds = load_dataset(args.emails)
@@ -4161,7 +4175,7 @@ def main(argv):
             with hosted_model(m):
                 r = run_emails(m, ds, cases, args.mirror, args.inject, args.deadline_ms)
                 top = ", ".join(f"{label[t]}→{label[c]} {n}×" for (t, c), n in r["confusions"].most_common(5))
-                print_row(r, i18n.t("bench.note.confusions", list=top or i18n.t("bench.none")))
+                row(r, i18n.t("bench.note.confusions", list=top or i18n.t("bench.none")))
     elif args.numbers:
         cases = number_cases(args.n or 100, args.lanes)
         names = {"tight": i18n.t("bench.gap.tight"), "medium": i18n.t("bench.gap.medium"), "clear": i18n.t("bench.gap.clear")}
@@ -4170,7 +4184,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_numbers(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, class_note(r["by_gap"], names))
+                row(r, class_note(r["by_gap"], names))
     elif args.signs:
         cases = sign_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.signs", n=len(cases), lanes=args.lanes) + "\n")
@@ -4178,7 +4192,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_signs(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.pairs)
-                print_row(r, sign_note(r))
+                row(r, sign_note(r))
                 print_pairs(r)
     elif args.memory:
         cases = memory_cases(args.n or 100, args.lanes)  # úlohy jsou v obou podobách stejné, --count mění jen zápis stavu
@@ -4190,7 +4204,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_memory(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.count)
-                print_row(r, memory_note(r))
+                row(r, memory_note(r))
                 print_memory(r)
     elif args.barrier:
         cases = barrier_cases(args.n or 100)
@@ -4200,7 +4214,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_barrier(m, cases, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, barrier_note(r))
+                row(r, barrier_note(r))
                 print_barrier(r)
     elif args.lookahead:
         form = "blocked" if args.blocked else "rows" if args.rows else LOOKAHEAD_FORM
@@ -4210,7 +4224,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_lookahead(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, lookahead_note(r))
+                row(r, lookahead_note(r))
                 print_lookahead(r)
     elif args.rule:
         form = "labeled" if args.labeled else "matched_by" if args.matched_by else RULE_FORM
@@ -4220,7 +4234,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_rule(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, rule_note(r))
+                row(r, rule_note(r))
                 print_rule(r)
     elif args.queue:
         cases = queue_cases(args.n or 100, args.lanes, args.weighted)     # vážené fronty jsou jiné úlohy: třída plyne z vážené délky
@@ -4232,7 +4246,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_queue(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, args.weighted)
-                print_row(r, queue_note(r))
+                row(r, queue_note(r))
                 print_queue(r)
     elif args.hint:
         cases = hint_cases(args.n or 100, args.lanes)            # N = počet řad, každá jde do modelu třikrát
@@ -4241,7 +4255,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_hint(m, cases, args.lanes, args.mirror, args.deadline_ms)
-                print_row(r, hint_note(r))
+                row(r, hint_note(r))
                 print_hint(r)
     elif args.diff:
         form = "dicts" if args.dicts else "lists" if args.lists else DIFF_FORM
@@ -4254,7 +4268,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_diff(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, diff_note(r))
+                row(r, diff_note(r))
                 print_diff(r)
     elif args.bet:
         cases = bet_cases(args.n or 100, args.lanes)
@@ -4263,7 +4277,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_bet(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, bet_note(r))
+                row(r, bet_note(r))
                 print_bet(r)
     elif args.cruise:
         form = "score" if args.as_score else "choice" if args.as_choice else CRUISE_FORM
@@ -4273,7 +4287,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_cruise(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, cruise_note(r))
+                row(r, cruise_note(r))
                 print_cruise(r)
     elif args.timetable:
         form = "shuffled" if args.shuffled else "sorted" if args.sorted else TIMETABLE_FORM
@@ -4287,7 +4301,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_timetable(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, timetable_note(r))
+                row(r, timetable_note(r))
                 print_timetable(r)
     elif args.pattern:
         form = "predict" if args.predict else "counter" if args.counter else PATTERN_FORM
@@ -4300,7 +4314,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_pattern(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, pattern_note(r))
+                row(r, pattern_note(r))
                 print_pattern(r)
     elif args.tictactoe:
         form = "cells" if args.cells else "rows" if args.board else TICTACTOE_FORM
@@ -4313,7 +4327,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_tictactoe(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, tictactoe_note(r))
+                row(r, tictactoe_note(r))
                 print_tictactoe(r)
     elif args.bandit:
         form = "history" if args.history else "totals" if args.totals else BANDIT_FORM
@@ -4326,7 +4340,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_bandit(m, cases, args.mirror, args.inject, args.deadline_ms, form)
-                print_row(r, bandit_note(r))
+                row(r, bandit_note(r))
                 print_bandit(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
@@ -4335,7 +4349,7 @@ def main(argv):
         for m in args.models:
             with hosted_model(m):
                 r = run_lanes(m, cases, args.lanes, args.mirror, args.inject, args.deadline_ms)
-                print_row(r, i18n.t("bench.note.wrongClear", n=r["wrong_clear"]))
+                row(r, i18n.t("bench.note.wrongClear", n=r["wrong_clear"]))
 
 
 if __name__ == "__main__":
