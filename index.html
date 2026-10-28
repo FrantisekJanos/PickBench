@@ -4525,6 +4525,76 @@ function diffQuestion(lanes) {                             // diff_question(lane
   return { changed_list: { type: 'choice', instructions, criteria } };
 }
 
+// Co se změnilo: generátor, dvojčata a rozbor jako diff_case, diff_cases, diff_twins, diff_summary v bench.py.
+// Úloha = { before, after, answer, cls, mode }; tries jen pro test meze pokusů (konstantu stránky v node podstrčit nejde).
+function diffCase(rand, lanes, cls, mode, tries = DIFF_TRIES) {
+  if (!(Number.isInteger(lanes) && lanes >= 2 && lanes <= 8) || !DIFF_CLASSES.includes(cls) || !DIFF_MODES.includes(mode))
+    throw new Error(`diffCase: unsupported ${lanes} lanes, class ${cls}, mode ${mode}`);
+  let row = null, answer = -1, nw = null;
+  for (let k = 0; k < tries && row === null; k++) {
+    answer = Math.floor(rand() * lanes);
+    if (mode === 'plain') {                                // řada bez opakování: kolize výplně = celá úloha znovu
+      const [old, n] = diffPair(rand, cls), used = new Set([old, n]), r = [];
+      let clash = false;
+      for (let i = 0; i < lanes && !clash; i++) {
+        if (i === answer) { r.push(old); continue; }
+        const v = diffSingle(rand, cls);
+        if (used.has(v)) clash = true;
+        else { used.add(v); r.push(v); }
+      }
+      if (!clash) { row = r; nw = n; }
+      continue;
+    }
+    const pairs = [...Array(diffPoolPairs(lanes))].map(() => diffPair(rand, cls)), pool = pairs.flat();
+    if (new Set(pool).size !== pool.length) continue;      // zásoba s opakovanou hodnotou: znovu
+    const partner = new Map(pairs.flatMap(([a, b]) => [[a, b], [b, a]]));
+    const old = pickOf(rand, pool);
+    nw = partner.get(old);
+    row = [...Array(lanes)].map((_, i) => i === answer ? old : pickOf(rand, pool));      // náhoda jen pro pruhy mimo answer, jako v Pythonu
+  }
+  if (row === null) throw new Error(`diffCase: no ${cls} ${mode} task for ${lanes} lanes after ${tries} tries`);
+  const before = row, after = before.map((v, i) => i === answer ? nw : v), all = [...before, ...after];
+  if (before.filter((v, i) => v !== after[i]).length !== 1 || before[answer] === after[answer]) throw new Error('diffCase: exactly one lane must change, the answer');
+  if (cls === 'num1' || cls === 'numnew') {
+    if (!all.every(v => Number.isInteger(v) && v >= DIFF_NUMBERS[0] && v <= DIFF_NUMBERS[1])) throw new Error('diffCase: every value must be a whole number in DIFF_NUMBERS');
+  } else if (!all.every(v => DIFF_WORDS.includes(v))) throw new Error('diffCase: every value must be a word from DIFF_WORDS');
+  if (!diffRelated(cls, before[answer], after[answer])) throw new Error(`diffCase: the changed lane must keep the ${cls} relation`);
+  if (mode === 'plain' && !(new Set(before).size === lanes && new Set(after).size === lanes)) throw new Error('diffCase: a plain row must not repeat a value in either snapshot');
+  return { before, after, answer, cls, mode };
+}
+
+function diffRow(lanes, rand) {                            // jedna úloha jako krok diff_cases: třída, podoba, úloha; truth = správný pruh
+  const cls = pickOf(rand, DIFF_CLASSES), mode = rand() < DIFF_REPEAT_SHARE ? 'repeat' : 'plain';
+  const c = diffCase(rand, lanes, cls, mode);
+  return { ...c, truth: c.answer };
+}
+
+// Pruhy kromě správného, které v after nesou novou hodnotu měněného pruhu nebo v before jeho starou (diff_twins; vzestupně).
+const diffTwins = c => c.before.map((_, i) => i).filter(i => i !== c.answer && (c.after[i] === c.after[c.answer] || c.before[i] === c.before[c.answer]));
+
+function diffErrorKind(c, choice, keys) {                  // druh chyby v pořadí diff_summary; správná volba null
+  if (typeof choice !== 'string' || !keys.includes(choice)) return 'invalid';
+  const picked = keys.indexOf(choice);
+  if (picked === c.answer) return null;
+  if (diffTwins(c).includes(picked)) return 'twin';
+  return Math.abs(picked - c.answer) === 1 ? 'neighbor' : 'other';
+}
+
+function diffSummary(cases, choices, keys) {               // jako diff_summary: přesnost podle třídy a podoby, rozbor chyb
+  const errors = { twin: 0, neighbor: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = diffErrorKind(c, choices[i], keys); if (kind) errors[kind]++; });
+  return { by_class: classTally(DIFF_CLASSES, cases.map(c => [c.answer, c.cls]), choices, keys),
+           by_mode: classTally(DIFF_MODES, cases.map(c => [c.answer, c.mode]), choices, keys), errors };
+}
+
+// Zahřívací úloha: slova (v JSON delší než čísla), plain, word1 v posledním pruhu. Nebere z rand.
+const DIFF_WARM = ['road', 'foam', 'loan', 'mean', 'heat', 'sent', 'test', 'boat'];     // žádná dvě o písmeno
+function diffWarm(lanes) {
+  const before = DIFF_WARM.slice(0, lanes), after = [...before];
+  after[lanes - 1] = DIFF_NEIGHBOURS[before[lanes - 1]].find(v => !before.includes(v));
+  return { before, after, answer: lanes - 1, cls: 'word1', mode: 'plain', truth: lanes - 1 };
+}
+
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
