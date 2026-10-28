@@ -1905,5 +1905,55 @@ class Diff(unittest.TestCase):
             self.assertGreaterEqual(len(json.dumps(bench.diff_state(before, after, "lists"))), longest, k)
 
 
+# Vzor soupeře: generátor stránky se stejnou náhodou jako ROWS_JS: seed, n → úlohy patternRow.
+PATTERN_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "patternRow(rand)")
+assert PATTERN_ROWS_JS != ROWS_JS
+PATTERN_PAGE = {}
+
+
+def pattern_page(n=3000, seed=1):
+    """Úlohy generátoru stránky, jednou za běh modulu."""
+    if (n, seed) not in PATTERN_PAGE:
+        PATTERN_PAGE[n, seed] = run_js(PATTERN_ROWS_JS, {"seed": seed, "n": n})
+    return PATTERN_PAGE[n, seed]
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Pattern(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ moves: PATTERN_MOVES, beats: PATTERN_BEATS, beaten: PATTERN_BEATEN, classes: PATTERN_CLASSES, run: PATTERN_RUN,"
+                    " warmup: PATTERN_WARMUP, check: PATTERN_CHECK, weights: PATTERN_WEIGHTS, question: patternQuestion() })", None)
+        self.assertEqual((js["moves"], js["classes"]), (list(bench.PATTERN_MOVES), list(bench.PATTERN_CLASSES)))
+        self.assertEqual((js["beats"], js["beaten"]), (bench.PATTERN_BEATS, bench.PATTERN_BEATEN))
+        self.assertEqual((js["run"], js["warmup"], js["check"]), (list(bench.PATTERN_RUN), list(bench.PATTERN_WARMUP), bench.PATTERN_CHECK))
+        self.assertEqual(json.dumps(js["weights"]), json.dumps(bench.PATTERN_WEIGHTS))            # i pořadí tvarů (tuple → seznam)
+        self.assertEqual(json.dumps(js["question"]), json.dumps(bench.pattern_question("predict")))
+        cases = bench.pattern_cases(40, seed=3)
+        for case, state in zip(cases, run_js("arg.map(patternState)", [list(c[0]) for c in cases])):
+            self.assertEqual(json.dumps(state), json.dumps(bench.pattern_state(case)))           # bajtově
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  opponent_throw: '([^'\\]*)',$", alt, re.M), [bench.ALT["opponent_throw"]])
+        self.assertNotIn("\n  throw: ", "\n" + alt)                # podoba --counter je jen v bench.py
+
+    def test_solve_matches_bench(self):
+        import bench
+        rng = random.Random(4)
+        histories = [list(t) for t in itertools.product(bench.PATTERN_MOVES, repeat=8)]
+        histories += [[rng.choice(bench.PATTERN_MOVES) for _ in range(rng.randint(5, 13))] for _ in range(500)]
+        histories += [list(c[0]) for c in bench.pattern_cases(300, seed=6)]
+        got = run_js("arg.map(h => { try { return patternSolve(h); } catch (e) { return e.message.split(':')[0]; } })", histories)
+        for h, js in zip(histories, got):
+            try:
+                py = list(bench.pattern_solve(tuple(h)))
+            except RuntimeError:
+                py = "patternSolve"
+            self.assertEqual(js, py, h)
+
+
 if __name__ == "__main__":
     unittest.main()
