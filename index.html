@@ -2837,7 +2837,8 @@ function timetableLabel(r) {
   const choice = TIMETABLE_DEPOTS[r.chosen] ?? null;
   if (choice === null) return { text: t('label.invalid'), color: RESULT.late.color };
   const pick = timetableDepot(choice), kind = timetableErrorKind(r, choice);
-  const key = { missed: 'timetable.label.missed', misapplied: 'timetable.label.misapplied', neighbor: 'timetable.label.neighbor' }[kind] ?? 'timetable.label.bad';
+  const neighbor = kind === 'neighbor' && r.rule !== 'applies';      // u platné výjimky je r.answer depo výjimky, ne depo řádku: štítek řádku by lhal
+  const key = { missed: 'timetable.label.missed', misapplied: 'timetable.label.misapplied' }[kind] ?? (neighbor ? 'timetable.label.neighbor' : 'timetable.label.bad');
   return { text: t(key, { pick, service, depot, zip, from, to }), color: RESULT.bad.color };
 }
 

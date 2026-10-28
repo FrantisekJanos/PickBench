@@ -621,6 +621,21 @@ class Page(unittest.TestCase):              # scénář ve stránce; tabulka, ge
         self.assertEqual(en[4]["text"], "✗ neighboring row: picked Birch, ZIP 81335 belongs to 81334–87678 → Maple")
         self.assertEqual([x["color"] for x in cs], ["#3fb950"] * 2 + ["#f85149"] * 4 + ["#8b9aa8"] * 2)
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_neighbor_pick_with_exception_names_the_right_answer(self):      # platná výjimka: štítek netvrdí, že řádek vede do depa výjimky
+        from test_parity import run_js, timetable_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "TIMETABLE_DEPOT_NAME", "TIMETABLE_SERVICE_NAME"))
+        code = "(() => {" + consts + page_function("timetableDepot") + page_function("timetableService") + page_function("timetableLabel") + (
+            "return arg.map(([c, result, chosen]) => timetableLabel({ ...c, result, chosen })); })()")
+        d = list(bench.TIMETABLE_DEPOTS).index
+        rows = [[timetable_js(APPLIES), "bad", d("birch")], [timetable_js(DECOY), "bad", d("birch")]]
+        cs, en = run_js(code, rows), run_js(code, rows, "en")
+        self.assertEqual(cs[0]["text"], "✗ zvolil Bříza, správně Cedr")
+        self.assertEqual(en[0]["text"], "✗ picked Birch, right: Cedar")
+        self.assertNotIn("81334–87678", cs[0]["text"])
+        self.assertIn("sousední řádek", cs[1]["text"])                      # bez výjimky zůstává štítek sousedního řádku
+
     def test_drawing_writes_only_through_t(self):
         self.assertNotIn("fillText(", page_function("timetableBoard"))                         # rozvržení bez kreslení a bez textů
         draw = page_function("drawTimetable")
