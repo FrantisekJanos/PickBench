@@ -1193,6 +1193,7 @@ const ALT = {                                              // jinak formulované
   speed: 'The cruise control has seven speed levels; 1 is the slowest and 7 the fastest. obstacle_m is how many meters ahead the nearest obstacle is, and it sets the starting level: level 1 below 20 m, level 2 from 20 m, level 3 from 40 m, level 4 from 60 m, level 5 from 100 m, level 6 from 150 m and level 7 from 220 m. A wet road takes one level off and an icy road two. Light fog takes one level off and dense fog two. Pick the level that is left.',
   depot: "Find the depot this parcel goes to. If exceptions lists the parcel's service, that exception's depot wins. Otherwise take the routes row whose range from zip_from up to zip_to, including both ends, holds the parcel's zip.",
   cell_cells: 'It is your turn in a game of tic-tac-toe and your mark is the one in you. cells names every cell as rNcM, row N counted from the top and column M from the left, and gives its mark; an empty string means the cell is free. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.',
+  toll: 'Every toll gate has its own unknown chance of paying a prize. drives tells how often a car has passed a gate and wins how often that paid. Pick the next gate: a gate passed fewer than 3 times comes first, and there is never more than one; if there is none, take the gate with the most wins per drive; when two gates are level on that, take the one passed fewer times.',
 };
 const ALT_LANES = /\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b/;      // zadání move_blocked a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT), jako ALT_LANES v bench.py
 function variantOf(q, v) {                                 // 0 původní, 1 obrácené pořadí možností, 2 jinak formulované zadání
@@ -4604,6 +4605,176 @@ function tictactoeSummary(cases, choices) {                // { by_class, by_sid
 }
 const TICTACTOE_WARM = { board: '.OXXOX.XO', you: 'O', answer: 0, cls: 'win' };     // pevná zahřívací úloha s nejdelším stavem (dvě volná pole)
 function tictactoeWarm() { return { ...TICTACTOE_WARM, truth: TICTACTOE_WARM.answer }; }
+// Mýtné brány: konstanty, pravidlo, zkratky, generátor, stav, otázka a rozbor, stejné jako v bench.py (BANDIT_*, bandit_answer,
+// bandit_check, BANDIT_SHORTCUTS, bandit_case, bandit_state, bandit_question, bandit_summary). Brána je [výhry, průjezdy, šance v %],
+// souhrn [[výhry, průjezdy]]. Podíly se porovnávají jen v celých číslech (křížové násobení), ne v plovoucí čárce. Stránka má jen
+// podobu totals: deník průjezdů (bandit_log, podoba history) se nelosuje. Množina bran ze zkratky je vzestupné pole indexů.
+const BANDIT_GATES = [4, 5];
+const BANDIT_EXPLORE = 3;
+const BANDIT_SPLIT = [[3, 6], [9, 16]];
+const BANDIT_TOTAL = 10;
+const BANDIT_MARGIN = [1, 10];
+const BANDIT_CHANCES = [...Array(17)].map((_, i) => 10 + 5 * i);
+const BANDIT_CLASSES = ['explore', 'exploit', 'tie'];
+const BANDIT_FRESH = [[0, 0], [0, 1], [0, 2], [1, 2], [1, 1], [2, 2]];
+const BANDIT_TRIES = 20000;
+const BANDIT_WATCH = {
+  explore: ['greedy', 'lowest_rate', 'fewest_losses', 'most_wins', 'exclusion'],
+  exploit: ['most_wins', 'most_tries', 'fewest_tries', 'fewest_losses', 'exclusion'],
+  tie: ['fewest_tries', 'fewest_losses', 'lowest_rate_tried', 'exclusion'],
+};
+const BANDIT_PATTERNS = {
+  4: {
+    explore: { MHMMM: 12, TMTMT: 12, MTMMM: 17, MMMMT: 12, HMHMT: 2, MMMMH: 10, MHMMT: 4, TMTMM: 27, MTMMT: 2, HMHTM: 3 },
+    exploit: { HHMMM: 22, MMHHM: 20, HMMMM: 1, MMMMH: 25, HTMMT: 1, TMMMT: 8, MMMTM: 20, MMMTT: 1, HTMMM: 1 },
+    tie: { HHMM: 15, MHMM: 3, MMMT: 30, MMMH: 20, THMM: 2, MTMM: 30 },
+  },
+  5: {
+    explore: { TMTMM: 26, TMTMT: 6, HMHMM: 1, MHMMM: 5, MMMMT: 29, HMHMT: 2, MTMMT: 1, MTMMM: 28, HMHTT: 1 },
+    exploit: { MMHHM: 15, MMMTT: 6, HHMMM: 6, MMMTM: 13, TMMMM: 21, HHMMT: 8, MMMMT: 30 },
+    tie: { HHMM: 6, MHMM: 1, MTMT: 20, MTMM: 30, MMMH: 10, MMMT: 30, THMM: 3 },
+  },
+};
+const banditShare = (w, n) => n ? [w, n] : [0, 1];                  // podíl jako zlomek [čitatel, jmenovatel > 0]
+const banditCmp = ([a, b], [c, d]) => Math.sign(a * d - c * b);      // −1, 0, 1 jako a/b proti c/d
+// Indexy s nejlepší hodnotou (při shodě všechny, vzestupně); cmp porovná dvě hodnoty, best = 1 nejvyšší, −1 nejnižší.
+function banditBest(values, cmp = (x, y) => Math.sign(x - y), best = 1) {
+  let top = values[0];
+  for (const v of values) if (cmp(v, top) * best > 0) top = v;
+  return values.flatMap((v, i) => cmp(v, top) === 0 ? [i] : []);
+}
+function banditAnswer(totals) {                              // [index, třída], nebo null; port bandit_answer
+  const fresh = totals.flatMap(([, n], i) => n < BANDIT_EXPLORE ? [i] : []);
+  if (fresh.length > 1) return null;
+  if (fresh.length) return [fresh[0], 'explore'];
+  const top = banditBest(totals.map(([w, n]) => banditShare(w, n)), banditCmp);
+  if (top.length === 1) return [top[0], 'exploit'];
+  const drives = top.map(i => totals[i][1]), least = Math.min(...drives);
+  if (drives.filter(n => n === least).length > 1) return null;
+  return [top[drives.indexOf(least)], 'tie'];
+}
+function banditCheck(totals) {                               // nezávislé čtení zadání: řazení podle (vyzkoušená?, −podíl, průjezdy); port bandit_check
+  if (totals.filter(([, n]) => n < BANDIT_EXPLORE).length > 1) return null;
+  const key = (i, j) => (totals[i][1] >= BANDIT_EXPLORE) - (totals[j][1] >= BANDIT_EXPLORE) ||
+    -banditCmp(banditShare(...totals[i]), banditShare(...totals[j])) || totals[i][1] - totals[j][1];
+  const order = totals.map((_, i) => i).sort(key);
+  return key(order[0], order[1]) === 0 ? null : order[0];
+}
+const BANDIT_TRIED_SHARE = (t, low) => t.map(([w, n]) => n >= BANDIT_EXPLORE ? banditShare(w, n) : low);   // brána k průzkumu dostane low
+const BANDIT_SHORTCUTS = {
+  most_wins: t => banditBest(t.map(([w]) => w)),
+  most_tries: t => banditBest(t.map(([, n]) => n)),
+  fewest_tries: t => banditBest(t.map(([, n]) => n), undefined, -1),
+  fewest_losses: t => banditBest(t.map(([w, n]) => n - w), undefined, -1),
+  lowest_rate: t => banditBest(t.map(([w, n]) => banditShare(w, n)), banditCmp, -1),
+  lowest_rate_tried: t => banditBest(BANDIT_TRIED_SHARE(t, [2, 1]), banditCmp, -1),
+  greedy: t => banditBest(t.map(([w, n]) => banditShare(w, n)), banditCmp),
+  greedy_tried: t => banditBest(BANDIT_TRIED_SHARE(t, [-1, 1]), banditCmp),
+  tie_more(t) {                                            // průzkum i podíl správně, při shodě brána s víc průjezdy
+    const top = banditBest(BANDIT_TRIED_SHARE(t, [-1, 1]), banditCmp);
+    return top.length > 1 ? [top.reduce((a, b) => t[b][1] > t[a][1] ? b : a)] : top;
+  },
+  exclusion(t) {                                           // brány, které netrefí žádná levná zkratka kromě fewest_tries; jinak všechny
+    const flagged = new Set(['most_wins', 'most_tries', 'fewest_losses', 'lowest_rate'].flatMap(name => BANDIT_SHORTCUTS[name](t)));
+    const rest = t.map((_, i) => i).filter(i => !flagged.has(i));
+    return rest.length ? rest : t.map((_, i) => i);
+  },
+};
+function banditPattern(cls, totals, answer) {
+  return BANDIT_WATCH[cls].map(name => {
+    const picks = BANDIT_SHORTCUTS[name](totals);
+    return picks.length === 1 && picks[0] === answer ? 'H' : picks.includes(answer) ? 'T' : 'M';
+  }).join('');
+}
+function banditTried(rand) {                                 // port bandit_tried: šance, průjezdy, výhry binomicky
+  const chance = pickOf(rand, BANDIT_CHANCES), [lo, hi] = pickOf(rand, BANDIT_SPLIT), drives = pickInt(rand, lo, hi);
+  let wins = 0;
+  for (let i = 0; i < drives; i++) if (rand() < chance / 100) wins++;
+  return [wins, drives, chance];
+}
+const banditTieMultiples = b => [...Array(10)].map((_, i) => i + 1).filter(m => BANDIT_EXPLORE <= b * m && b * m <= BANDIT_SPLIT[1][1]);
+const banditGcd = (a, b) => b ? banditGcd(b, a % b) : a;
+const BANDIT_TIE_SHARES = [];                                // společné podíly dvojice ve shodě, vzestupně (BANDIT_TIE_SHARES v bench.py)
+for (let b = 2; b <= BANDIT_SPLIT[1][1]; b++) for (let a = 1; a < b; a++) if (banditGcd(a, b) === 1 && banditTieMultiples(b).length >= 2) BANDIT_TIE_SHARES.push([a, b]);
+BANDIT_TIE_SHARES.sort(banditCmp);
+function banditTiePair(rand) {                               // port bandit_tie_pair; sample(…, 2) = první náhodně, druhý ze zbytku
+  const [a, b] = pickOf(rand, BANDIT_TIE_SHARES), ms = banditTieMultiples(b);
+  const i = Math.floor(rand() * ms.length), rest = ms.filter((_, j) => j !== i), m = [ms[i], pickOf(rand, rest)].sort((x, y) => x - y);
+  const near = () => {
+    const target = a / b + (-0.15 + 0.3 * rand());
+    return BANDIT_CHANCES.reduce((best, c) => Math.abs(c / 100 - target) < Math.abs(best / 100 - target) ? c : best);
+  };
+  const first = near();
+  return [[a * m[0], b * m[0], first], [a * m[1], b * m[1], near()]];
+}
+function banditRaw(rand, k, cls) {                           // port bandit_raw: [brány, správná], nebo null
+  let gates;
+  if (cls === 'explore') {
+    const [w, n] = pickOf(rand, BANDIT_FRESH);
+    gates = [[w, n, pickOf(rand, BANDIT_CHANCES)], ...[...Array(k - 1)].map(() => banditTried(rand))];
+  } else if (cls === 'tie') gates = [...banditTiePair(rand), ...[...Array(k - 2)].map(() => banditTried(rand))];
+  else gates = [...Array(k)].map(() => banditTried(rand));
+  shuffleWith(rand, gates);
+  if (gates.reduce((s, [, n]) => s + n, 0) > BANDIT_TOTAL * k) return null;
+  const totals = gates.map(([w, n]) => [w, n]), got = banditAnswer(totals);
+  if (!got || got[1] !== cls || banditCheck(totals) !== got[0]) return null;
+  const shares = totals.filter(([, n]) => n >= BANDIT_EXPLORE).map(([w, n]) => [w, n]).sort((x, y) => banditCmp(y, x));
+  const top = cls === 'tie' ? 2 : 1;
+  if (cls !== 'explore' && shares.length > top) {           // odstup: rozdíl zlomků a/b − c/d proti 1/10 v celých číslech
+    const [[a, b], [c, d]] = [shares[top - 1], shares[top]];
+    if (BANDIT_MARGIN[1] * (a * d - c * b) < BANDIT_MARGIN[0] * b * d) return null;
+  }
+  if (cls === 'tie' && shares[0][0] === shares[0][1]) return null;
+  return [gates, got[0]];
+}
+function banditCase(rand, k, cls) {                          // port bandit_case: { gates, answer, cls }; vyhodí Error jako RuntimeError v bench.py
+  if (!BANDIT_GATES.includes(k) || !BANDIT_CLASSES.includes(cls)) throw new Error(`banditCase: unsupported task for ${k} gates and class ${cls}`);
+  const patterns = BANDIT_PATTERNS[k][cls], want = pickCum(rand, Object.keys(patterns), cumWeights(Object.values(patterns)));
+  for (let i = 0; i < BANDIT_TRIES; i++) {
+    const got = banditRaw(rand, k, cls);
+    if (got && banditPattern(cls, got[0].map(([w, n]) => [w, n]), got[1]) === want) return { gates: got[0], answer: got[1], cls };
+  }
+  throw new Error(`banditCase: no ${cls} task (${want}) for ${k} gates after ${BANDIT_TRIES} tries`);
+}
+const banditRow = (k, rand) => { const c = banditCase(rand, k, pickOf(rand, BANDIT_CLASSES)); return { ...c, truth: c.answer }; };      // třída, pak úloha, jako bandit_cases
+const banditState = gates => Object.fromEntries(gates.map(([w, n], i) => [`gate_${i + 1}`, { drives: n, wins: w }]));
+function banditQuestion(gates) {
+  const criteria = {};
+  gateKeys(gates).forEach((k, i) => criteria[k] = `Gate ${i + 1}` + (i === 0 ? ' (leftmost)' : i === gates - 1 ? ' (rightmost)' : ''));
+  return { toll: { type: 'choice', instructions: 'Each toll gate pays a prize with its own hidden chance. For every gate, drives is how many times a car has gone through it and wins is how many of those drives won the prize. Choose the next gate by these rules, in order: 1. If a gate has fewer than 3 drives, choose it (there is at most one such gate). 2. Otherwise choose the gate with the highest share of wins, wins divided by drives. 3. If two gates share the highest share, choose the one with fewer drives.', criteria } };
+}
+const BANDIT_ERRORS = ['no_explore', 'tie_more', 'over_explore', 'most_wins', 'fewest_losses', 'lowest_rate', 'other', 'invalid'];
+function banditErrorKind(c, pick) {                          // port bandit_error_kind; pick = index brány, nebo null (neplatná)
+  if (pick === null) return 'invalid';
+  if (pick === c.answer) return null;
+  const t = c.gates.map(([w, n]) => [w, n]), s = BANDIT_SHORTCUTS;
+  if (c.cls === 'explore' && s.greedy_tried(t).includes(pick)) return 'no_explore';
+  if (c.cls === 'tie' && s.tie_more(t).includes(pick)) return 'tie_more';
+  if (c.cls !== 'explore' && s.fewest_tries(t).includes(pick)) return 'over_explore';
+  return ['most_wins', 'fewest_losses', 'lowest_rate'].find(name => s[name](t).includes(pick)) ?? 'other';
+}
+const banditLoss = (gates, i) => Math.max(...gates.map(g => g[2])) - gates[i][2];
+function banditSummary(cases, choices, keys) {               // port bandit_summary: { by_class, errors, loss }; cases = [{ gates, answer, cls }]
+  const by_class = Object.fromEntries(BANDIT_CLASSES.map(c => [c, [0, 0]])), errors = Object.fromEntries(BANDIT_ERRORS.map(e => [e, 0]));
+  const loss = { model: 0, rule: 0, greedy: 0, random: 0 };
+  cases.forEach((c, i) => {
+    const choice = choices[i], pick = typeof choice === 'string' && keys.includes(choice) ? keys.indexOf(choice) : null;
+    by_class[c.cls][0] += choice === keys[c.answer]; by_class[c.cls][1]++;
+    const kind = banditErrorKind(c, pick);
+    if (kind) errors[kind]++;
+    const every = c.gates.map((_, j) => banditLoss(c.gates, j)), greedy = BANDIT_SHORTCUTS.greedy(c.gates.map(([w, n]) => [w, n]));
+    loss.model += pick === null ? Math.max(...every) : every[pick];
+    loss.rule += every[c.answer];
+    loss.greedy += greedy.reduce((s, j) => s + every[j], 0) / greedy.length;
+    loss.random += every.reduce((s, x) => s + x, 0) / every.length;
+  });
+  for (const k in loss) loss[k] = cases.length ? loss[k] / cases.length : NaN;
+  return { by_class, errors, loss };
+}
+function banditWarm(gates) {                                 // pevná zahřívací úloha bez rand s nejdelším stavem: dvouciferné průjezdy i výhry u každé brány
+  const rows = [[12, 16, 75], [10, 16, 60], [11, 15, 70], [10, 14, 65], [10, 13, 80]].slice(0, gates);
+  return { gates: rows, answer: banditAnswer(rows.map(([w, n]) => [w, n]))[0], cls: 'exploit' };
+}
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
