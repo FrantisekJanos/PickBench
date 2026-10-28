@@ -965,6 +965,9 @@ class PageTexts(unittest.TestCase):
                              .replace("{p50_first}", "{p50First}").replace("{p50_last}", "{p50Last}"), code)
             self.assertIn("2–8", page_text("ui.sweep"), code)
 
+    def test_sweep_chart_follows_driver_and_model(self):                  # graf průchodu je za zvoleného řidiče a model: změna výběru ho překreslí
+        self.assertRegex(page(), r"for \(const id of \['model', 'driver'\]\) \$\(id\)\.addEventListener\('change', \(\) => \{[^}]*drawSweep\(\);")
+
     def test_length_line_matches_bench(self):                              # řádek pod tabulkou e-mailů a veřejné sady jako bench.py --by-length
         for code in ("cs", "en"):
             names = {"short": "shortOk", "medium": "mediumOk", "long": "longOk"}

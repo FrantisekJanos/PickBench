@@ -6350,7 +6350,7 @@ const modelsReady = req('/models').then(r => r.json()).then(j => {
   if (j.ollama_error) status(j.ollama_error);              // Ollama neběží, ale hostované modely nabídnout jde
 }).catch(e => status(() => t('run.serverDown', { error: e.message })));      // věty ze serveru výš jsou text a zůstávají, jak přišly; hláška prohlížeče v téhle větě také
 $('model').addEventListener('change', () => { modelFallback = false; });      // vlastní volba uživatele; musí přijít dřív než syncRun v následujícím řádku
-for (const id of ['model', 'driver']) $(id).addEventListener('change', () => { syncRun(); renderHw(); });      // výběr hostovaného modelu ukáže varování, zamkne Start do potvrzení a přepne panel Hardware
+for (const id of ['model', 'driver']) $(id).addEventListener('change', () => { syncRun(); renderHw(); drawSweep(); });      // výběr hostovaného modelu ukáže varování, zamkne Start do potvrzení a přepne panel Hardware
 
 $('scenario').onchange = selectScenario;
 // Volby scénáře ze seznamu sad a volby hostovaných modelů vznikají jednou při načtení stránky. Volba sady si proto nese, z čeho vznikla (data-kind = druh
