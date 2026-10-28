@@ -17,8 +17,8 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
-          python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --emails datasets/<soubor>.json [--by-length] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<soubor>.json [--by-length] [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
@@ -158,6 +158,8 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
 --totals, --history:  jen s --bandit: podoba stavu, úlohy jsou v obou stejné. totals = u každé brány počet průjezdů
             a výher; history = deník všech průjezdů (brána, výhra nebo prohra) od nejstaršího. Bez volby platí totals.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
+--by-length:  jen s --emails a --public: pod řádkem modelu přesnost podle délky textu ve slovech (u e-mailu předmět a tělo);
+            texty celé sady se seřadí podle délky a rozdělí na třetiny (krátké, střední, dlouhé).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
 --inject:   trojský kůň: čtvrtina úloh má ve stavu schovaný pokyn mířící na konkrétní špatnou odpověď;
@@ -207,8 +209,8 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --sweep-lanes [--numbers] model1 model2 ...
-          python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
-          python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --emails datasets/<file>.json [--by-length] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --public datasets/public/<file>.json [--by-length] [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py --emails datasets/cz-firemni-emaily.json nimble:9b-q4_K_M tev1
           python bench.py 60 --numbers --lanes 4 --mirror tev1
@@ -348,6 +350,8 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
 --totals, --history:  only with --bandit: the form of the state; the tasks are the same in both. totals = the drives and
             wins of every gate; history = a log of all drives (gate, and win or loss), oldest first. Without the option: totals.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
+--by-length:  with --emails and --public only: below the model row the accuracy by text length in words (for an e-mail the subject and the body);
+            the texts of the whole dataset are sorted by length and split into thirds (short, medium, long).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
 --inject:   Trojan horse: a quarter of the tasks carry a hidden instruction in the state, aimed at one specific wrong answer;
@@ -530,6 +534,31 @@ def email_cases(ds, n=None, seed=1):
     order = list(ds["emails"])
     random.Random(seed).shuffle(order)
     return [order[i % len(order)] for i in range(n or len(order))]
+
+
+def email_words(e):
+    """Délka e-mailu ve slovech: předmět a tělo, jak je model čte."""
+    return len(e["subject"].split()) + len(e["body"].split())
+
+
+def length_tally(items, oks, lengths):
+    """Přesnost podle třídy délky. items = úlohy v pořadí měření (tytéž slovníky jako v sadě), oks = správně?, lengths = délky
+    celé sady v jejím pořadí (třídy metrics.length_classes). Úloha se na třídu mapuje podle identity položky."""
+    sizes = metrics.length_classes([length for _, length in lengths])
+    cls_of = {id(item): cls for (item, _), cls in zip(lengths, sizes["classes"])}
+    tally = {cls: [0, 0] for cls in metrics.LENGTH_CLASSES}
+    for item, ok in zip(items, oks):
+        tally[cls_of[id(item)]][0] += bool(ok)
+        tally[cls_of[id(item)]][1] += 1
+    return tally, sizes["ranges"]
+
+
+def length_line(r):
+    """Řádek --by-length: třída, rozsah slov („—“ u prázdné třídy) a správně/celkem."""
+    span = lambda cls: "—" if r["length_ranges"][cls] is None else f"{r['length_ranges'][cls][0]}–{r['length_ranges'][cls][1]}"
+    b = r["by_length"]
+    return i18n.t("bench.byLength", short=span("short"), short_ok=b["short"][0], short_n=b["short"][1], medium=span("medium"),
+                  medium_ok=b["medium"][0], medium_n=b["medium"][1], long=span("long"), long_ok=b["long"][0], long_n=b["long"][1])
 
 
 def email_question(ds):
@@ -3468,7 +3497,9 @@ def run_public(model, ds, cases, deadline=None):
             "p95": lat[int(n * 0.95)], "min": lat[0], "max": lat[-1], "acc": quality["acc"],
             "conf": statistics.mean(conf) if conf else float("nan"), "ece": ece(cal), "brier": metrics.brier(cal), "cal": cal, "tasks": len(pairs), "tokens": tokens,
             "stab": None, "variant_acc": None, "inject": None, "deadline": deadline, "goodput": metrics.goodput(timed, deadline),
-            "quality": quality, "refused": refused}
+            "quality": quality, "refused": refused,
+            **dict(zip(("by_length", "length_ranges"), length_tally(cases, [pick == label for label, pick in pairs],
+                                                                    [(it, len(it["text"].split())) for it in ds["items"]])))}
 
 
 def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
@@ -3495,6 +3526,8 @@ def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None):
     r, choices = measure(model, items, question, mirror, targets, deadline)
     r["quality"] = metrics.classification([(e["category"], c if isinstance(c, str) and c in ds["index"] else None)
                                            for e, c in zip(cases, choices)])
+    r["by_length"], r["length_ranges"] = length_tally(cases, [c == e["category"] for e, c in zip(cases, choices)],
+                                                      [(e, email_words(e)) for e in ds["emails"]])
     r["confusions"] = Counter()
     for e, choice in zip(cases, choices):
         if choice != e["category"]:
@@ -3826,6 +3859,7 @@ def parse_args(argv):
     p.add_argument("--deadline-ms", type=float)
     p.add_argument("--defer", type=float)                        # práh jistoty 0–1: řádek pokrytí, přesnosti nad prahem a Brierova skóre
     p.add_argument("--sweep-lanes", action="store_true")         # průchod 2–8 pruhů (s --numbers bran)
+    p.add_argument("--by-length", action="store_true")           # --emails, --public: přesnost podle délky textu
     p.add_argument("rest", nargs="*")
     a = p.parse_intermixed_args(argv)                # volby smí stát mezi N a modely
     a.n = int(a.rest.pop(0)) if a.rest and a.rest[0].isdigit() else None
@@ -4096,7 +4130,7 @@ def print_bandit(r):
     print(" " * 20 + i18n.t("bench.bandit.loss", **{name: f"{value:.1f}" for name, value in r["loss"].items()}), flush=True)
 
 
-def print_public(r, worst=5, defer=None):
+def print_public(r, worst=5, defer=None, by_length=False):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:
         if r.get("reason"):                          # důvod doslova od serveru; bez něj jen stav
@@ -4114,6 +4148,8 @@ def print_public(r, worst=5, defer=None):
     print(pad + i18n.t("bench.worst", list=classes), flush=True)
     confusions = ", ".join(f"{t}→{p if p is not None else '?'} {k}×" for t, p, k in q["confusions"][:worst])
     print(pad + i18n.t("bench.confusions", list=confusions or i18n.t("bench.none")), flush=True)
+    if by_length:
+        print(pad + length_line(r), flush=True)
 
 
 def main(argv):
@@ -4180,6 +4216,8 @@ def main(argv):
         sys.exit(i18n.t("bench.err.deadline"))
     if args.defer is not None and not 0 < args.defer <= 1:       # i NaN
         sys.exit(i18n.t("bench.err.defer"))
+    if args.by_length and not (args.emails or args.public):
+        sys.exit(i18n.t("bench.err.byLength"))
     if args.sweep_lanes and sum(map(bool, scenarios)) > bool(args.numbers):      # jen překážky a číselné duely
         sys.exit(i18n.t("bench.err.sweepScenario"))
     if args.sweep_lanes and (args.lanes_given or args.mirror or args.inject or args.deadline_ms is not None or args.defer is not None):
@@ -4216,7 +4254,7 @@ def main(argv):
         print(head)
         for m in args.models:
             with hosted_model(m):
-                print_public(run_public(m, ds, cases, args.deadline_ms), defer=args.defer)
+                print_public(run_public(m, ds, cases, args.deadline_ms), defer=args.defer, by_length=args.by_length)
     elif args.emails:
         try:
             ds = load_dataset(args.emails)
@@ -4231,6 +4269,8 @@ def main(argv):
                 r = run_emails(m, ds, cases, args.mirror, args.inject, args.deadline_ms)
                 top = ", ".join(f"{label[t]}→{label[c]} {n}×" for (t, c), n in r["confusions"].most_common(5))
                 row(r, i18n.t("bench.note.confusions", list=top or i18n.t("bench.none")))
+                if args.by_length:
+                    print(" " * 20 + length_line(r), flush=True)
     elif args.numbers:
         cases = number_cases(args.n or 100, args.lanes)
         names = {"tight": i18n.t("bench.gap.tight"), "medium": i18n.t("bench.gap.medium"), "clear": i18n.t("bench.gap.clear")}

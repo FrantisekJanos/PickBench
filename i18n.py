@@ -355,6 +355,12 @@ TEXTS = {
                                "en": "{n} {n|situation|situations} for every number of lanes from 2 to 8, the same for all models"},
     "bench.intro.sweepNumbers": {"cs": "{n} {n|řada|řady|řad} čísel pro každý počet bran od 2 do 8; sada je pro všechny modely stejná",
                                  "en": "{n} {n|row|rows} of numbers for every number of gates from 2 to 8, the same for all models"},
+    "bench.err.byLength": {"cs": "Volba --by-length jde jen s --emails nebo --public.", "en": "The --by-length option works only with --emails or --public."},
+    # --by-length: {short}, {medium}, {long} = rozsah slov třídy („18–24“, u prázdné třídy „—“), {…_ok}/{…_n} = správně / celkem.
+    "bench.byLength": {"cs": "přesnost podle délky textu: krátké {short} slov {short_ok}/{short_n}, střední {medium} slov {medium_ok}/{medium_n}, "
+                             "dlouhé {long} slov {long_ok}/{long_n}",
+                       "en": "accuracy by text length: short {short} words {short_ok}/{short_n}, medium {medium} words {medium_ok}/{medium_n}, "
+                             "long {long} words {long_ok}/{long_n}"},
     "bench.col.lanes": {"cs": "pruhů", "en": "lanes"},
     "bench.col.gates": {"cs": "bran", "en": "gates"},
     "bench.sweep.trend": {"cs": "od {first} do {last}: správně {acc_first} → {acc_last}, medián {p50_first} → {p50_last} ms",
