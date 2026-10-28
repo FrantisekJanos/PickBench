@@ -1954,6 +1954,70 @@ class Pattern(unittest.TestCase):
                 py = "patternSolve"
             self.assertEqual(js, py, h)
 
+    def test_generated_rows_keep_the_guarantees(self):
+        import bench
+        from test_pattern import periods_of
+        for r in pattern_page():
+            h, p = tuple(r["moves"]), int(r["cls"][1])
+            with self.subTest(row=r):
+                self.assertEqual(list(r), ["moves", "next", "cls", "shape", "run", "warm", "truth"])
+                self.assertEqual(len(h), r["run"] + r["warm"])
+                self.assertTrue(8 <= r["run"] <= 10 and 1 <= r["warm"] <= 3)
+                self.assertIn(r["shape"], bench.PATTERN_WEIGHTS[r["cls"]])
+                self.assertEqual(bench.pattern_solve(h), (p, r["next"]))
+                self.assertEqual({h[-q] for q in periods_of(h)}, {r["next"]})
+                self.assertNotEqual(h[-r["run"] - 1], h[-r["run"] - 1 + p])                       # rozehrávka cyklus neprodlužuje
+                self.assertEqual(r["truth"], list(bench.PATTERN_MOVES).index(r["next"]))
+
+    def test_classes_answers_and_shortcuts_are_like_bench(self):    # stejné meze jako tests/test_pattern.py (Generator)
+        import bench
+        from test_pattern import shortcut_hits
+        c = pattern_page()
+        classes = Counter(r["cls"] for r in c)
+        for cls in bench.PATTERN_CLASSES:
+            self.assertTrue(0.22 <= classes[cls] / len(c) <= 0.28, classes)
+            answers = Counter(r["next"] for r in c if r["cls"] == cls)
+            for move in bench.PATTERN_MOVES:
+                self.assertTrue(0.28 <= answers[move] / classes[cls] <= 0.39, (cls, answers))
+        for cls, top in (("p2", 0.56), ("p3", 0.48), ("p4", 0.48)):
+            sub = [r for r in c if r["cls"] == cls]
+            hits = {}
+            for r in sub:
+                for name, (family, v) in shortcut_hits(tuple(r["moves"]), r["next"], int(cls[1])).items():
+                    if not (cls == "p2" and family == "transition"):              # přechod je v p2 přesné řešení
+                        hits[name] = hits.get(name, 0) + v / len(sub)
+            self.assertLessEqual(max(hits.values()), top, cls)
+
+    def test_same_seed_same_rows(self):
+        first = run_js(PATTERN_ROWS_JS, {"seed": 7, "n": 50})
+        self.assertEqual(run_js(PATTERN_ROWS_JS, {"seed": 7, "n": 50}), first)
+        self.assertNotEqual(run_js(PATTERN_ROWS_JS, {"seed": 8, "n": 50}), first)
+
+    def test_unknown_class_raises(self):
+        got = run_js("(() => { try { patternCase(Math.random, 'p5'); return null; } catch (e) { return e.message; } })()", None)
+        self.assertEqual(got, "patternCase: unknown class p5")
+
+    def test_errors_and_summary_match_bench(self):                  # i neplatné volby
+        import bench
+        cases, rng = bench.pattern_cases(400, seed=4), random.Random(6)
+        choices = [rng.choice(list(bench.PATTERN_MOVES) * 2 + [None, "lizard", "Rock", 3]) for _ in cases]
+        js_cases = [{"moves": list(h), "next": nxt, "cls": cls} for h, nxt, cls, *_ in cases]
+        got = run_js("({ kinds: arg.cases.map((c, i) => patternErrorKind(c, arg.choices[i])), summary: patternSummary(arg.cases, arg.choices) })",
+                     {"cases": js_cases, "choices": choices})
+        self.assertEqual(got["kinds"], [bench.pattern_error_kind(c, ch, "predict") for c, ch in zip(cases, choices)])
+        self.assertEqual(json.dumps(got["summary"]), json.dumps(bench.pattern_summary(cases, choices, "predict")))     # i pořadí klíčů
+        empty = run_js("patternSummary([], [])", None)
+        self.assertEqual(sum(empty["errors"].values()), 0)
+
+    def test_warm_task_is_fixed_valid_and_longest(self):
+        import bench
+        warm = run_js("patternWarm()", None)
+        self.assertEqual(list(warm), ["moves", "next", "cls", "shape", "run", "warm", "truth"])
+        self.assertEqual(bench.pattern_solve(tuple(warm["moves"])), (1, warm["next"]))
+        self.assertEqual(len(warm["moves"]), bench.PATTERN_RUN[1] + bench.PATTERN_WARMUP[1])
+        longest = max(len(json.dumps(bench.pattern_state(c))) for c in bench.pattern_cases(3000, seed=2))
+        self.assertGreaterEqual(len(json.dumps(run_js("patternState(arg)", warm["moves"]))), longest)      # horní odhad ve stepEstimate
+
 
 if __name__ == "__main__":
     unittest.main()

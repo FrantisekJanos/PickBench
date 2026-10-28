@@ -4788,6 +4788,79 @@ function patternQuestion() {                               // pattern_question("
   return { opponent_throw: { type: 'choice', instructions: PATTERN_INS, criteria } };
 }
 
+// Úloha dané třídy: port pattern_case z bench.py, stejné kroky a pořadí volání rand, náhoda z předané funkce (stránka dává rnd);
+// jiné úlohy než bench.py, protože Python má jiný generátor náhody. Staví přímo, bez zamítání; porušená záruka = chyba, nic se neopravuje potichu.
+// Vrací { moves, next, cls, shape, run, warm }.
+function patternCase(rand, cls) {
+  if (!PATTERN_CLASSES.includes(cls)) throw new Error(`patternCase: unknown class ${cls}`);
+  const p = Number(cls[1]), mod = (a, b) => ((a % b) + b) % b;
+  const combos = [], weights = [];
+  for (const [shape, ws] of Object.entries(PATTERN_WEIGHTS[cls])) {
+    for (let run = PATTERN_RUN[0]; run <= PATTERN_RUN[1]; run++) combos.push([shape, run]);
+    weights.push(...ws);
+  }
+  const [shape, run] = pickCum(rand, combos, cumWeights(weights));
+  const pool = [...PATTERN_MOVES], perm = [];              // rng.sample(PATTERN_MOVES, 3)
+  for (let i = 0; i < 3; i++) {
+    const j = Math.floor(rand() * (3 - i));
+    perm.push(pool[j]);
+    pool[j] = pool[2 - i];
+  }
+  const cycle = [...shape].map(ch => perm['ABC'.indexOf(ch)]);        // cycle[0] = další tah; posledních p tahů historie = cycle
+  const warm = pickInt(rand, ...PATTERN_WARMUP);
+  const body = Array.from({ length: run }, (_, i) => cycle[mod(i - run, p)]);
+  const wouldBe = cycle[mod(-1 - run, p)];                 // tah, který by cyklus měl hned před cyklickou částí
+  const opening = [];
+  for (let i = 0; i < warm - 1; i++) opening.push(pickOf(rand, PATTERN_MOVES));
+  opening.push(pickOf(rand, PATTERN_MOVES.filter(m => m !== wouldBe)));
+  const moves = [...opening, ...body];
+  const [period, next] = patternSolve(moves);
+  if (period !== p || next !== cycle[0] || moves.slice(-p).join() !== cycle.join() || patternHasPeriod(moves.slice(-run - 1), p)) {
+    throw new Error(`patternCase: ${JSON.stringify(moves)} does not keep period ${p} with next move ${cycle[0]}`);
+  }
+  return { moves, next, cls, shape, run, warm };
+}
+function patternRow(rand) {                                // třída se losuje před úlohou, jako pattern_cases; truth = brána správného tahu
+  const c = patternCase(rand, pickOf(rand, PATTERN_CLASSES));
+  return { ...c, truth: PATTERN_MOVES.indexOf(c.next) };
+}
+
+// Rozbor chyb jako pattern_error_kind(…, "predict") v bench.py; c = { moves, next, cls }, choice = klíč tahu. null = správně.
+function patternMost(seq) {                                // pattern_most: nejčastější tahy v pořadí PATTERN_MOVES (při shodě všechny)
+  const counts = PATTERN_MOVES.map(m => seq.filter(x => x === m).length), top = Math.max(...counts);
+  return PATTERN_MOVES.filter((m, i) => counts[i] === top);
+}
+function patternFollow(moves) {                            // pattern_follow: nejčastější tahy po dřívějších výskytech posledního tahu
+  const after = [];
+  for (let j = 0; j < moves.length - 1; j++) if (moves[j] === moves[moves.length - 1]) after.push(moves[j + 1]);
+  return after.length ? patternMost(after) : [];
+}
+function patternErrorKind(c, choice) {
+  const p = Number(c.cls[1]);
+  if (!(typeof choice === 'string' && PATTERN_MOVES.includes(choice))) return 'invalid';
+  if (choice === c.next) return null;
+  if (choice === PATTERN_BEATS[c.next]) return 'counter_given';
+  if (choice === c.moves[c.moves.length - 1]) return 'last';
+  if (patternMost(c.moves).includes(choice)) return 'frequent';
+  for (let k = 2; k <= 4; k++) if (k % p && c.moves[c.moves.length - k] === choice) return 'period';
+  if (patternFollow(c.moves).includes(choice)) return 'transition';
+  return 'other';
+}
+function patternErrors(cases, choices) {                   // pattern_errors: počty druhů chyb v pořadí výpisu
+  const counts = { counter_given: 0, last: 0, frequent: 0, period: 0, transition: 0, other: 0, invalid: 0 };
+  cases.forEach((c, i) => { const kind = patternErrorKind(c, choices[i]); if (kind) counts[kind]++; });
+  return counts;
+}
+function patternSummary(cases, choices) {                  // pattern_summary(…, "predict"): přesnost podle periody a rozbor chyb
+  return { by_period: classTally(PATTERN_CLASSES, cases.map(c => [PATTERN_MOVES.indexOf(c.next), c.cls]), choices, PATTERN_MOVES), errors: patternErrors(cases, choices) };
+}
+
+// Zahřívací úloha: pevná, bez rand, nejdelší stav (13 tahů, nejdelší slovo scissors). Poslední tah rozehrávky paper z cyklu vybočuje;
+// odhad délky dotazu ve stepEstimate je horní.
+function patternWarm() {
+  return { moves: ['scissors', 'scissors', 'paper', ...Array(10).fill('scissors')], next: 'scissors', cls: 'p1', shape: 'A', run: 10, warm: 3, truth: 2 };
+}
+
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
