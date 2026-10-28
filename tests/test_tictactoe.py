@@ -676,6 +676,30 @@ class Page(unittest.TestCase):              # scénář ve stránce; pravidla, k
         case = {"board": "X...X.OXO", "you": "O", "answer": 1, "cls": "block"}
         self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["r1c2", "r1c1", None]})
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_marks_keep_the_alpha_of_the_board(self):              # značka vrátí průhlednost volajícího: vyřešená deska (0,6) se celá kreslí poloprůhledně
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % name, page).group(0) for name in ("TICTACTOE_PITCH", "TICTACTOE_SPAN", "TICTACTOE_MARK", "tictactoeCellXY"))
+        code = ("const TICTACTOE_EMPTY = '.', LW = 60, CELL = 40, W = 180, t = k => k, seen = [];"
+                "const ctx = new Proxy({ globalAlpha: 1 }, { get: (o, k) => k in o ? o[k] : (...a) => { if (/^(fill|stroke)(Rect|Text)$|^stroke$/.test(k)) seen.push(+o.globalAlpha.toFixed(3)); } });"
+                + consts + page_function("drawTictactoeMark") + page_function("drawTictactoe")
+                + "ctx.globalAlpha = 0.6; drawTictactoe({ board: 'X...X.OXO', you: 'O' }, 300); const after = ctx.globalAlpha;"
+                "ctx.globalAlpha = 0.5; drawTictactoeMark('X', 0, 0, 10, 0.5);"
+                "process.stdout.write(JSON.stringify([[...new Set(seen.slice(0, -1))], after, seen[seen.length - 1], ctx.globalAlpha]));")
+        self.assertEqual(run_page_js(code), [[0.6], 0.6, 0.25, 0.5])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_badge_follows_the_board_under_the_car(self):          # odznak: deska, která ještě kryje auto, pak nejbližší neprojetá, pak poslední projetá
+        vehicle = re.search(r"\n  drawVehicle\(g, x, w\) \{.*?\n  \},", tictactoe_body(), re.S).group(0)[1:-1]
+        code = ("const TICTACTOE_SPAN = 2.65, CAR_Y = 0, marks = [], ctx = new Proxy({}, { get: () => () => {} });"
+                "const drawTictactoeMark = m => marks.push(m), o = {" + vehicle + "};"
+                "const g = rows => ({ rows, history: [{ you: 'H' }] });"
+                "o.drawVehicle(g([{ you: 'X', result: 'ok', y: -1.5 }, { you: 'O', result: null, y: 4.5 }]), 0, 10);"
+                "o.drawVehicle(g([{ you: 'X', result: 'ok', y: -3 }, { you: 'O', result: null, y: 3 }, { you: 'X', result: null, y: 9 }]), 0, 10);"
+                "o.drawVehicle(g([{ you: 'X', result: 'ok', y: -3 }]), 0, 10);"
+                "process.stdout.write(JSON.stringify(marks));")
+        self.assertEqual(run_page_js(code), ["X", "O", "H"])
+
     def test_marks_are_drawn_not_written(self):                    # X a O jsou kresba: na plátno jde text jen přes t()
         part = page_source().split("// ---------- scénář: tah na výhru ----------", 1)[1].split("\n// ---------- ", 1)[0]
         self.assertNotIn("fillText(r.you", part)

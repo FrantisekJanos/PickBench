@@ -312,7 +312,7 @@ const TEXTS = {
   'opt.scenario.cruise': { cs: 'Tempomat', en: 'Cruise control' },
   'opt.scenario.timetable': { cs: 'Jízdní řád', en: 'Timetable' },
   'opt.scenario.tictactoe': { cs: 'Tah na výhru', en: 'Winning move' },
-  'opt.scenario.emails':{ cs: 'E-maily: {name}', en: 'E-mails: {name}' },
+  'opt.scenario.emails': { cs: 'E-maily: {name}', en: 'E-mails: {name}' },
   'opt.scenario.public': { cs: 'Veřejná sada: {name}', en: 'Public dataset: {name}' },
   'opt.scenario.noEmails': { cs: 'E-maily (žádná sada ve složce datasets/)', en: 'E-mails (no dataset in the datasets/ folder)' },
   'opt.scenario.listFailed': { cs: 'E-maily (seznam sad se nepodařilo načíst)', en: 'E-mails (the page could not load the list of datasets)' },
@@ -346,7 +346,7 @@ const TEXTS = {
   'scenario.cruise': { cs: 'tempomat', en: 'cruise control' },
   'scenario.timetable': { cs: 'jízdní řád', en: 'timetable' },
   'scenario.tictactoe': { cs: 'tah na výhru', en: 'winning move' },
-  'mode.bench':{ cs: 'benchmark', en: 'benchmark' },
+  'mode.bench': { cs: 'benchmark', en: 'benchmark' },
   'mode.benchAborted': { cs: 'benchmark (přerušen)', en: 'benchmark (interrupted)' },
   'mode.ladder': { cs: 'žebřík, max {best} polí/s', en: 'ladder, max {best} cells/s' },
   'mode.ladderAborted': { cs: 'žebřík (přerušen), max {best} polí/s', en: 'ladder (interrupted), max {best} cells/s' },
@@ -3018,12 +3018,14 @@ const tictactoeLinesThrough = (b, i, m, need) => TICTACTOE_LINES.filter(line => 
 // Střed pole i desky bloku r v px: sloupec = pruh, řádek k (0 = r1) leží o (2 − k) roztečí za nejbližší tenkou řadou.
 const tictactoeCellXY = (i, y) => [(i % 3 + 0.5) * LW, y - (2 - Math.floor(i / 3)) * TICTACTOE_PITCH * CELL];
 
+// alpha násobí průhlednost volajícího (vyřešená deska 0,6) a po kresbě se vrátí ta jeho, aby zbytek desky nekreslil plně
 function drawTictactoeMark(mark, x, y, size, alpha = 1) {  // značka kresbou (X dvě čáry, O kroužek), ne písmenem: na plátno jde text jen přes t()
-  ctx.globalAlpha = alpha; ctx.strokeStyle = TICTACTOE_MARK[mark]; ctx.lineWidth = Math.max(3, size / 5); ctx.lineCap = 'round';
+  const before = ctx.globalAlpha;
+  ctx.globalAlpha = before * alpha; ctx.strokeStyle = TICTACTOE_MARK[mark]; ctx.lineWidth = Math.max(3, size / 5); ctx.lineCap = 'round';
   ctx.beginPath();
   if (mark === 'X') { ctx.moveTo(x - size / 2, y - size / 2); ctx.lineTo(x + size / 2, y + size / 2); ctx.moveTo(x + size / 2, y - size / 2); ctx.lineTo(x - size / 2, y + size / 2); }
   else ctx.arc(x, y, size / 2, 0, 7);
-  ctx.stroke(); ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
+  ctx.stroke(); ctx.lineCap = 'butt'; ctx.globalAlpha = before;
 }
 function drawTictactoeLine(line, y, color, dash = []) {    // čára přes trojici polí (od prvního ke třetímu, o kus přes kraje)
   const [x0, y0] = tictactoeCellXY(line[0], y), [x1, y1] = tictactoeCellXY(line[2], y), dx = (x1 - x0) * 0.15, dy = (y1 - y0) * 0.15;
@@ -3037,18 +3039,18 @@ function drawTictactoeFrame(i, y, color) {                 // rámeček pole (ze
 }
 // Deska bloku: podklad, devět polí s jemným obrysem a značky; nad deskou cedulka „hraješ“ se značkou úlohy. globalAlpha nastaví volající.
 function drawTictactoe(r, y) {
-  const P = TICTACTOE_PITCH * CELL, w = LW * 0.8, h = P * 0.86, alpha = ctx.globalAlpha;
+  const P = TICTACTOE_PITCH * CELL, w = LW * 0.8, h = P * 0.86;
   ctx.fillStyle = '#2b333c'; ctx.fillRect(0, y - (TICTACTOE_SPAN + 0.15) * CELL, W, (TICTACTOE_SPAN + TICTACTOE_CLEAR + 0.3) * CELL);
   for (let i = 0; i < 9; i++) {
     const [x, cy] = tictactoeCellXY(i, y);
     ctx.fillStyle = '#3a4450'; ctx.fillRect(x - w / 2, cy - h / 2, w, h);
     ctx.strokeStyle = '#56606b'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2, cy - h / 2, w, h);
-    if (r.board[i] !== TICTACTOE_EMPTY) drawTictactoeMark(r.board[i], x, cy, Math.min(w, h) * 0.6, alpha);
+    if (r.board[i] !== TICTACTOE_EMPTY) drawTictactoeMark(r.board[i], x, cy, Math.min(w, h) * 0.6);
   }
   const sy = y - (TICTACTOE_SPAN + 0.45) * CELL, label = t('tictactoe.youPlay');
   ctx.font = '600 12px "Segoe UI", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#e6edf3';
   ctx.fillText(label, W / 2 + 4, sy);
-  drawTictactoeMark(r.you, W / 2 + 18, sy, 14, alpha);
+  drawTictactoeMark(r.you, W / 2 + 18, sy, 14);
   ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 }
 function tictactoeLabel(r) {                               // štítek projetého bloku: třída nebo druh chyby slovem a barva (zelená, červená, šedá)
@@ -3074,7 +3076,7 @@ const tictactoe = {
   gap: TICTACTOE_GAP, passAt: TICTACTOE_CLEAR, keep: TICTACTOE_SPAN + 1.6,      // bloky po 6 polích, vyhodnocení při dotyku bloku
   get about() { return t('scenario.tictactoe.about'); },
   panels: ['confPanel', 'legend'], get extraTitle() { return t('scenario.tictactoe.extraTitle'); },
-  legend: [[null, 'legend.tictactoe.board'], ['#56b4e9', 'legend.tictactoe.badge'], [null, 'legend.tictactoe.order'], ['#3fb950', 'legend.tictactoe.line']],
+  legend: [[null, 'legend.tictactoe.board'], ['linear-gradient(90deg, #56b4e9 50%, #e69f00 50%)', 'legend.tictactoe.badge'], [null, 'legend.tictactoe.order'], ['#3fb950', 'legend.tictactoe.line']],
   get extraTip() { return t('scenario.tictactoe.extraTip'); },
   get matchTip() { return t('scenario.tictactoe.tip.match'); },
   newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
@@ -3098,9 +3100,11 @@ const tictactoe = {
     g.cases.push({ board: task.board, you: task.you, answer: task.answer, cls: task.cls });
     g.choices.push(move >= 0 ? TICTACTOE_CELLS[move] : null);
   },
-  // Odznak na střeše auta: značka, za kterou auto hraje u nejbližší neprojeté desky (bez ní u poslední projeté).
+  // Odznak na střeše auta: značka desky, přes kterou auto právě jede (vyhodnocená, ale ještě kryje auto: řádky r2 a r1),
+  // jinak nejbližší neprojeté desky, bez ní poslední projeté.
   drawVehicle(g, x, w) {
-    const r = g.rows.filter(r => r.result === null).reduce((a, b) => a && a.y <= b.y ? a : b, null) ?? g.history[0];
+    const r = g.rows.find(r => r.result !== null && -r.y <= TICTACTOE_SPAN)
+      ?? g.rows.filter(r => r.result === null).reduce((a, b) => a && a.y <= b.y ? a : b, null) ?? g.history[0];
     if (!r) return;
     ctx.fillStyle = '#0b1016'; ctx.beginPath(); ctx.arc(x + w / 2, CAR_Y + 8, 10, 0, 7); ctx.fill();
     drawTictactoeMark(r.you, x + w / 2, CAR_Y + 8, 11);
