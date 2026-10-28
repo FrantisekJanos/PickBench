@@ -345,7 +345,7 @@ SHARED = ("// ==== sdíleno s Pythonem: začátek ====", "// ==== sdíleno s Pyt
 FIELD_JS = re.compile(r"\{(\w+)(?:\|[^{}|]*\|[^{}|]*)?\}")
 # Klíče, kde je český a anglický text stejný záměrně (vlastní jména, zkratky, slova stejná v obou jazycích).
 SAME = {"mode.bench", "ui.start", "ui.stop", "ui.model", "ui.hardware", "ui.csv", "opt.driver.model",
-        "col.n", "col.p95", "col.min", "col.max", "col.ece", "col.temp", "col.f1", "col.goodput",
+        "col.n", "col.p95", "col.min", "col.max", "col.ece", "col.brier", "col.temp", "col.f1", "col.goodput",
         "metric.precision", "metric.recall", "metric.f1", "last.lane", "card.model", "scenario.emails.task", "last.ms", "run.benchProgress"}
 # Předpony klíčů, které se skládají za běhu: t('state.' + st.state).
 DYNAMIC = ("tip.", "col.", "result.", "gap.", "state.")
@@ -950,6 +950,14 @@ class PageTexts(unittest.TestCase):
                 for code in ("cs", "en"):                                     # a obě strany v nich vidí stejné proměnné ({n:.1f} by znal jen Python)
                     self.assertEqual(i18n.fields(self.texts[key][code]), set(FIELD_JS.findall(self.texts[key][code])), (key, code))
 
+    def test_calibration_threshold_says_the_same_as_bench(self):           # práh jistoty ve stránce a bench.py --defer: tatáž slova
+        for code in ("cs", "en"):
+            page_text, tool = (lambda key: self.texts[key][code]), (lambda key: i18n.TEXTS[key][code])
+            self.assertIn(page_text("ui.calThreshold").lower(), tool("bench.defer"), code)          # práh jistoty / confidence threshold
+            self.assertIn(tool("bench.defer").split("; ")[0].split(", ")[-1].rsplit(" ", 1)[0], page_text("cal.cover"), code)   # předat člověku nebo pravidlům
+            self.assertIn("{brier}", page_text("cal.brier"), code)
+        self.assertEqual(self.texts["col.brier"]["cs"], "Brier")
+
     def test_command_line_says_the_same_words_as_the_page(self):              # bench.py tiskne tytéž věci jako stránka: stejné slovo, v záhlaví nejvýš zkrácené
         columns = {"avg": "col.avg", "p50": "col.p50", "p95": "col.p95", "min": "col.min", "max": "col.max", "rate": "col.rate", "acc": "col.acc",
                    "conf": "tile.conf.label", "ece": "col.ece", "stab": "col.stab", "goodput": "col.goodput", "tokens": "last.tokens"}
@@ -1231,7 +1239,7 @@ class Results(unittest.TestCase):
         cs = node("cellsOf(arg)", data)
         self.assertEqual(cs, {"driver": "tev1 +2. otázka +zrcadla", "scenario": "překážky", "lanes": 3, "mode": "žebřík (přerušen), max — polí/s",
                               "n": 12, "avg": "41.3", "p50": "40.0", "p95": "55.5", "min": "30.0", "max": "60.0", "rate": "9.9", "acc": "75 %",
-                              "ece": "3.1 %", "stab": "—", "errors": 2, "late": "—", "dist": "60", "joule": "3.46", "temp": "61", "fooled": "—",
+                              "ece": "3.1 %", "brier": "—", "stab": "—", "errors": 2, "late": "—", "dist": "60", "joule": "3.46", "temp": "61", "fooled": "—",
                               "runlen": "—", "seed": "—", "f1": "—", "goodput": "—", "usd": "—", "net": "—", "batch": "3/2",
                               "note": "start při 71 °C (cíl pod 60 °C); zastaven před délkou průjezdu; volná věta"})
         en = node("cellsOf(arg)", data, lang="en")
@@ -1933,10 +1941,10 @@ class Wording(unittest.TestCase):
         self.assertTrue(en("step.toggleLabel").startswith(en("step.skip") + " "))
         self.assertEqual(en("tile.hwPstate.label"), "performance state (pstate)")    # samotné state je stav kroku fronty
 
-    def test_result_column_headings_start_in_lower_case(self):                # N, ECE a J/decision jsou zkratky a jednotka: velké písmeno bez malého za ním
+    def test_result_column_headings_start_in_lower_case(self):                # N, ECE a J/decision jsou zkratky a jednotka, Brier jméno: velké písmeno bez malého za ním
         heads = {key: entry["en"] for key, entry in self.page.items() if re.fullmatch(r"col\.\w+", key)}
         self.assertGreaterEqual(len(heads), 29)
-        self.assertEqual({key: text for key, text in heads.items() if re.match(r"[A-Z][a-z]", text)}, {})
+        self.assertEqual({key: text for key, text in heads.items() if re.match(r"[A-Z][a-z]", text) and key != "col.brier"}, {})
 
     def test_input_tokens_are_named_in_words(self):                           # česky nese záhlaví hwbench.py jméno pole odpovědi (input_tokens), anglicky slova jako sousední target tokens
         self.assertEqual(i18n.TEXTS["hw.col.inputTokens"], {"cs": "input_tokens", "en": "input tokens"})
