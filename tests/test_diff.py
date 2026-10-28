@@ -428,6 +428,45 @@ class Page(unittest.TestCase):              # scénář ve stránce; generátor,
             for v, js in enumerate(by_variant):
                 self.assertEqual(json.dumps(js), json.dumps(bench.variant(q, v)), (next(iter(q)), v))
 
+    def test_scenario_is_offered_selected_and_wired(self):
+        page = page_source()
+        self.assertEqual(page.count('<option value="diff" data-i18n="opt.scenario.diff"></option>'), 1)
+        self.assertEqual(page.count(REGISTRY), 1)
+        self.assertEqual(page.count("// ---------- scénář: co se změnilo ----------"), 1)
+        self.assertEqual(page.count("|| v === 'diff'"), 1)
+        body = diff_body() + "\n"
+        for line in ("  spawnRow(g, y) { g.rows.push(this.newRow(g, y, diffRow(LANES, rnd))); },",
+                     "  randomTask() { return this.task(diffRow(LANES, rnd)); },",
+                     "  warmTask() { return this.task(diffWarm(LANES), null, null); },",      # zahřívací úloha je pevná a bez pokynu
+                     "  questions(v = 0) { return variantOf(diffQuestion(LANES), v); },"):
+            self.assertIn("\n" + line + "\n", body)
+        for call in ("id: 'diff', lanesFree: true,", "rollInject([d.truth])", "diffState(d.before, d.after)",
+                     "injectText(INJECT_NOTE, laneKeys(LANES)[inject])", "a.changed_list?.choice", "diffSummary(", "t('diff.line', ",
+                     "laneOf: (r, move) => move,"):
+            self.assertIn(call, body)
+        self.assertNotIn("noInject", body)                                                        # trojský kůň tu jde, jako bench.py --diff --inject
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_tally_keeps_the_task_and_the_choice(self):       # počítají se všechny odpovědi; neplatná je null
+        lane_keys = re.search(r"\nconst laneKeys = [^\n]*\n", page_source()).group(0)
+        code = lane_keys + "let LANES = 2; const base = { tally() {} }; const o = { __proto__: base," + method(diff_body(), "tally") + "};" + (
+            "const g = { cases: [], choices: [] }, task = { before: ['road', 'foam'], after: ['road', 'roam'], answer: 1, truth: 1, cls: 'word1',"
+            " mode: 'plain', inject: null, state: {} }; [1, 0, -1].forEach(m => o.tally(g, task, m)); process.stdout.write(JSON.stringify(g));")
+        case = {"before": ["road", "foam"], "after": ["road", "roam"], "answer": 1, "cls": "word1", "mode": "plain"}
+        self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["lane_2", "lane_1", None]})
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_last_decision_shows_both_snapshots(self):         # oba snímky, volba, druh změny a podoba řady
+        from test_parity import run_js
+        page = page_source()
+        names = "".join(re.search(r"\nconst %s = [^\n]*\n" % k, page).group(0) for k in ("DIFF_CLASS_NAME", "DIFF_MODE_NAME"))
+        code = "(() => { const laneName = i => t('lane.name', { n: i + 1 });" + names + "const proto = {" + method(diff_body(), "describeLast") + "};" + (
+            "return proto.describeLast({ before: ['tape', 'tape', 'park', 'tear'], after: ['cape', 'tape', 'park', 'tear'], truth: 0, cls: 'word1',"
+            " mode: 'repeat' }, { move: 1 }); })()")
+        self.assertEqual(run_js(code, None).split("\n"), ["před:    tape  tape  park  tear", "po:      cape  tape  park  tear",
+                                                          "zvoleno: pruh 2  (správně: pruh 1)", "změna:   slovo o písmeno, s opakováním"])
+        self.assertEqual(run_js(code, None, "en").split("\n")[3], "change:  word off by a letter, with repeats")
+
 
 if __name__ == "__main__":
     unittest.main()
