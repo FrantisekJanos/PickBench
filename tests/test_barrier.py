@@ -553,7 +553,7 @@ def page_function(name):
 
 
 # Registr scénářů s řadami v selectScenario: jediný zápis, testy ostatních scénářů ho importují (S3, T3, J3 ho prodlouží).
-REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule, queue, queueWeighted, bet, cruise, timetable, hint, diff, pattern }[v];"
+REGISTRY = "SC = { obstacles, numbers, signs, memory, barrier, lookahead, rule, queue, queueWeighted, bet, cruise, timetable, tictactoe, bandit, hint, diff, pattern }[v];"
 
 
 class Page(unittest.TestCase):                                         # scénář ve stránce; pravidla, generátor a výpočty hlídá tests/test_parity.py (Barrier)
@@ -562,8 +562,8 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertEqual(page.count("function pickWrong(truths, r, options = LANES) {"), 1)
         self.assertEqual(page.count("function rollInject(truths, options = LANES) {"), 1)
         self.assertEqual(page.count("pickWrong(truths, pick, options)"), 1)
-        self.assertEqual(page.count("newRow: (g, y, data, options = LANES) => ("), 1)
-        self.assertEqual(page.count("inject: rollInject([data.truth], options)"), 1)
+        self.assertEqual(page.count("newRow: (g, y, data, options = LANES, truths = [data.truth]) => ("), 1)      # truths: tah na výhru vynechá i obsazená pole
+        self.assertEqual(page.count("inject: rollInject(truths, options)"), 1)
         self.assertEqual(page.count("state: SC.stateOf?.(task, variant) ?? task.state"), 1)       # obrácená otázka zrcadla nese obrácený pokyn
         self.assertEqual(page.count("SC.parse(j.answers || {}, task, variant)"), 1)
         self.assertEqual(page.count("SC.tally(G, task, res.move, res);"), 1)

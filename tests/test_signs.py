@@ -414,7 +414,7 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertEqual(page.count('<option value="signs" data-i18n="opt.scenario.signs"></option>'), 1)
         self.assertEqual(page.count(REGISTRY), 1)
         self.assertEqual(page.count("SC.drawVehicle?.(g, x, w);"), 1)
-        self.assertEqual(page.count("drawVehicle(g, x, w) {"), 2)                    # háček mají zákazy (štítek vozidla) a závora (brzdová světla)
+        self.assertEqual(page.count("drawVehicle(g, x, w) {"), 3)                    # háček mají zákazy (štítek vozidla), závora (brzdová světla) a tah na výhru (odznak)
         body = page.replace("\r\n", "\n").split("\nconst signs = {", 1)[1].split("\n  warmTask() {", 1)[1].split("\n  },", 1)[0].split("\n", 1)[1]
         self.assertIn("SIGN_WARM", body)                                              # zahřívací úloha je pevná: nebere z rnd, jinak by se řady posunuly podle řidiče
         self.assertNotIn("rnd", body)
