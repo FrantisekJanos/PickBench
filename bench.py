@@ -3503,10 +3503,11 @@ def run_public(model, ds, cases, deadline=None, by_length=False):
                if by_length else {})}
 
 
-def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
+def run_lanes(model, cases, lanes=3, mirror=False, inject=False, deadline=None, warm=True):
     keys, question = lane_keys(lanes), lane_question(lanes)
     state = lambda lane, dists: {"car_is_in": keys[lane], **{k: describe(d) for k, d in zip(keys, dists)}}
-    ask(model, state(lanes // 2, [99] * lanes), question)        # zahřátí = načtení modelu, nepočítá se
+    if warm:                                         # --sweep-lanes zahřívá jen u prvního počtu pruhů
+        ask(model, state(lanes // 2, [99] * lanes), question)    # zahřátí = načtení modelu, nepočítá se
     truths = [{keys[i] for i in oracle(lane, dists)} for lane, dists in cases]
     targets = inject_plan(truths, keys) if inject else None
     notes = targets or [None] * len(cases)
@@ -3538,10 +3539,11 @@ def run_emails(model, ds, cases, mirror=False, inject=False, deadline=None, by_l
     return r
 
 
-def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None):
+def run_numbers(model, cases, lanes=3, mirror=False, inject=False, deadline=None, warm=True):
     keys, question = gate_keys(lanes), number_question(lanes)
     state = lambda values: dict(zip(keys, values))
-    ask(model, state(cases[0][0]), question)                     # zahřátí, nepočítá se
+    if warm:                                         # --sweep-lanes zahřívá jen u prvního počtu bran
+        ask(model, state(cases[0][0]), question)                 # zahřátí, nepočítá se
     targets = inject_plan([{keys[top]} for _, top, _ in cases], keys) if inject else None
     notes = targets or [None] * len(cases)
     items = [(with_note(state(values), note), {keys[top]}, "") for (values, top, _), note in zip(cases, notes)]
@@ -3762,10 +3764,11 @@ SWEEP_BAR = 20                                       # znaků # za 100 % správn
 
 
 def run_sweep(model, n, numbers=False):
-    """Pro každý počet pruhů (s numbers bran) 2–8 vlastní sada n úloh, stejná jako bench.py n --lanes K. Vrací [(K, souhrn)]."""
+    """Pro každý počet pruhů (s numbers bran) 2–8 vlastní sada n úloh, stejná jako bench.py n --lanes K. Vrací [(K, souhrn)].
+    Zahřívací dotaz (nepočítá se) jen jednou, u prvního počtu: u hostovaného modelu stojí každý dotaz peníze i strop dotazů."""
     if numbers:
-        return [(k, run_numbers(model, number_cases(n, k), k)) for k in SWEEP_LANES]
-    return [(k, run_lanes(model, make_cases(n, k), k)) for k in SWEEP_LANES]
+        return [(k, run_numbers(model, number_cases(n, k), k, warm=k == SWEEP_LANES[0])) for k in SWEEP_LANES]
+    return [(k, run_lanes(model, make_cases(n, k), k, warm=k == SWEEP_LANES[0])) for k in SWEEP_LANES]
 
 
 def sweep_header(numbers=False):

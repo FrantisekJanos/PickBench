@@ -43,11 +43,27 @@ class Sweep(unittest.TestCase):
         with mock.patch.object(bench, "post", post):
             rows = bench.run_sweep("m", 5)
         self.assertEqual([k for k, _ in rows], [2, 3, 4, 5, 6, 7, 8])
-        self.assertEqual(len(seen), 7 * 6)                             # zahřívací dotaz a 5 úloh na každý počet pruhů
+        self.assertEqual(len(seen), 1 + 7 * 5)                         # jeden zahřívací dotaz a 5 úloh na každý počet pruhů
         for i, k in enumerate(bench.SWEEP_LANES):
             keys = bench.lane_keys(k)
             want = [{"car_is_in": keys[lane], **{key: bench.describe(d) for key, d in zip(keys, dists)}} for lane, dists in bench.make_cases(5, k)]
-            self.assertEqual(seen[i * 6 + 1:(i + 1) * 6], want, k)
+            self.assertEqual(seen[1 + i * 5:1 + (i + 1) * 5], want, k)
+
+    def test_one_warmup_for_the_whole_sweep(self):
+        """Zahřívací dotaz jde jen u prvního počtu pruhů (bran): u hostovaného modelu stojí každý dotaz peníze i strop dotazů."""
+        for numbers in (False, True):
+            with self.subTest(numbers=numbers):
+                post, seen = recording(lambda state: "gate_1" if numbers else "lane_1")
+                with mock.patch.object(bench, "post", post):
+                    bench.run_sweep("m", 3, numbers=numbers)
+                self.assertEqual(len(seen), 1 + 7 * 3)
+                first = bench.number_cases(3, 2)[0][0] if numbers else None
+                if numbers:
+                    self.assertEqual(seen[0], dict(zip(bench.gate_keys(2), first)))            # zahřátí: první úloha se 2 branami
+                    self.assertEqual(seen[1:4], [dict(zip(bench.gate_keys(2), v)) for v, _, _ in bench.number_cases(3, 2)])
+                else:
+                    keys = bench.lane_keys(2)
+                    self.assertEqual(seen[0], {"car_is_in": keys[1], **{key: bench.describe(99) for key in keys}})   # zahřátí se 2 pruhy
 
     def test_numbers_sweep_uses_gates(self):
         post, seen = recording(lambda state: "gate_1")
