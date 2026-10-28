@@ -861,6 +861,16 @@ const TEXTS = {
   'diff.class.wordnew': { cs: 'jiné slovo', en: 'other word' },
   'diff.mode.plain': { cs: 'bez opakování', en: 'without repeats' },
   'diff.mode.repeat': { cs: 's opakováním', en: 'with repeats' },
+  'diff.before': { cs: '📷 před', en: '📷 before' },
+  'diff.after': { cs: '📷 po', en: '📷 after' },
+  'diff.label.ok': { cs: '✓ pruh {n}: {old} → {new}', en: '✓ lane {n}: {old} → {new}' },
+  'diff.label.twin': { cs: '✗ pruh {pick} se nezměnil, jen má stejnou hodnotu; změnil se pruh {n}: {old} → {new}', en: '✗ lane {pick} did not change, it only has the same value; lane {n} changed: {old} → {new}' },
+  'diff.label.neighbor': { cs: '✗ sousední pruh {pick}; změnil se pruh {n}: {old} → {new}', en: '✗ the next lane {pick}; lane {n} changed: {old} → {new}' },
+  'diff.label.bad': { cs: '✗ pruh {pick}; změnil se pruh {n}: {old} → {new}', en: '✗ lane {pick}; lane {n} changed: {old} → {new}' },
+  'legend.diff.shots': { cs: 'dva snímky téže řady: nahoře před, dole po; auto projíždí snímkem po', en: 'two snapshots of the same row: before at the top, after at the bottom; the car drives through the after snapshot' },
+  'legend.diff.pick': { cs: 'mezi snímky se změnil právě jeden pruh; model ho hledá, modrý obrys = jeho volba', en: 'exactly one lane changed between the snapshots; the model looks for it, blue outline = its pick' },
+  'legend.diff.repeat': { cs: 'hodnoty se v řadě můžou opakovat: stejná hodnota v jiném pruhu ještě neznamená změnu', en: 'values may repeat in a row: the same value in another lane is not yet a change' },
+  'legend.diff.out': { cs: 'po průjezdu změněný pruh zeleně v obou snímcích, štítek ukáže starou → novou hodnotu', en: 'after the car passes, the changed lane is green in both snapshots, and the label shows the old → new value' },
   'diff.line': { cs: 'řady bez opakování {plain}, s opakováním {repeat}; chyby: stejná hodnota v jiném pruhu {twin}, sousední pruh {neighbor}, jiné {other}, neplatné {invalid}', en: 'rows without repeats {plain}, with repeats {repeat}; errors: same value in another lane {twin}, next lane {neighbor}, other {other}, invalid {invalid}' },
   // scénář veřejná sada: popisek tlačítka Start a věta chyby, text v canvasu, popis (tři varianty podle nabídky štítků; {rest} = popis sady, zdroj a licence), tabulka tříd, dlaždice
   'public.benchOnly': { cs: 'Veřejná sada běží jen jako benchmark bez hry: má víc štítků, než je pruhů, nebo má každá úloha vlastní nabídku. Použijte tlačítko Spustit benchmark.', en: 'A public dataset runs only as a benchmark without the game: it has more labels than there are lanes, or every task has its own list. Use the Run benchmark button.' },
@@ -3143,13 +3153,43 @@ const hint = {
 // jméno třídy a podoby v TEXTS (komentář nad řádky: test čte řádek až po „};“ na jeho konci)
 const DIFF_CLASS_NAME = { num1: 'diff.class.num1', numnew: 'diff.class.numnew', word1: 'diff.class.word1', wordnew: 'diff.class.wordnew' };
 const DIFF_MODE_NAME = { plain: 'diff.mode.plain', repeat: 'diff.mode.repeat' };
+const DIFF_SHOT = 1.5;                                     // snímek před je o tolik polí nad snímkem po
+
+// Štítek projeté řady: výsledek slovem, druh chyby jako diff_summary, stará → nová hodnota změněného pruhu.
+function diffLabel(r) {
+  const lanes = r.before.length, n = r.truth + 1, old = r.before[r.truth], nw = r.after[r.truth];
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < lanes)) return { text: t('label.invalid'), color: RESULT.late.color };
+  if (r.result === 'ok') return { text: t('diff.label.ok', { n, old, new: nw }), color: RESULT.ok.color };
+  const kind = diffErrorKind(r, laneKeys(lanes)[r.chosen], laneKeys(lanes));
+  return { text: t({ twin: 'diff.label.twin', neighbor: 'diff.label.neighbor' }[kind] ?? 'diff.label.bad', { pick: r.chosen + 1, n, old, new: nw }), color: RESULT.bad.color };
+}
+
+// Jeden snímek: rámeček přes silnici se štítkem (📷 před / po) a v každém pruhu políčko s hodnotou; po průjezdu změněný pruh zeleně.
+function drawDiffShot(values, y, r, label) {
+  const hw = LW * 0.42;
+  ctx.strokeStyle = '#4a5663'; ctx.lineWidth = 1.5; ctx.strokeRect(3, y - 19, W - 6, 38);
+  values.forEach((v, lane) => {
+    const x = (lane + 0.5) * LW;
+    ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
+    ctx.beginPath(); ctx.roundRect(x - hw, y - 13, 2 * hw, 26, 5); ctx.fill();
+    ctx.fillStyle = '#e6edf3'; ctx.font = `600 ${Math.round(Math.min(14, LW * 0.22))}px "Segoe UI", sans-serif`;
+    ctx.fillText(String(v), x, y + 1, 2 * hw - 4);
+  });
+  ctx.font = '600 10px "Segoe UI", sans-serif'; ctx.textAlign = 'left';
+  const text = t(label), w = ctx.measureText(text).width + 8;
+  ctx.fillStyle = '#20262d'; ctx.fillRect(20, y - 26, w, 13);      // vpravo od značky trojského koně
+  ctx.fillStyle = '#8b9aa8'; ctx.fillText(text, 24, y - 19);
+  ctx.textAlign = 'center';
+}
 
 const diff = {
   __proto__: rowBase,
   id: 'diff', lanesFree: true,
   get about() { return t('scenario.diff.about'); },
-  panels: ['confPanel'], get extraTitle() { return t('scenario.diff.extraTitle'); },
+  panels: ['confPanel', 'legend'], get extraTitle() { return t('scenario.diff.extraTitle'); },
   get extraTip() { return t('scenario.diff.extraTip'); },
+  legend: [[null, 'legend.diff.shots'], [null, 'legend.diff.pick'], [null, 'legend.diff.repeat'], ['#3fb950', 'legend.diff.out']],
   get matchTip() { return t('scenario.diff.tip.match'); },
   lanes: () => +$('lanes').value,
   newGame() { return { ...this.baseGame(), cases: [], choices: [] }; },
@@ -3175,7 +3215,30 @@ const diff = {
     if (g.summary?.n !== g.cases.length) g.summary = { n: g.cases.length, ...diffSummary(g.cases, g.choices, laneKeys(LANES)) };
     return g.summary;
   },
-  drawItems(g) { for (const r of g.rows) this.drawRing(r, CAR_Y - r.y * CELL, 12); },
+  // Dva snímky nad sebou spojené čarou v každém pruhu; před průjezdem modrý obrys sloupce volby, po něm zelený sloupec a štítek.
+  drawItems(g) {
+    const hw = LW * 0.42, shot = DIFF_SHOT * CELL;
+    for (const r of g.rows) {
+      const y = CAR_Y - r.y * CELL;
+      ctx.globalAlpha = r.result ? 0.35 : 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';     // v každé řadě znovu: štítek předchozí řady zarovnání vrací
+      ctx.fillStyle = 'rgba(230,237,243,.06)'; ctx.fillRect(2, y - shot - 30, W - 4, shot + 52);      // oba snímky jedné řady na společném podkladu
+      ctx.strokeStyle = '#4a5663'; ctx.lineWidth = 1;
+      for (let lane = 0; lane < r.before.length; lane++) {
+        const x = (lane + 0.5) * LW;
+        ctx.beginPath(); ctx.moveTo(x, y - shot + 13); ctx.lineTo(x, y - 13); ctx.stroke();
+      }
+      drawDiffShot(r.before, y - shot, r, 'diff.before');
+      drawDiffShot(r.after, y, r, 'diff.after');
+      ctx.globalAlpha = 1;
+      if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES) {
+        ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw - 2, y - shot - 15, 2 * hw + 4, shot + 30);
+      }
+      this.drawRing(r, y, Math.min(hw, 15));
+      if (r.result !== null) { const lab = diffLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
+    }
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
   describeLast(task, res) {                                // oba snímky, volba, druh změny a podoba řady
     const name = i => i >= 0 ? laneName(i) : t('answer.invalid');
     const kind = `${t(DIFF_CLASS_NAME[task.cls])}, ${t(DIFF_MODE_NAME[task.mode])}`;

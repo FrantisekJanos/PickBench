@@ -467,6 +467,32 @@ class Page(unittest.TestCase):              # scénář ve stránce; generátor,
                                                           "zvoleno: pruh 2  (správně: pruh 1)", "změna:   slovo o písmeno, s opakováním"])
         self.assertEqual(run_js(code, None, "en").split("\n")[3], "change:  word off by a letter, with repeats")
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_kind_of_error(self):            # štítek: stará → nová hodnota, dvojče před sousedem jako diff_summary, neplatná, nestihl
+        from test_parity import run_js
+        code = "(() => {" + re.search(r"\nconst RESULT = [^\n]*\n", page_source()).group(0) + page_function("diffLabel") + (
+            "const W = [['tape', 'tape', 'park', 'tear'], ['cape', 'tape', 'park', 'tear']], N = [[2408, 2144, 4943, 2486], [2409, 2144, 4943, 2486]];"
+            "const r = ([before, after], result, chosen) => ({ before, after, answer: 0, truth: 0, result, chosen });"
+            "return [r(N, 'ok', 0), r(W, 'bad', 1), r(N, 'bad', 1), r(N, 'bad', 3), r(N, 'bad', -1), r(W, 'late', undefined)].map(diffLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ pruh 1: 2408 → 2409", "✗ pruh 2 se nezměnil, jen má stejnou hodnotu; změnil se pruh 1: tape → cape",
+                                                   "✗ sousední pruh 2; změnil se pruh 1: 2408 → 2409", "✗ pruh 4; změnil se pruh 1: 2408 → 2409",
+                                                   "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ lane 2 did not change, it only has the same value; lane 1 changed: tape → cape")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    def test_drawing_writes_only_through_t_and_shows_pick_and_legend(self):
+        for literal in ("fillText('", 'fillText("', "fillText(`"):
+            self.assertNotIn(literal, page_function("drawDiffShot"))                             # štítek snímku přes t(), hodnoty přes String(…)
+            self.assertNotIn(literal, diff_body())
+        self.assertIn("t(label)", page_function("drawDiffShot"))
+        body = diff_body()
+        for part in ("drawDiffShot(r.before, y - shot, r, 'diff.before')", "drawDiffShot(r.after, y, r, 'diff.after')", "diffLabel(r)", "drawRowLabel(",
+                     "strokeRect(", "panels: ['confPanel', 'legend']", "[null, 'legend.diff.shots']", "[null, 'legend.diff.pick']",
+                     "[null, 'legend.diff.repeat']", "['#3fb950', 'legend.diff.out']"):
+            self.assertIn(part, body)
+        self.assertEqual(page_source().count("const DIFF_SHOT = 1.5;"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
