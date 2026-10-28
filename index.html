@@ -147,6 +147,7 @@
           <input id="deadline" type="number" min="1" max="600000" data-i18n-placeholder="ph.deadline" style="width:100px">
         </label>
         <button id="bench" disabled data-i18n="ui.bench"></button>
+        <button id="sweep" disabled data-i18n="ui.sweep"></button>
       </div>
       <div id="status"></div>
       <div id="hostedWarn" hidden><span id="hostedText"></span><button id="hostedOk" data-i18n="ui.hostedOk"></button></div>
@@ -218,6 +219,12 @@
       <small id="calCover"></small>
     </div>
 
+    <div class="panel" id="sweepPanel" hidden>
+      <h2 data-i18n="ui.sweepTitle"></h2>
+      <canvas id="sweepChart" width="900" height="170"></canvas>
+      <small id="sweepLine"></small>
+    </div>
+
     <div class="panel">
       <h2><span data-i18n="ui.results"></span> <button id="csv" style="float:right;padding:2px 10px" data-i18n="ui.csv"></button><button id="clear" style="float:right;padding:2px 10px;margin-right:8px" data-i18n="ui.clear"></button></h2>
       <label class="inline" style="margin-bottom:8px"><input id="lastBatch" type="checkbox"> <span data-i18n="ui.lastBatch"></span></label>
@@ -263,6 +270,14 @@ const TEXTS = {
   'ui.benchn': { cs: 'Benchmark bez hry, počet úloh', en: 'Benchmark without the game, number of tasks' },
   'ui.deadline': { cs: 'limit na rozhodnutí (ms)', en: 'decision deadline (ms)' },
   'ui.bench': { cs: 'Spustit benchmark', en: 'Run benchmark' },
+  'ui.sweep': { cs: 'Průchod 2–8', en: 'Sweep 2–8' },
+  'ui.sweepTitle': { cs: 'Podle počtu pruhů', en: 'By number of lanes' },
+  'sweep.legend': { cs: 'sloupce: medián latence · čára: správně · pod osou počet pruhů', en: 'bars: median latency · line: correct · below the axis the number of lanes' },
+  'sweep.trend': { cs: 'od {first} do {last}: správně {accFirst} → {accLast}, medián {p50First} → {p50Last} ms', en: 'from {first} to {last}: correct {accFirst} → {accLast}, median {p50First} → {p50Last} ms' },
+  'plan.sweep.busy': { cs: 'Průchod 2–8 se přidá, až nic neběží a ve frontě nic nečeká.', en: 'The 2–8 sweep starts only when nothing runs and no step waits in the queue.' },
+  'plan.sweep.scenario': { cs: 'Průchod 2–8 je jen u překážek a číselných duelů.', en: 'The 2–8 sweep is only for obstacles and number duels.' },
+  'tip.sweep': { cs: 'Přidá do fronty plánovače sedm kroků benchmarku bez hry s počtem pruhů 2 až 8 (jinak se stejným nastavením) a frontu spustí, jako bench.py --sweep-lanes. Panel „Podle počtu pruhů“ pak ukáže medián latence a podíl správných podle počtu pruhů. Jen u překážek a číselných duelů a jen s prázdnou frontou.',
+                 en: 'Adds seven benchmark steps without the game to the scheduler queue, with 2 to 8 lanes and otherwise the same settings, and starts the queue, like bench.py --sweep-lanes. The "By number of lanes" panel then shows the median latency and the share correct by the number of lanes. Only for obstacles and number duels and only with an empty queue.' },
   'ui.hostedOk': { cs: 'Rozumím, povolit tohoto poskytovatele', en: 'I understand, allow this provider' },
   // statické HTML, panel Plánovač
   'ui.plan': { cs: 'Plánovač', en: 'Scheduler' },
@@ -5097,7 +5112,7 @@ function lengthClasses(lengths) {
 // Jedna bublina pro celou stránku. Popisek má každý prvek s atributem data-tip; text jde do stránky jako text, nikdy jako HTML.
 // TIPS: id pevných prvků s popiskem; text je v TEXTS pod klíčem tip.<id>. Dlaždice a nadpisy scénářů si popisky nesou samy (viz quality, extraTip);
 // popisky dlaždic, které nepatří jednomu scénáři (jistota, zrcadla, trojský kůň, hardware), jsou v TEXTS pod klíčem tile.<jméno>.
-const TIPS = ['mAvg', 'mP50', 'mP95', 'mMin', 'mMax', 'mRate', 'mOll', 'mUsd', 'mNet', 'mSpend', 'mN', 'chartCap', 'calTitle', 'calT', 'scenario', 'lanes', 'driver', 'model', 'mode',
+const TIPS = ['mAvg', 'mP50', 'mP95', 'mMin', 'mMax', 'mRate', 'mOll', 'mUsd', 'mNet', 'mSpend', 'mN', 'chartCap', 'calTitle', 'calT', 'sweep', 'scenario', 'lanes', 'driver', 'model', 'mode',
   'speed', 'runlen', 'seed', 'extra', 'mirror', 'inject', 'benchn', 'deadline', 'bench', 'start', 'stop', 'csv', 'clear', 'planTitle', 'sqKind', 'sqAdd', 'pauseS', 'pauseTemp',
   'pauseCap', 'sqReset', 'sqClear', 'sqRun', 'sqStop', 'lastBatch'];
 let tipFor = null;                                         // prvek, u kterého je bublina právě zobrazená
@@ -5403,6 +5418,7 @@ function renderResults() {                                 // hodnoty jdou do st
     return tr;
   }));
   if (tipFor && !tipFor.isConnected) hideTip();            // bublina tlačítka zaniklého řádku
+  drawSweep();
 }
 
 function addResult(how, inGame) {                          // zapíše běh do tabulky a pošle ho do databáze; how = { mode, aborted, speed, best }; vrací záznam, nebo null
@@ -5430,7 +5446,54 @@ function addResult(how, inGame) {                          // zapíše běh do t
   return rec;
 }
 
-const resultsLocked = () => planRunning;                   // jedna podmínka pro Smazat výsledky i tlačítka v řádcích: fronta zapisuje výsledky, smazání uprostřed by rozbilo dávku
+// Průchod 2–8 (jako bench.py --sweep-lanes): tlačítko přidá do fronty sedm kroků benchmarku s počtem pruhů 2 až 8 a frontu spustí.
+// Graf kreslí z tabulky výsledků: nejnovější dávka, která má pro zvolený scénář a řidiče (model) aspoň dva různé počty pruhů.
+const SWEEP_SC = ['obstacles', 'numbers'];                 // jako bench.py: jen překážky a číselné duely; ostatní scénáře mají pruhy pevné nebo je nepoužívají
+function sweepAdd() {
+  if (!SWEEP_SC.includes(SC.id)) return sqSay(() => t('plan.sweep.scenario'));
+  if (planRunning || running || PLAN.steps.some(st => st.state === 'wait')) return sqSay(() => t('plan.sweep.busy'));
+  const s = readSettings(), whole = (v, min, max) => Math.min(max, Math.max(min, Math.floor(v) || 0));
+  s.deadline = deadlineOf(s.deadline); s.benchn = whole(s.benchn, 5, 1000); s.runlen = whole(s.runlen, 0, 100000);      // stejné meze jako addStep
+  if (PLAN.steps.length + 7 > PLAN_MAX) return sqSay(() => t('plan.full', { max: PLAN_MAX }));
+  if (s.driver === 'model' && !s.model) return sqSay(() => t('plan.add.noModel'));
+  if (needConsent()) return sqSay(() => t('plan.add.consent'));                 // hostovaný model: souhlas jako u addStep
+  for (let k = 2; k <= 8; k++) {
+    const settings = { ...s, lanes: k }, est = stepEstimate('bench', settings);
+    PLAN.steps.push({ kind: 'bench', settings, state: 'wait', note: '', ...(est ? { est } : {}) });
+  }
+  sqSay(''); planChanged(); runPlan();
+}
+function sweepData() {
+  const driver = $('driver').value, model = $('model').value;
+  const mine = RESULTS.filter(r => r.data && r.data.kind === 'bench' && r.data.vals && r.data.vals.scenario === SC.id && r.data.vals.driver === driver
+    && (driver !== 'model' || r.data.vals.model === model) && Number.isInteger(r.data.batch));
+  for (const batch of [...new Set(mine.map(r => r.data.batch))].sort((a, b) => b - a)) {
+    const by = new Map();
+    for (const r of mine) if (r.data.batch === batch && !by.has(r.data.vals.lanes)) by.set(r.data.vals.lanes, r.data.vals);   // RESULTS je od nejnovějšího
+    if (by.size >= 2) return [...by.values()].sort((a, b) => a.lanes - b.lanes);
+  }
+  return [];
+}
+function drawSweep() {
+  const rows = SWEEP_SC.includes(SC.id) ? sweepData() : [];
+  $('sweepPanel').hidden = rows.length < 2;
+  if (rows.length < 2) return;
+  const c = $('sweepChart'), x = c.getContext('2d'); c.width = c.clientWidth || 900;
+  const pad = 34, top = 18, h = c.height - 40, bw = (c.width - 2 * pad) / rows.length, maxMs = Math.max(1, ...rows.map(r => r.p50 || 0));
+  x.font = '11px "Segoe UI", sans-serif'; x.fillStyle = '#8b9aa8'; x.fillText(t('sweep.legend'), 4, 12);
+  rows.forEach((r, i) => {
+    const bh = (r.p50 || 0) / maxMs * h, left = pad + i * bw;
+    x.fillStyle = '#4cc2ff'; x.fillRect(left + 6, top + h - bh, bw - 12, bh);
+    x.fillStyle = '#e6edf3'; x.textAlign = 'center'; x.fillText(r.lanes, left + bw / 2, c.height - 6); x.textAlign = 'start';
+  });
+  x.strokeStyle = '#3fb950'; x.lineWidth = 2; x.beginPath();
+  rows.forEach((r, i) => { const px = pad + (i + 0.5) * bw, py = top + h - (r.acc || 0) * h; i ? x.lineTo(px, py) : x.moveTo(px, py); });
+  x.stroke(); x.lineWidth = 1;
+  const a = rows[0], b = rows[rows.length - 1];
+  $('sweepLine').textContent = t('sweep.trend', { first: a.lanes, last: b.lanes, accFirst: pctOf(a.acc), accLast: pctOf(b.acc), p50First: f(a.p50), p50Last: f(b.p50) });
+}
+
+const resultsLocked = () => planRunning;                  // jedna podmínka pro Smazat výsledky i tlačítka v řádcích: fronta zapisuje výsledky, smazání uprostřed by rozbilo dávku
 let clearTimer = null, clearArmed = 0;                     // clearTimer běží = tlačítko je odjištěné; clearArmed = čas prvního kliku (performance.now)
 const clearLook = () => { $('clear').textContent = t(clearTimer ? 'results.clearArmed' : 'ui.clear'); };      // text tlačítka podle stavu; volá ho i renderLang, aby odjištěné tlačítko přepnutí jazyka přežilo
 function clearResults() {                                  // smazání s potvrzením druhým klikem do 4 s; druhý klik platí až po půl sekundě, aby nic nesmazal dvojklik
@@ -5903,7 +5966,7 @@ function stopPlan() {                                      // ukončí běžíc�
   if (running) stop();
 }
 
-$('sqRun').onclick = runPlan; $('sqStop').onclick = stopPlan;
+$('sqRun').onclick = runPlan; $('sqStop').onclick = stopPlan; $('sweep').onclick = sweepAdd;
 $('calT').oninput = () => drawCal();                       // práh mění jen výpočet pod grafem, ne běh
 $('lastBatch').onchange = renderResults;
 document.addEventListener('visibilitychange', () => {       // Wake Lock se při skrytí záložky ruší; po návratu si ho fronta vezme znovu
@@ -6064,6 +6127,7 @@ function syncRun() {                                       // Start a Spustit be
   renderHosted();
   const off = running || planRunning || !initDone || needConsent();
   $('bench').disabled = off; $('start').disabled = off || !!SC.benchOnly;
+  $('sweep').disabled = off || !SWEEP_SC.includes(SC.id);
 }
 function setRunning(on) {
   running = on;
@@ -6108,7 +6172,7 @@ async function selectScenario() {
     if (!SC.hasExtra) $('extra').checked = false;
     setTip($('start'), SC.benchOnly ? t('public.benchOnly') : t('tip.start'));
     injectOn = $('inject').checked && !SC.benchOnly;
-    syncControls(); syncRun(); renderLegend(); resetGame();
+    syncControls(); syncRun(); renderLegend(); resetGame(); drawSweep();
   };
   const benchBack = () => { if (benchBefore !== null) { $('benchn').value = benchBefore; benchBefore = null; } };
   const notLoaded = r => apiError('', r.status, () => t('run.datasetFailed'));      // věta stránky: chyba ji nese i jako funkci say a stav ji po přepnutí jazyka složí znovu

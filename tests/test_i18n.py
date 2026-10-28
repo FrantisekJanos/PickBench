@@ -958,6 +958,13 @@ class PageTexts(unittest.TestCase):
             self.assertIn("{brier}", page_text("cal.brier"), code)
         self.assertEqual(self.texts["col.brier"]["cs"], "Brier")
 
+    def test_sweep_texts_match_bench(self):                                # trend pod grafem průchodu jako řádek bench.py --sweep-lanes
+        for code in ("cs", "en"):
+            page_text, tool = (lambda key: self.texts[key][code]), (lambda key: i18n.TEXTS[key][code])
+            self.assertEqual(page_text("sweep.trend"), tool("bench.sweep.trend").replace("{acc_first}", "{accFirst}").replace("{acc_last}", "{accLast}")
+                             .replace("{p50_first}", "{p50First}").replace("{p50_last}", "{p50Last}"), code)
+            self.assertIn("2–8", page_text("ui.sweep"), code)
+
     def test_command_line_says_the_same_words_as_the_page(self):              # bench.py tiskne tytéž věci jako stránka: stejné slovo, v záhlaví nejvýš zkrácené
         columns = {"avg": "col.avg", "p50": "col.p50", "p95": "col.p95", "min": "col.min", "max": "col.max", "rate": "col.rate", "acc": "col.acc",
                    "conf": "tile.conf.label", "ece": "col.ece", "stab": "col.stab", "goodput": "col.goodput", "tokens": "last.tokens"}
