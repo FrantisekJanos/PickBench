@@ -3305,7 +3305,7 @@ const bandit = {
   // Poloha auta jako v jádře (plynule k cíli); u řady, kterou auto projíždí bez platné odpovědi včas, poloprůhledně (závory zůstaly dole).
   carPose(g) {
     const r = g.rows.find(r => Math.abs(r.y - this.passAt) < 0.8);
-    const ghost = r && !(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES && r.result !== 'late');
+    const ghost = r && r.result !== null && !(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < LANES && r.result !== 'late');
     return { lane: g.visLane + (g.lane - g.visLane) * 0.35, alpha: ghost ? 0.45 : 1 };
   },
   drawItems(g) {                                           // řady mýta (drawBandit), kroužek výsledku a štítek pod projetou řadou

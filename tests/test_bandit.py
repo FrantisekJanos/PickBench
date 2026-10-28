@@ -647,6 +647,15 @@ class Drawing(unittest.TestCase):           # kresba řady mýta, čárky, ští
         self.assertEqual([s for s in got["after"] if s.startswith("šance")], ["šance 45 %", "šance 90 %", "šance 35 %", "šance 70 %"])
         self.assertEqual(got["stars"], [185])                                                  # hvězdička jen u nejvyšší skryté šance (brána 2, vpravo v budce)
 
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_car_turns_ghost_only_for_a_resolved_row_without_a_valid_answer(self):      # čekající řada auto nezprůhlední
+        code = ("const LANES = 4; const o = { passAt: 0," + bandit_method("carPose") + "};"
+                "const alpha = row => o.carPose({ rows: [row], visLane: 1, lane: 1 }).alpha;"
+                "process.stdout.write(JSON.stringify([alpha({ y: 0.5, chosen: undefined, result: null }), alpha({ y: 0.5, chosen: 2, result: null }),"
+                " alpha({ y: 0, chosen: -1, result: 'bad' }), alpha({ y: 0, chosen: undefined, result: 'late' }), alpha({ y: -0.2, chosen: 2, result: 'late' }),"
+                " alpha({ y: 0, chosen: 2, result: 'ok' }), alpha({ y: 0, chosen: 1, result: 'bad' }), alpha({ y: 3, chosen: undefined, result: null })]));")
+        self.assertEqual(run_page_js(code), [1, 1, 0.45, 0.45, 0.45, 1, 1, 1])
+
     def test_drawing_writes_only_through_t(self):
         source = page_function("drawBandit") + page_function("banditLabel") + page_function("drawBanditStar")
         self.assertEqual(source.count("fillText("), 2)                                       # „výhry/průjezdy  podíl | nová“ a šance; písmena jen přes t()
