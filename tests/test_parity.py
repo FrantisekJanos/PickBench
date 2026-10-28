@@ -1622,5 +1622,136 @@ class Timetable(unittest.TestCase):
         self.assertGreaterEqual(len(json.dumps(bench.timetable_state(case, "sorted"))), longest)      # horní odhad délky dotazu ve stepEstimate
 
 
+# Generátor Rušivé nápovědy stránky se stejnou náhodou jako ROWS_JS: seed, lanes, n trojic → 3n řad hintTrio (set = číslo trojice).
+HINT_ROWS_JS = ROWS_JS.replace("[...Array(arg.n)].map(() => signRow(arg.lanes, rand))", "[...Array(arg.n)].map((_, i) => hintTrio(rand, arg.lanes, i)).flat()")
+assert HINT_ROWS_JS != ROWS_JS
+HINT_PAGE = {}
+
+
+def hint_page(n, lanes, seed=1):
+    """Řady generátoru stránky, jednou za běh modulu."""
+    if (n, lanes, seed) not in HINT_PAGE:
+        HINT_PAGE[n, lanes, seed] = run_js(HINT_ROWS_JS, {"seed": seed, "lanes": lanes, "n": n})
+    return HINT_PAGE[n, lanes, seed]
+
+
+def py_hint(row):
+    """Řada stránky jako úloha hint_cases: (čísla, správná brána, třída, podmínka, nápověda, číslo řady)."""
+    return (tuple(row["values"]), row["answer"], row["gap"], row["cond"], row["hint"], row["set"])
+
+
+def no_nan(x):
+    """Výsledek rozboru z Pythonu tak, jak ho vrátí JSON ze stránky: NaN = null, n-tice = seznam."""
+    if isinstance(x, float) and x != x:
+        return None
+    if isinstance(x, dict):
+        return {k: no_nan(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [no_nan(v) for v in x]
+    return x
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Hint(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ gaps: NUMBER_GAPS, conds: HINT_CONDS, field: HINT_FIELD, questions: [2, 3, 4, 5, 6, 7, 8].map(hintQuestion) })", None)
+        self.assertEqual((js["gaps"], js["conds"], js["field"]), (list(bench.GAPS), list(bench.HINT_CONDS), bench.HINT_FIELD))
+        for k, q in zip(range(2, 9), js["questions"]):
+            self.assertEqual(json.dumps(q), json.dumps(bench.hint_question(k)), k)          # bajtově, i pořadí klíčů
+        cases = bench.hint_cases(40, 4, seed=3)
+        states = run_js("arg.map(([values, hint]) => hintState(values, hint))", [[list(c[0]), c[4]] for c in cases])
+        for c, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.hint_state(c[0], c[4])))     # nápověda poslední klíč, none bez pole
+
+    def test_rows_come_in_trios_like_bench(self):        # záruky jako tests/test_hint.py (Generator) a meze tříd jako number_case
+        import bench
+        for lanes in (2, 3, 4, 8):
+            rows = hint_page(900, lanes, seed=lanes)
+            with self.subTest(lanes=lanes):
+                self.assertEqual(len(rows), 2700)
+                self.assertEqual(Counter(r["cond"] for r in rows), {"none": 900, "congruent": 900, "incongruent": 900})
+                trios = {}
+                for r in rows:
+                    trios.setdefault(r["set"], []).append(r)
+                    v, top, second = r["values"], max(r["values"]), sorted(r["values"])[-2]
+                    self.assertEqual(len(v), lanes)
+                    self.assertEqual((v.count(top), v.index(top), r["truth"]), (1, r["answer"], r["answer"]))
+                    self.assertTrue(20 <= second <= 5000, v)
+                    lo, hi = {"tight": (1, max(1, second * 5 // 100)), "medium": (second * 5 // 100 + 1, second * 30 // 100),
+                              "clear": (second * 30 // 100 + 1, second * 3)}[r["gap"]]
+                    self.assertTrue(lo <= top - second <= hi, r)
+                    self.assertTrue(all(1 <= x <= second for x in sorted(v)[:-2]), v)
+                    if r["cond"] == "none":
+                        self.assertIsNone(r["hint"])
+                    elif r["cond"] == "congruent":
+                        self.assertEqual(r["hint"], r["answer"])
+                    else:
+                        self.assertTrue(0 <= r["hint"] < lanes and r["hint"] != r["answer"], r)
+                self.assertEqual(sorted(trios), list(range(900)))
+                for trio in trios.values():
+                    self.assertEqual(sorted(r["cond"] for r in trio), sorted(bench.HINT_CONDS))
+                    self.assertEqual(len({(tuple(r["values"]), r["answer"], r["gap"]) for r in trio}), 1)     # stejná čísla ve trojici
+                self.assertEqual(Counter(trios[s][0]["cond"] for s in trios).keys(), set(bench.HINT_CONDS))     # pořadí ve trojici se losuje
+
+    def test_answers_gaps_wrong_hints_and_strategies_like_bench(self):     # meze tests/test_hint.py (K = 3, 900 řad)
+        import bench
+        rows = hint_page(900, 3, seed=3)
+        none = [r for r in rows if r["cond"] == "none"]
+        answers, gaps = Counter(r["answer"] for r in none), Counter(r["gap"] for r in none)
+        for gate in range(3):
+            self.assertAlmostEqual(answers[gate] / 900, 1 / 3, delta=0.07)
+        for gap in bench.GAPS:
+            self.assertTrue(0.25 <= gaps[gap] / 900 <= 0.42, gaps)
+        inc = [r for r in rows if r["cond"] == "incongruent"]
+        self.assertTrue(0.4 <= sum(r["values"][r["hint"]] == sorted(r["values"])[-2] for r in inc) / len(inc) <= 0.6)
+        share = lambda pick, cond=None: (lambda sub: sum(pick(r) == r["answer"] for r in sub) / len(sub))(
+            [r for r in rows if cond is None or r["cond"] == cond])
+        follow = lambda r: 0 if r["hint"] is None else r["hint"]
+        anti = lambda r: 1 if r["hint"] == 0 else 0
+        self.assertEqual((share(follow, "congruent"), share(follow, "incongruent")), (1, 0))
+        self.assertTrue(0.4 <= share(anti, "incongruent") <= 0.6)
+        self.assertLess(share(anti), 0.34)
+        self.assertLess(share(lambda r: 0), 0.4)
+
+    def test_same_seed_same_rows(self):
+        self.assertEqual(hint_page(30, 3, seed=5), run_js(HINT_ROWS_JS, {"seed": 5, "lanes": 3, "n": 30}))
+        self.assertNotEqual(hint_page(30, 3, seed=5), run_js(HINT_ROWS_JS, {"seed": 6, "lanes": 3, "n": 30}))
+
+    def test_summary_matches_bench(self):                 # stejné úlohy, stejné volby: stejný rozbor (i neplatné volby, chybějící none, nic)
+        import bench
+        from test_hint import CASES                       # ručně ověřené úlohy z tests/test_hint.py
+        rng, keys = random.Random(7), bench.gate_keys(3)
+        rows = hint_page(900, 3, seed=3)
+        hand = [{"values": list(c[0]), "answer": c[1], "gap": c[2], "cond": c[3], "hint": c[4], "set": c[5]} for c in CASES]
+        bad = [None, "gate_9", 7, "GATE_1", ["gate_1"]]
+        choices = [rng.choice(keys + bad) if rng.random() < 0.3 else keys[r["hint"]] if r["hint"] is not None and rng.random() < 0.5
+                   else keys[r["answer"]] for r in rows]
+        part = [i for i, r in enumerate(rows) if not (r["cond"] == "none" and r["set"] % 3 == 0)]      # trojice bez řady none
+        runs = [(rows, choices), ([rows[i] for i in part], [choices[i] for i in part]), ([], []),
+                (hand, ["gate_2", "gate_2", "gate_3", "gate_2", "gate_1", "gate_1"]), (hand, [None] * 6)]
+        got = run_js("arg.runs.map(([cases, choices]) => hintSummary(cases, choices, arg.keys))", {"runs": runs, "keys": keys})
+        for (cases, ch), js in zip(runs, got):
+            want = bench.hint_summary([py_hint(c) for c in cases], ch, keys)
+            same(self, js, no_nan(want), "hint_summary")                             # celá čísla v JSON stránky jsou 1, v Pythonu 1.0
+
+    def test_points_match_bench(self):                    # pp: znaménko vždy, půlka k sudému jako round v Pythonu, NaN pomlčka
+        import bench
+        values = [0.125, -0.125, 0.135, -0.135, 0.0, -0.0, 0.5, 1 / 3, -1 / 3, 0.005, -0.005, 0.015, 0.025, 1.0, -1.0]
+        values += [k / n - j / n for n in (1, 2, 3, 7, 8, 16, 40, 100, 200) for k in range(n + 1) for j in range(0, n + 1, 3)]
+        values += [random.Random(i).uniform(-1, 1) for i in range(300)]
+        self.assertEqual(run_js("arg.map(pointsText)", values), [bench.pp(v) for v in values])
+        self.assertEqual(run_js("[pointsText(NaN), pointsText(null)]", None), ["—", "—"])
+
+    def test_warm_task_is_valid_and_longest(self):        # zahřívací úloha: jediné maximum v poslední bráně, nejdelší stav ze všech úloh bench.py
+        import bench
+        for k, w in zip(range(2, 9), run_js("[2, 3, 4, 5, 6, 7, 8].map(hintWarm)", None)):
+            v = w["values"]
+            self.assertEqual((v.count(max(v)), v.index(max(v)), w["truth"], w["answer"]), (1, k - 1, k - 1, k - 1))
+            self.assertTrue(w["hint"] is not None and w["hint"] != w["answer"])
+            longest = max(len(json.dumps(bench.hint_state(c[0], c[4]))) for c in bench.hint_cases(300, k))
+            self.assertGreaterEqual(len(json.dumps(bench.hint_state(tuple(v), w["hint"]))), longest, k)
+
+
 if __name__ == "__main__":
     unittest.main()

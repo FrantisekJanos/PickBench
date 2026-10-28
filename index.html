@@ -4237,6 +4237,85 @@ function timetableWarm() {
   return { rows, order: rows.map((_, k) => k), zip: 55555, service: 'economy', exception: ['express', 'alder'], answer: 'cedar',
            size: 'large', pos: 'inner', rule: 'decoy', truth: TIMETABLE_DEPOTS.indexOf('cedar') };
 }
+
+// Rušivá nápověda: čísla jako number_case v bench.py, trojice podmínek, stav, otázka a rozbor jako HINT_*, hint_* v bench.py.
+// Brána je index od nuly (brána 1 = 0), nápověda je index brány nebo null. Co jde do modelu, je anglicky.
+const NUMBER_GAPS = ['tight', 'medium', 'clear'];          // GAPS v bench.py; stránka má vlastní GAPS v části číselných duelů (sdílený blok ho nevidí)
+const HINT_CONDS = ['none', 'congruent', 'incongruent'];   // bez pole nápovědy, nápověda na správné bráně, na jedné ze špatných
+const HINT_FIELD = 'most_popular';                         // pole stavu s nápovědou
+
+// Řada čísel s jediným maximem, kroky a pořadí náhody jako number_case (celočíselné dělení jako // v Pythonu).
+function numberCase(rand, lanes) {
+  const second = pickInt(rand, 20, 5000), gap = pickOf(rand, NUMBER_GAPS);
+  const top = second + (gap === 'tight' ? pickInt(rand, 1, Math.max(1, Math.floor(second * 5 / 100)))
+    : gap === 'medium' ? pickInt(rand, Math.floor(second * 5 / 100) + 1, Math.floor(second * 30 / 100))
+    : pickInt(rand, Math.floor(second * 30 / 100) + 1, second * 3));
+  const values = [top, second];
+  for (let i = 2; i < lanes; i++) values.push(pickInt(rand, 1, second));
+  shuffleWith(rand, values);
+  return { values, answer: values.indexOf(top), gap };
+}
+
+// Trojice řad se stejnými čísly (podmínky HINT_CONDS v náhodném pořadí), jako jedna řada hint_cases; set = číslo trojice.
+function hintTrio(rand, lanes, set) {
+  const { values, answer, gap } = numberCase(rand, lanes), top = Math.max(...values);
+  if (values.filter(v => v === top).length !== 1 || values.indexOf(top) !== answer) throw new Error('hintTrio: a row of numbers has no unique largest number');
+  const wrong = pickOf(rand, [...Array(lanes).keys()].filter(i => i !== answer));
+  const row = (cond, hint) => ({ values: [...values], answer, gap, cond, hint, set, truth: answer });
+  return shuffleWith(rand, [row('none', null), row('congruent', answer), row('incongruent', wrong)]);
+}
+
+function hintState(values, hint) {                         // jako hint_state: brány, s nápovědou pole HINT_FIELD jako poslední klíč
+  const state = {};
+  values.forEach((v, i) => state[`gate_${i + 1}`] = v);
+  if (hint !== null) state[HINT_FIELD] = `gate_${hint + 1}`;
+  return state;
+}
+
+function hintQuestion(lanes) {                             // jako hint_question = number_question: pole nápovědy zadání nezmiňuje
+  const criteria = {};
+  gateKeys(lanes).forEach((k, i) => criteria[k] = `Gate ${i + 1}` + (i === 0 ? ' (leftmost)' : i === lanes - 1 ? ' (rightmost)' : ''));
+  return { largest: { type: 'choice', instructions: 'Each gate shows a number. Choose the gate with the largest number.', criteria } };
+}
+
+// Rozbor jako hint_summary: case = { values, answer, gap, cond, hint, set }, volba = klíč brány nebo cokoli jiného (neplatná).
+function hintSummary(cases, choices, keys) {
+  const by_cond = classTally(HINT_CONDS, cases.map(c => [c.answer, c.cond]), choices, keys);
+  const inc = cases.map((c, i) => [c, choices[i]]).filter(([c]) => c.cond === 'incongruent');
+  const by_gap = classTally(NUMBER_GAPS, inc.map(([c]) => [c.answer, c.gap]), inc.map(([, ch]) => ch), keys);
+  const none = new Map();                                  // číslo trojice → volba bez nápovědy (poslední vyhrává, jako dict v Pythonu)
+  cases.forEach((c, i) => { if (c.cond === 'none') none.set(c.set, choices[i]); });
+  const errors = { hint: 0, other: 0, invalid: 0 };
+  let pull = 0, pairs = 0, flipped = 0;
+  for (const [c, ch] of inc) {
+    const hint = keys[c.hint], right = keys[c.answer];
+    if (!(typeof ch === 'string' && keys.includes(ch))) errors.invalid++;
+    else if (ch === hint) errors.hint++;
+    else if (ch !== right) errors.other++;
+    if (none.has(c.set)) {
+      pairs++;
+      pull += (ch === hint) - (none.get(c.set) === hint);
+      flipped += none.get(c.set) === right && ch === hint;
+    }
+  }
+  const acc = Object.fromEntries(HINT_CONDS.map(k => [k, by_cond[k][1] ? by_cond[k][0] / by_cond[k][1] : NaN]));
+  return { by_cond, by_gap, help: acc.congruent - acc.none, hurt: acc.none - acc.incongruent, pull: pairs ? pull / pairs : NaN, errors, flipped, pairs };
+}
+
+// Procentní body se znaménkem jako pp v bench.py: „+12“, „-3“, „+0“, NaN „—“; zaokrouhlení jako round v Pythonu (půlka k sudému).
+function pointsText(x) {
+  if (x == null || Number.isNaN(x)) return '—';
+  const v = x * 100, f = Math.floor(v), d = v - f;
+  const r = d > 0.5 ? f + 1 : d < 0.5 ? f : f % 2 === 0 ? f : f + 1;
+  return (r < 0 ? '-' : '+') + Math.abs(r);
+}
+
+// Zahřívací úloha: nejdelší stav (pět číslic, nejvyšší možné z numberCase, s polem nápovědy), správně poslední brána. Nebere z rand.
+function hintWarm(lanes) {
+  const values = [...Array(lanes)].map((_, i) => 20000 - lanes + 1 + i);
+  return { values, answer: lanes - 1, truth: lanes - 1, gap: 'tight', cond: 'incongruent', hint: 0, set: -1 };
+}
+
 // ==== sdíleno s Pythonem: konec ====
 
 // ---------- popisky po najetí myší nebo klávesnicí ----------
