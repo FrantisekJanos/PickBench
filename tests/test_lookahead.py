@@ -507,8 +507,8 @@ class Page(unittest.TestCase):              # scénář ve stránce; prohledáv�
         page = page_source()
         self.assertIn("  id: 'lookahead', lanesFree: true, minLanes: 3,", lookahead_body())
         self.assertEqual(page.count("  lanes: () => Math.max(3, +$('lanes').value),"), 1)
-        self.assertEqual(page.count("  for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);"), 1)
-        self.assertEqual(page.count("  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;"), 1)
+        self.assertEqual(page.count("  for (const o of lanes.options) o.disabled = +o.value < (SC.minLanes ?? 2);"), 1)
+        self.assertEqual(page.count("  if (+lanes.value < (SC.minLanes ?? 2)) lanes.value = SC.minLanes;"), 1)
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_car_takes_the_lane_of_the_task_and_moves_one_lane(self):

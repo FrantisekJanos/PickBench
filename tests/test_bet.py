@@ -364,7 +364,7 @@ class Page(unittest.TestCase):              # scénář ve stránce; generátor 
         self.assertIn("  id: 'bet', lanesFree: true, minLanes: 3,", body)
         self.assertIn("  lanes() { return Math.max(3, +$('lanes').value); },", body)
         self.assertEqual(page.count("  lanes: () => Math.max(3, +$('lanes').value),"), 1)               # řádek Dvou kroků dopředu zůstává jediný
-        self.assertEqual(page.count("  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;"), 1)
+        self.assertEqual(page.count("  if (+lanes.value < (SC.minLanes ?? 2)) lanes.value = SC.minLanes;"), 1)
 
     @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
     def test_tally_keeps_the_task_and_the_choice(self):            # počítají se všechny odpovědi; neplatná je null (regret 1, do chyb jako neplatná)

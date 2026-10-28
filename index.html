@@ -5188,11 +5188,11 @@ let ladder = null;                                         // { i: úroveň, fro
 
 function syncControls() {                                  // co jde měnit jen v některém scénáři nebo režimu
   $('lanes').disabled = running || !SC.lanesFree;
-  for (const o of $('lanes').options) o.disabled = +o.value < (SC.minLanes ?? 2);     // dva kroky dopředu: od 3 pruhů
-  if (+$('lanes').value < (SC.minLanes ?? 2)) $('lanes').value = SC.minLanes;
   const lanes = $('lanes');                                // závora a skryté pravidlo: zamčený volič ukazuje pevný počet pruhů, volba uživatele se vrátí
   if (SC.fixedLanes) { lanes.dataset.free ??= lanes.value; lanes.value = SC.fixedLanes; }
   else if (lanes.dataset.free !== undefined) { lanes.value = lanes.dataset.free; delete lanes.dataset.free; }
+  for (const o of lanes.options) o.disabled = +o.value < (SC.minLanes ?? 2);     // dva kroky dopředu: od 3 pruhů; nejdřív návrat volby, pak minimum
+  if (+lanes.value < (SC.minLanes ?? 2)) lanes.value = SC.minLanes;
   $('extra').disabled = running || !SC.hasExtra;
   $('speed').disabled = running && $('mode').value === 'ladder';
   $('mirror').disabled = $('inject').disabled = running || !!SC.benchOnly;      // veřejná sada: zrcadla ani trojský kůň nejsou
