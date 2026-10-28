@@ -2939,6 +2939,45 @@ def bandit_cases(n, k=4, seed=1):
     return tasks
 
 
+def bandit_form(form):
+    """Podoba stavu: None = výchozí BANDIT_FORM, neznámá podoba = ValueError."""
+    form = form or BANDIT_FORM
+    if form not in BANDIT_FORMS:
+        raise ValueError(f"unknown bandit form: {form}")
+    return form
+
+
+def bandit_state(case, form=None):
+    """Stav pro model. totals: gate_N → průjezdy a výhry; history: seznam bran a deník všech průjezdů od nejstaršího
+    (brána bez průjezdu v deníku chybí, proto je seznam bran zvlášť)."""
+    gates, log = case[0], case[3]
+    if bandit_form(form) == "totals":
+        return {f"gate_{i + 1}": {"drives": n, "wins": w} for i, (w, n, _) in enumerate(gates)}
+    return {"gates": gate_keys(len(gates)),
+            "log": [{"gate": f"gate_{i + 1}", "result": "win" if won else "loss"} for i, won in log]}
+
+
+BANDIT_INS = {                                       # zadání pro model podle podoby stavu; jde do modelu, proto anglicky a mimo i18n
+    "totals": ("Each toll gate pays a prize with its own hidden chance. For every gate, drives is how many times a car has "
+               "gone through it and wins is how many of those drives won the prize. Choose the next gate by these rules, "
+               "in order: 1. If a gate has fewer than 3 drives, choose it (there is at most one such gate). "
+               "2. Otherwise choose the gate with the highest share of wins, wins divided by drives. "
+               "3. If two gates share the highest share, choose the one with fewer drives."),
+    "history": ("Each toll gate pays a prize with its own hidden chance. gates lists all gates; log lists every earlier drive, "
+                "oldest first: the gate the car went through and whether it won the prize. Choose the next gate by these rules, "
+                "in order: 1. If a gate has fewer than 3 drives in log, choose it (there is at most one such gate). "
+                "2. Otherwise choose the gate with the highest share of wins, its wins divided by its drives. "
+                "3. If two gates share the highest share, choose the one with fewer drives."),
+}
+
+
+def bandit_question(k, form=None):
+    """Otázka choice podle podoby stavu: totals → klíč toll, history → klíč toll_log (vzor gate / gate_labeled)."""
+    form = bandit_form(form)
+    return {"toll" if form == "totals" else "toll_log": {"type": "choice", "instructions": BANDIT_INS[form],
+                                                         "criteria": position_criteria(gate_keys(k), "Gate")}}
+
+
 # ---------- zrcadla a kalibrace (stejné jako v index.html) ----------
 ALT = {                                              # jinak formulované zadání, podle klíče otázky
     "target": "A car is driving on a multi-lane road. Pick the lane it should head for, namely the one with the most free road ahead. A lane reported as \"clear\" beats any lane with an obstacle distance. When the car's current lane shares the longest free distance, keep that lane. When only other lanes share it, pick the one nearest to the car.",
@@ -2963,6 +3002,8 @@ ALT = {                                              # jinak formulované zadán
     "opponent_throw": "In this game of rock-paper-scissors, opponent_moves holds every move the opponent has made, from the first to the latest. After a short opening it keeps repeating the same sequence of one to four moves, and its last 8 moves or more follow that sequence. Continue the sequence by one move and pick that move.",
     "cell": "It is your turn in a game of tic-tac-toe and your mark is the one in you. board shows the three rows from top to bottom, each written left to right, with '.' for a free cell. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.",
     "cell_cells": "It is your turn in a game of tic-tac-toe and your mark is the one in you. cells names every cell as rNcM, row N counted from the top and column M from the left, and gives its mark; an empty string means the cell is free. A player who gets three marks in a line, across, down or diagonally, wins. Choose a free cell for your mark: a cell that completes a line of your own comes first; failing that, the cell where the opponent would complete a line; failing that, the cell that leaves you two separate lines that each need just one more mark.",
+    "toll": "Every toll gate has its own unknown chance of paying a prize. drives tells how often a car has passed a gate and wins how often that paid. Pick the next gate: a gate passed fewer than 3 times comes first, and there is never more than one; if there is none, take the gate with the most wins per drive; when two gates are level on that, take the one passed fewer times.",
+    "toll_log": "Every toll gate has its own unknown chance of paying a prize. gates names all gates and log holds every earlier drive from the oldest: which gate the car passed and whether that paid. Pick the next gate: a gate that appears fewer than 3 times in log comes first, and there is never more than one; if there is none, take the gate with the most wins per drive; when two gates are level on that, take the one passed fewer times.",
 }
 INVERTED = {"go": ("stop", BARRIER_STOP)}           # otázka noul: obrácená otázka (klíč, zadání) místo obráceného pořadí možností
 ALT_LANES = re.compile(r"\ba (\d+)-lane road\b|\btoll gate with (\d+) lanes\b")    # zadání move a lane nese počet pruhů; jiná formulace ho převezme ({lanes} v ALT)

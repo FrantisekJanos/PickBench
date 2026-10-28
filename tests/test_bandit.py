@@ -247,5 +247,64 @@ class Generator(unittest.TestCase):
             self.assertTrue(0 < a < b and Fraction(a, b).denominator == b and len(bench.bandit_tie_multiples(b)) >= 2, (a, b))
 
 
+INS_TOTALS = ("Each toll gate pays a prize with its own hidden chance. For every gate, drives is how many times a car has "
+              "gone through it and wins is how many of those drives won the prize. Choose the next gate by these rules, "
+              "in order: 1. If a gate has fewer than 3 drives, choose it (there is at most one such gate). "
+              "2. Otherwise choose the gate with the highest share of wins, wins divided by drives. "
+              "3. If two gates share the highest share, choose the one with fewer drives.")
+INS_HISTORY = ("Each toll gate pays a prize with its own hidden chance. gates lists all gates; log lists every earlier drive, "
+               "oldest first: the gate the car went through and whether it won the prize. Choose the next gate by these rules, "
+               "in order: 1. If a gate has fewer than 3 drives in log, choose it (there is at most one such gate). "
+               "2. Otherwise choose the gate with the highest share of wins, its wins divided by its drives. "
+               "3. If two gates share the highest share, choose the one with fewer drives.")
+ALT_TOTALS = ("Every toll gate has its own unknown chance of paying a prize. drives tells how often a car has passed a gate "
+              "and wins how often that paid. Pick the next gate: a gate passed fewer than 3 times comes first, and there is "
+              "never more than one; if there is none, take the gate with the most wins per drive; when two gates are level "
+              "on that, take the one passed fewer times.")
+ALT_HISTORY = ("Every toll gate has its own unknown chance of paying a prize. gates names all gates and log holds every "
+               "earlier drive from the oldest: which gate the car passed and whether that paid. Pick the next gate: a gate "
+               "that appears fewer than 3 times in log comes first, and there is never more than one; if there is none, "
+               "take the gate with the most wins per drive; when two gates are level on that, take the one passed fewer times.")
+
+
+class StateAndQuestion(unittest.TestCase):
+    def test_example_states(self):
+        case = by_hand(EXPLORE, 3, "explore")
+        state = bench.bandit_state(case)
+        self.assertEqual(json.dumps(state), '{"gate_1": {"drives": 9, "wins": 5}, "gate_2": {"drives": 4, "wins": 4}, '
+                                            '"gate_3": {"drives": 6, "wins": 0}, "gate_4": {"drives": 2, "wins": 1}}')
+        self.assertEqual(bench.bandit_state(case, "totals"), state)
+        history = bench.bandit_state(case, "history")
+        self.assertEqual(list(history), ["gates", "log"])
+        self.assertEqual(history["gates"], ["gate_1", "gate_2", "gate_3", "gate_4"])
+        self.assertEqual(history["log"][:2], [{"gate": "gate_1", "result": "win"}] * 2)
+        self.assertEqual(len(history["log"]), 21)
+        fresh = by_hand(((0, 0, 50), (5, 9, 45), (4, 8, 60), (1, 3, 20)), 0, "explore")
+        self.assertNotIn("gate_1", {e["gate"] for e in bench.bandit_state(fresh, "history")["log"]})    # brána bez průjezdu v deníku chybí
+        with self.assertRaises(ValueError):
+            bench.bandit_state(case, "log")                                   # podoby jsou totals a history
+        for x in cases(60) + cases(60, 5):
+            self.assertEqual(totals_of(bench.bandit_state(x, "history")), totals_of(bench.bandit_state(x)))   # deník nese týž souhrn
+            self.assertEqual(solve(bench.bandit_state(x)), f"gate_{x[1] + 1}")
+
+    def test_questions_and_their_alternative_wordings(self):
+        for k in bench.BANDIT_GATES:
+            for form, key, text, alt in (("totals", "toll", INS_TOTALS, ALT_TOTALS), ("history", "toll_log", INS_HISTORY, ALT_HISTORY)):
+                with self.subTest(k=k, form=form):
+                    q = bench.bandit_question(k, form)
+                    self.assertEqual(list(q), [key])
+                    self.assertEqual((q[key]["type"], q[key]["instructions"]), ("choice", text))
+                    self.assertEqual(json.dumps(q[key]["criteria"]), json.dumps(bench.position_criteria(bench.gate_keys(k), "Gate")))
+                    self.assertEqual(bench.ALT[key], alt)
+                    self.assertEqual(bench.variant(q, 2)[key]["instructions"], alt)
+                    self.assertEqual(list(bench.variant(q, 1)[key]["criteria"]), bench.gate_keys(k)[::-1])
+        self.assertEqual(bench.bandit_question(4), bench.bandit_question(4, FORM))
+
+    def test_state_stays_under_600_tokens(self):                 # odhad: 4 znaky JSON na token; deník při 5 branách je nejdelší
+        longest = max(len(json.dumps(bench.bandit_state(x, "history"))) for x in cases(900, 5))
+        self.assertLessEqual(longest, 2400)
+        self.assertLessEqual(max(len(json.dumps(bench.bandit_state(x))) for x in cases(900, 5)), 200)
+
+
 if __name__ == "__main__":
     unittest.main()
