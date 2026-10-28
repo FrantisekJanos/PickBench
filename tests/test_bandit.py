@@ -413,5 +413,100 @@ class Lines(unittest.TestCase):
         self.assertEqual(len(printed("en", bench.print_bandit, r)), 2)
 
 
+class Cli(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)                            # jazyk z prostředí vývojáře tu nesmí rozhodovat
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(LANG_ENV, None)
+        self.sent = []
+
+    def cli(self, *argv):
+        """Pustí bench.py jako příkaz proti podstrčené Ollamě. Vrací (výstup, čím skončil: None nebo argument sys.exit)."""
+        def urlopen(req, timeout=None):
+            self.sent.append(req.data)
+            return fake_urlopen(req, timeout)
+        out, code = io.StringIO(), None
+        with mock.patch.object(sys, "argv", ["bench.py", *argv]), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(time, "perf_counter", Clock()), contextlib.redirect_stdout(out):
+            try:
+                runpy.run_path(str(ROOT / "bench.py"), run_name="__main__")
+            except SystemExit as e:
+                code = e.code
+        return out.getvalue(), code
+
+    def test_parse(self):
+        a = bench.parse_args(["40", "--bandit", "m1"])
+        self.assertEqual((a.n, a.bandit, a.totals, a.history, a.lanes, a.lanes_given, a.models), (40, True, False, False, 4, False, ["m1"]))
+        a = bench.parse_args(["--history", "--bandit", "--lanes", "5", "m1"])
+        self.assertEqual((a.history, a.totals, a.lanes, a.lanes_given), (True, False, 5, True))
+        self.assertTrue(bench.parse_args(["--bandit", "--totals", "m1"]).totals)
+
+    def test_first_line_and_rows(self):
+        form = {"totals": ("souhrn průjezdů", "drive totals"), "history": ("deník průjezdů", "drive log")}
+        for argv, cs, en in ((["1", "--bandit", "m1"], "1 úloha u mýta (bandita, {}), 4 brány", "1 task at a toll (bandit, {}), 4 gates"),
+                             (["7", "--bandit", "--lanes", "5", "--history", "m1"], "7 úloh u mýta (bandita, {}), 5 bran", "7 tasks at a toll (bandit, {}), 5 gates"),
+                             (["3", "--totals", "--bandit", "m1"], "3 úlohy u mýta (bandita, {}), 4 brány", "3 tasks at a toll (bandit, {}), 4 gates")):
+            words = form["history"] if "--history" in argv else form["totals"] if "--totals" in argv else form[FORM]
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv)[0].splitlines()[0], cs.format(words[0]) + "; sada je pro všechny modely stejná")
+                self.assertEqual(self.cli(*argv, "--lang", "en")[0].splitlines()[0], en.format(words[1]) + ", the same for all models")
+        self.assertTrue(self.cli("--bandit", "m1")[0].startswith("100 úloh u mýta"))       # výchozí počet úloh
+        en = self.cli("6", "--bandit", "m1", "--lang", "en")[0].splitlines()
+        self.assertEqual(len(en), 6)
+        self.assertRegex(en[3], r"^m1 .*   \(explore \d+/\d+, best share \d+/\d+, tied share \d+/\d+\)$")
+        self.assertRegex(en[4], r"^ {20}errors: no exploration \d+, tie: more drives \d+, needless exploration \d+, most wins \d+, "
+                                r"fewest losses \d+, lowest share \d+, other \d+, invalid \d+$")
+        self.assertRegex(en[5], r"^ {20}one-step loss \d+\.\d pp \(rule \d+\.\d, greedy pick \d+\.\d, random \d+\.\d\)$")
+        self.assertEqual(len(self.cli("1", "--bandit", "m1")[0].splitlines()), 6)            # jediná úloha: prázdné třídy 0/0
+
+    def test_option_errors_in_both_languages(self):
+        lanes = ("Scénář Mýtné brány umí jen 4 nebo 5 bran (--lanes 4 nebo 5).", "The toll gate scenario supports only 4 or 5 gates (--lanes 4 or 5).")
+        form = ("Volby --totals a --history jdou jen s --bandit.", "The --totals and --history options work only with --bandit.")
+        for argv, (cs, en) in ((["6", "--bandit", "--lanes", "3", "m1"], lanes), (["--bandit", "--lanes", "6", "m1"], lanes),
+                               (["--bandit", "--lanes", "2", "m1"], lanes), (["6", "--totals", "m1"], form), (["--history", "--queue", "m1"], form),
+                               (["--bandit", "--weighted", "m1"], ("Volba --weighted jde jen s --queue.", "The --weighted option works only with --queue.")),
+                               (["--bandit", "--rows", "m1"], ("Volby --rows a --blocked jdou jen s --lookahead.",
+                                                               "The --rows and --blocked options work only with --lookahead."))):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", cs))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", en))
+        for argv in (["--bandit", "--queue", "m1"], ["--bandit", "--rule", "m1"], ["--bandit", "--bet", "m1"], ["--bandit", "--timetable", "m1"],
+                     ["--bandit", "--totals", "--history", "m1"], ["--bandit", "--lanes", "9", "m1"], ["--bandit"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.cli(*argv), ("", bench.__doc__))
+                self.assertEqual(self.cli(*argv, "--lang", "en"), ("", bench.USAGE_EN))
+        self.assertEqual(self.sent, [])
+
+    def test_both_forms_send_the_same_tasks(self):
+        self.cli("6", "--bandit", "--totals", "m1")
+        totals, self.sent = [json.loads(body) for body in self.sent], []
+        self.cli("6", "--bandit", "--history", "m1")
+        history = [json.loads(body) for body in self.sent]
+        self.assertEqual((len(totals), len(history)), (7, 7))                   # zahřátí a šest úloh
+        self.assertTrue(all(list(p["questions"]) == ["toll"] for p in totals))
+        self.assertTrue(all(list(p["questions"]) == ["toll_log"] for p in history))
+        self.assertEqual([totals_of(p["state"]) for p in totals], [totals_of(p["state"]) for p in history])
+
+    def test_mirror_and_inject_work_with_bandit(self):
+        out, code = self.cli("8", "--bandit", "--mirror", "--inject", "--deadline-ms", "9", "m1")
+        self.assertIsNone(code)
+        lines = out.splitlines()
+        self.assertIn("stabilita", lines[2])
+        self.assertIn("goodput", lines[2])
+        self.assertTrue(lines[4].strip().startswith("přesnost variant: "), lines[4])
+        self.assertTrue(lines[5].strip().startswith("trojský kůň: 2 úloh s pokynem"), lines[5])
+        self.assertTrue(lines[6].strip().startswith("chyby: bez průzkumu "), lines[6])
+        self.assertTrue(lines[7].strip().startswith("ztráta jednoho kroku "), lines[7])
+
+    def test_usage_names_the_options(self):
+        for text in (bench.__doc__, bench.USAGE_EN):
+            self.assertIn("python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...", text)
+            self.assertIn("python bench.py 100 --bandit tev1", text)
+            self.assertIn("\n--bandit:   ", text)
+            self.assertIn("\n--totals, --history:  ", text)
+            self.assertIn(FORM + ".", text)
+
+
 if __name__ == "__main__":
     unittest.main()

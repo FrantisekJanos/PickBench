@@ -15,6 +15,7 @@ Použití:  python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<soubor>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<soubor>.json [--deadline-ms L] model1 model2 ...
 Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -33,6 +34,7 @@ Příklad:  python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
           python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
 
 Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N situací (výchozí 100).
 --numbers:  číselné duely, model volí bránu s největším číslem z K bran, N řad (výchozí 100).
@@ -143,6 +145,16 @@ Bez voleb:  překážky, model volí cílový pruh z K pruhů (výchozí 3), N s
             ve třech čtvrtinách úloh; i to je uvažování o linkách, jen neúplné. S --lanes se nekombinuje.
 --board, --cells:  jen s --tictactoe: podoba stavu, úlohy jsou v obou stejné. --board = tři řádky desky jako řetězce
             („.“ volné pole); --cells = každé pole jménem rNcM. Bez volby platí --cells.
+--bandit:   mýtné brány (bandita): každá z K bran (4 nebo 5, výchozí 4) vyplácí odměnu s vlastní skrytou šancí a stav
+            nese, kolikrát už auto každou branou projelo a kolikrát vyhrálo. Model volí další bránu podle pravidla v zadání:
+            bránu s méně než 3 průjezdy vyzkoušet, jinak nejvyšší podíl výher, při shodě podílů tu s méně průjezdy; správná
+            brána je vždy jediná. Měří se uplatnění pravidla proti lákadlu „vezmi nejlepší podíl“, ne jestli model zkoumá sám.
+            N úloh (výchozí 100), rovnoměrně ve třech třídách: průzkum, nejvyšší podíl, shoda podílů. Za řádkem modelu přesnost
+            podle třídy, pod ním chyby (bez průzkumu, při shodě víc průjezdů, zbytečný průzkum, nejvíc výher, nejméně proher,
+            nejnižší podíl, jiné, neplatné) a ztráta jednoho kroku proti skrytým šancím (pravidlo, hladová volba, náhoda);
+            průzkum v jednom kroku vždy stojí, ztráta proto není míra kvality. Jen --lanes 4 nebo 5.
+--totals, --history:  jen s --bandit: podoba stavu, úlohy jsou v obou stejné. totals = u každé brány počet průjezdů
+            a výher; history = deník všech průjezdů (brána, výhra nebo prohra) od nejstaršího. Bez volby platí totals.
 --emails:   třídění e-mailů do kategorií sady, N e-mailů (výchozí celá sada, při větším N se opakuje).
 --mirror:   každá úloha třikrát (původní zadání, obrácené pořadí možností, jinak formulované zadání);
             přibude stabilita = podíl úloh se stejnou odpovědí ve všech třech variantách.
@@ -185,6 +197,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -203,6 +216,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
           python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -313,6 +327,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             without an opponent's mark finds the fork in about three quarters of the tasks: partial reasoning. Not with --lanes.
 --board, --cells:  only with --tictactoe: the form of the state; the tasks are the same in both. --board = the three rows
             of the board as strings ("." for a free cell); --cells = every cell by its name rNcM. Without the option: --cells.
+--bandit:   toll gates (bandit): each of K gates (4 or 5, default 4) pays a prize with its own hidden chance, and the state
+            says how many times the car has gone through each gate and how many of those drives won. The model picks the next
+            gate by the rule in the prompt: try a gate with fewer than 3 drives, otherwise take the highest share of wins, on a
+            tied share the gate with fewer drives; the right gate is always unique. It measures applying the rule against the
+            pull of "take the best share", not exploring on its own. N tasks (default 100), spread evenly over three classes:
+            explore, best share, tied share. After the model row, the accuracy by class; below it the errors (no exploration,
+            more drives in a tie, needless exploration, most wins, fewest losses, lowest share, other, invalid) and the one-step
+            loss against the hidden chances (rule, greedy pick, random); exploring always costs in one step, so it is no measure of quality. Only --lanes 4 or 5.
+--totals, --history:  only with --bandit: the form of the state; the tasks are the same in both. totals = the drives and
+            wins of every gate; history = a log of all drives (gate, and win or loss), oldest first. Without the option: totals.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
@@ -3746,6 +3770,9 @@ def parse_args(argv):
     p.add_argument("--tictactoe", action="store_true")
     p.add_argument("--board", action="store_true")
     p.add_argument("--cells", action="store_true")
+    p.add_argument("--bandit", action="store_true")             # mýtné brány: výchozí 4 brány dosadí níže
+    p.add_argument("--totals", action="store_true")
+    p.add_argument("--history", action="store_true")
     p.add_argument("--pairs", action="store_true")
     p.add_argument("--public")
     p.add_argument("--mirror", action="store_true")
@@ -3760,6 +3787,8 @@ def parse_args(argv):
         a.lanes = 4 if a.memory or a.lookahead or a.queue or a.bet else 3      # paměťová stopa a sázka: 4 brány, dva kroky dopředu a fronta: 4 pruhy
     if a.diff and not a.lanes_given:
         a.lanes = DIFF_LANES                         # co se změnilo: výchozí počet pruhů (rozhodl pokus nanečisto)
+    if a.bandit and not a.lanes_given:
+        a.lanes = BANDIT_GATES[0]                    # mýtné brány: výchozí 4 brány
     return a
 
 
@@ -4043,12 +4072,15 @@ def main(argv):
     scenarios += (args.diff,)                        # co se změnilo
     scenarios += (args.pattern,)                     # vzor soupeře
     scenarios += (args.tictactoe,)                   # tah na výhru
+    scenarios += (args.bandit,)                      # mýtné brány
     if (not args.models or not 2 <= args.lanes <= 8 or sum(map(bool, scenarios)) > 1
             or ((args.lookahead or args.bet) and args.lanes < 3) or (args.rows and args.blocked) or (args.matched_by and args.labeled)
             or (args.sorted and args.shuffled) or (args.as_choice and args.as_score) or (args.counter and args.predict)
             or (args.board and args.cells)):
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.dicts and args.lists:
+        sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
+    if args.totals and args.history:                 # mýtné brány: dvě podoby stavu naráz
         sys.exit(i18n.pick({"cs": __doc__, "en": USAGE_EN}))
     if args.public and (args.mirror or args.inject):
         sys.exit(i18n.t("bench.err.publicCombo"))
@@ -4066,6 +4098,10 @@ def main(argv):
         sys.exit(i18n.t("bench.err.lanesRule"))
     if args.weighted and not args.queue:
         sys.exit(i18n.t("bench.err.weightedQueue"))
+    if (args.totals or args.history) and not args.bandit:
+        sys.exit(i18n.t("bench.err.formBandit"))
+    if args.bandit and args.lanes not in BANDIT_GATES:
+        sys.exit(i18n.t("bench.err.lanesBandit"))
     if (args.dicts or args.lists) and not args.diff:
         sys.exit(i18n.t("bench.err.formDiff"))
     if args.hint and args.inject:
@@ -4279,6 +4315,19 @@ def main(argv):
                 r = run_tictactoe(m, cases, args.mirror, args.inject, args.deadline_ms, form)
                 print_row(r, tictactoe_note(r))
                 print_tictactoe(r)
+    elif args.bandit:
+        form = "history" if args.history else "totals" if args.totals else BANDIT_FORM
+        cases = bandit_cases(args.n or 100, args.lanes)  # úlohy jsou v obou podobách stejné, podoba mění jen zápis stavu
+        if form == "history":
+            print(i18n.t("bench.intro.banditHistory", n=len(cases), lanes=args.lanes) + "\n")
+        else:
+            print(i18n.t("bench.intro.bandit", n=len(cases), lanes=args.lanes) + "\n")
+        print(head)
+        for m in args.models:
+            with hosted_model(m):
+                r = run_bandit(m, cases, args.mirror, args.inject, args.deadline_ms, form)
+                print_row(r, bandit_note(r))
+                print_bandit(r)
     else:
         cases = make_cases(args.n or 100, args.lanes)
         print(i18n.t("bench.intro.lanes", n=len(cases), lanes=args.lanes) + "\n")

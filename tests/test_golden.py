@@ -65,6 +65,9 @@ BENCH = {                                            # jméno zlatého souboru �
     "bench-tictactoe": ["24", "--tictactoe", "m1"],                    # bez podoby: výchozí; 24 úloh: objeví se všechny čtyři třídy
     "bench-tictactoe-mirror": ["24", "--tictactoe", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],
     "bench-tictactoe-board": ["12", "--tictactoe", "--board", "m1"],
+    "bench-bandit": ["12", "--bandit", "m1"],                                                           # bez podoby a bez --lanes: výchozí
+    "bench-bandit-mirror": ["12", "--bandit", "--mirror", "--inject", "--deadline-ms", "9", "m1", "m2"],
+    "bench-bandit-history": ["12", "--bandit", "--history", "--lanes", "5", "m1"],
 }
 HWBENCH = {                                          # jméno zlatého souboru → argumenty hwbench.py
     "hwbench-latency": ["latency", "--n", "20", "m1"],
@@ -267,7 +270,7 @@ class English(unittest.TestCase):
                 self.assertEqual(CZECH.findall(en), [])
 
     def test_requests_to_the_model_are_the_same_bytes_in_both_languages(self):      # co jde do modelu, se s jazykem nemění ani o bajt
-        for name in ("bench-hint", "bench-hint-mirror", "bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-cruise-score", "bench-timetable", "bench-timetable-shuffled", "bench-diff", "bench-diff-lists", "bench-pattern", "bench-pattern-counter", "bench-pattern-mirror", "bench-tictactoe", "bench-tictactoe-mirror", "bench-tictactoe-board", "hwbench-latency", "hwbench-questions", "hwbench-context", "hwbench-cache", "hwbench-repeat"):
+        for name in ("bench-hint", "bench-hint-mirror", "bench-lanes-volby", "bench-numbers", "bench-emails", "bench-public", "bench-signs", "bench-signs-pairs", "bench-memory", "bench-memory-count", "bench-barrier", "bench-barrier-plain", "bench-lookahead", "bench-lookahead-rows", "bench-lookahead-blocked", "bench-rule", "bench-rule-matched-by", "bench-rule-labeled", "bench-queue", "bench-queue-weighted", "bench-bet", "bench-bet-lanes", "bench-cruise", "bench-cruise-mirror", "bench-cruise-score", "bench-timetable", "bench-timetable-shuffled", "bench-diff", "bench-diff-lists", "bench-pattern", "bench-pattern-counter", "bench-pattern-mirror", "bench-tictactoe", "bench-tictactoe-mirror", "bench-tictactoe-board", "bench-bandit", "bench-bandit-mirror", "bench-bandit-history", "hwbench-latency", "hwbench-questions", "hwbench-context", "hwbench-cache", "hwbench-repeat"):
             with self.subTest(name=name):
                 cs, en = [], []
                 capture(name, "cs", cs)

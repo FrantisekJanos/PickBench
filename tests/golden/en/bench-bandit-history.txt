@@ -1,0 +1,6 @@
+12 tasks at a toll (bandit, drive log), 5 gates, the same for all models
+
+model                    mean   median     p95    min     max   dec./s  correct    conf.    ECE  tokens
+m1                       11ms     12ms    17ms    5ms    17ms     88.2      17%      73%    57%     451   (explore 1/7, best share 1/2, tied share 0/3)
+                    errors: no exploration 0, tie: more drives 1, needless exploration 1, most wins 2, fewest losses 0, lowest share 3, other 3, invalid 0
+                    one-step loss 36.2 pp (rule 20.4, greedy pick 5.1, random 28.2)

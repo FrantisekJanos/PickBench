@@ -15,6 +15,7 @@ Usage:    python bench.py [N] [--lanes K] [--mirror] [--inject] [--deadline-ms L
           python bench.py [N] --diff [--dicts | --lists] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --pattern [--counter | --predict] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --tictactoe [--board | --cells] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
+          python bench.py [N] --bandit [--totals | --history] [--lanes K] [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --emails datasets/<file>.json [--mirror] [--inject] [--deadline-ms L] model1 model2 ...
           python bench.py [N] --public datasets/public/<file>.json [--deadline-ms L] model1 model2 ...
 Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
@@ -33,6 +34,7 @@ Examples: python bench.py 100 nimble:9b-q4_K_M tev1 tev1:0.8b cf:clef-flash
           python bench.py 100 --diff tev1
           python bench.py 100 --pattern tev1
           python bench.py 100 --tictactoe tev1
+          python bench.py 100 --bandit tev1
 
 No options: obstacles, the model picks the target lane out of K lanes (default 3), N situations (default 100).
 --numbers:  number duels, the model picks the gate with the largest number out of K gates, N rows (default 100).
@@ -143,6 +145,16 @@ No options: obstacles, the model picks the target lane out of K lanes (default 3
             without an opponent's mark finds the fork in about three quarters of the tasks: partial reasoning. Not with --lanes.
 --board, --cells:  only with --tictactoe: the form of the state; the tasks are the same in both. --board = the three rows
             of the board as strings ("." for a free cell); --cells = every cell by its name rNcM. Without the option: --cells.
+--bandit:   toll gates (bandit): each of K gates (4 or 5, default 4) pays a prize with its own hidden chance, and the state
+            says how many times the car has gone through each gate and how many of those drives won. The model picks the next
+            gate by the rule in the prompt: try a gate with fewer than 3 drives, otherwise take the highest share of wins, on a
+            tied share the gate with fewer drives; the right gate is always unique. It measures applying the rule against the
+            pull of "take the best share", not exploring on its own. N tasks (default 100), spread evenly over three classes:
+            explore, best share, tied share. After the model row, the accuracy by class; below it the errors (no exploration,
+            more drives in a tie, needless exploration, most wins, fewest losses, lowest share, other, invalid) and the one-step
+            loss against the hidden chances (rule, greedy pick, random); exploring always costs in one step, so it is no measure of quality. Only --lanes 4 or 5.
+--totals, --history:  only with --bandit: the form of the state; the tasks are the same in both. totals = the drives and
+            wins of every gate; history = a log of all drives (gate, and win or loss), oldest first. Without the option: totals.
 --emails:   sorting e-mails into the categories of the dataset, N e-mails (default the whole dataset; a larger N repeats it).
 --mirror:   every task three times (original prompt, reversed order of options, differently worded prompt);
             adds stability = the share of tasks with the same answer in all three variants.
