@@ -3,6 +3,7 @@
 Blok mezi značkami „sdíleno s Pythonem“ se z index.html vytáhne a pustí v node nad stejnými daty jako Python.
 Před něj jde blok textů (značky „texty“): věty chyb validátoru bere sdílený blok z něj funkcí t(), v jazyce stránky.
 Bez programu node se testy přeskočí."""
+import bisect
 import itertools
 import json
 import math
@@ -1620,6 +1621,62 @@ class Timetable(unittest.TestCase):
         self.assertEqual((warm["rule"], warm["truth"]), ("decoy", bench.TIMETABLE_DEPOTS.index(warm["answer"])))
         longest = max(len(json.dumps(bench.timetable_state(c, "sorted"))) for c in bench.timetable_cases(300, seed=2))
         self.assertGreaterEqual(len(json.dumps(bench.timetable_state(case, "sorted"))), longest)      # horní odhad délky dotazu ve stepEstimate
+
+
+TICTACTOE_ROWS_JS = ROWS_JS.replace("signRow(arg.lanes, rand)", "tictactoeRow(rand)")
+assert TICTACTOE_ROWS_JS != ROWS_JS
+TICTACTOE_PAGE = {}
+
+
+def tictactoe_page(n, seed=1):
+    """Úlohy generátoru stránky (jednou za běh modulu) a tytéž jako n-tice bench.py (deska, značka, pole odpovědi, třída)."""
+    if (n, seed) not in TICTACTOE_PAGE:
+        raw = run_js(TICTACTOE_ROWS_JS, {"seed": seed, "n": n})
+        TICTACTOE_PAGE[n, seed] = raw, [(r["board"], r["you"], r["answer"], r["cls"]) for r in raw]
+    return TICTACTOE_PAGE[n, seed]
+
+
+def tictactoe_js(case):
+    return {"board": case[0], "you": case[1], "answer": case[2], "cls": case[3]}
+
+
+@unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+class Tictactoe(unittest.TestCase):
+    def test_constants_state_and_question_match_bench(self):
+        import bench
+        js = run_js("({ cells: TICTACTOE_CELLS, lines: TICTACTOE_LINES, classes: TICTACTOE_CLASSES, empty: TICTACTOE_EMPTY, few: TICTACTOE_FEW,"
+                    " tries: TICTACTOE_TRIES, balance: TICTACTOE_BALANCE, weight: TICTACTOE_CELL_WEIGHT, side: TICTACTOE_SIDE_X,"
+                    " neigh: TICTACTOE_NEIGH })", None)
+        self.assertEqual((js["cells"], js["lines"], js["classes"]), (list(bench.TICTACTOE_CELLS), [list(x) for x in bench.TICTACTOE_LINES], list(bench.TICTACTOE_CLASSES)))
+        self.assertEqual((js["empty"], js["few"], js["tries"]), (bench.TICTACTOE_EMPTY, bench.TICTACTOE_FEW, bench.TICTACTOE_TRIES))
+        for name, py in (("balance", bench.TICTACTOE_BALANCE), ("weight", bench.TICTACTOE_CELL_WEIGHT), ("side", bench.TICTACTOE_SIDE_X)):
+            self.assertEqual(json.dumps(js[name]), json.dumps(py), name)                         # i pořadí klíčů
+        self.assertEqual(js["neigh"], [list(x) for x in bench.TICTACTOE_NEIGH])
+        cases = bench.tictactoe_cases(300, seed=3)
+        states = run_js("arg.map(c => tictactoeState(c))", [tictactoe_js(c) for c in cases])
+        for case, state in zip(cases, states):
+            self.assertEqual(json.dumps(state), json.dumps(bench.tictactoe_state(case, "cells")), case)      # bajtově, i pořadí klíčů
+        self.assertEqual(json.dumps(run_js("tictactoeQuestion()", None)), json.dumps(bench.tictactoe_question("cells")))
+
+    def test_alternative_wording_matches_bench(self):              # ALT stojí mimo sdílený blok: čte se ze zdrojáku stránky
+        import bench
+        page = (ROOT / "index.html").read_text(encoding="utf-8").replace("\r\n", "\n")
+        alt = re.search(r"\nconst ALT = \{[^\n]*\n(.*?)\n\};", page, re.S).group(1)
+        self.assertEqual(re.findall(r"^  cell_cells: '([^'\\]*)',$", alt, re.M), [bench.ALT["cell_cells"]])
+        self.assertNotIn("\n  cell: ", "\n" + alt)                 # podoba --board je jen v bench.py
+
+    def test_rules_and_pools_match_bench(self):
+        import bench
+        positions = bench.tictactoe_positions()
+        js = run_js("({ positions: tictactoePositions(), pools: tictactoePools(), solved: tictactoePositions().map(b => [tictactoeSolve(b),"
+                    " tictactoeValue(b), tictactoeWins(b, 'X'), tictactoeWins(b, 'O'), tictactoeForks(b, 'X'), tictactoeForks(b, 'O')]) })", None)
+        self.assertEqual(js["positions"], positions)
+        pools = bench.tictactoe_pools()
+        self.assertEqual(js["pools"], {c: [list(pools[c].get(i, ())) for i in range(9)] for c in bench.TICTACTOE_CLASSES})
+        for b, (solved, value, wx, wo, fx, fo) in zip(positions, js["solved"]):
+            s = bench.tictactoe_solve(b)
+            self.assertEqual((solved, value), (list(s) if s else None, bench.tictactoe_value(b)), b)
+            self.assertEqual((wx, wo, fx, fo), (bench.tictactoe_wins(b, "X"), bench.tictactoe_wins(b, "O"), bench.tictactoe_forks(b, "X"), bench.tictactoe_forks(b, "O")), b)
 
 
 if __name__ == "__main__":
