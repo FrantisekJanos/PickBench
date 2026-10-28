@@ -544,6 +544,44 @@ class Page(unittest.TestCase):              # scénář ve stránce; řešitel, 
         case = {"moves": ["rock"], "next": "paper", "cls": "p1"}
         self.assertEqual(run_page_js(code), {"cases": [case] * 3, "choices": ["paper", "rock", None]})
 
+    def test_drawing_writes_only_through_t(self):
+        self.assertNotIn("fillText(", page_function("drawPatternMove"))                         # tahy jen kresbou
+        body = pattern_body()
+        for part in ("drawTrail(g) {", "memoryTrailRow(g)", "t('pattern.trailTitle')", "t('pattern.now')", "t('pattern.cycle'",
+                     "t(PATTERN_MOVE_NAME[", "drawPatternMove(ctx, ", "drawPatternMove(tc, ", "patternLabel(r)"):
+            self.assertIn(part, body)
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_labels_name_the_outcome(self):             # štítek: trefa, chyba s druhem, chyba bez druhu, neplatná, nestihl
+        from test_parity import run_js
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("RESULT", "PATTERN_MOVE_NAME", "PATTERN_KIND_NAME"))
+        code = "(() => {" + consts + page_function("patternLabel") + (
+            "const moves = ['rock', 'rock', 'paper', 'scissors', 'rock', 'paper', 'scissors', 'rock', 'paper'];"      # příklad ze specu: další scissors
+            "const r = (result, chosen) => ({ moves, next: 'scissors', cls: 'p3', truth: 2, result, chosen });"
+            "return [r('ok', 2), r('bad', 0), r('bad', 1), r('bad', -1), r('late', undefined)].map(patternLabel); })()")
+        cs, en = run_js(code, None), run_js(code, None, "en")
+        self.assertEqual([x["text"] for x in cs], ["✓ soupeř zahrál nůžky", "✗ zvolil kámen, soupeř zahrál nůžky (protitah místo předpovědi)",
+                                                   "✗ zvolil papír, soupeř zahrál nůžky (opakuje poslední tah)", "✗ neplatná odpověď", "⏱ nestihl"])
+        self.assertEqual(en[1]["text"], "✗ picked rock, the opponent played scissors (counter instead of prediction)")
+        self.assertEqual([x["color"] for x in cs], ["#3fb950", "#f85149", "#f85149", "#8b9aa8", "#8b9aa8"])
+
+    @unittest.skipUnless(shutil.which("node"), "program node není v PATH")
+    def test_strip_hides_the_cycle_until_the_row_is_passed(self):   # divák vidí totéž co model; po průjezdu cyklus a skutečný tah
+        from test_parity import run_js
+        drawtrail = re.search(r"\n  drawTrail\(g\) \{.*?\n  \},", pattern_body(), re.S).group(0)[1:-1]
+        page = page_source()
+        consts = "".join(re.search(r"\nconst %s = [^\n]*\n" % n, page).group(0) for n in ("PATTERN_MOVE_NAME", "PATTERN_RUN", "PATTERN_WARMUP"))
+        code = "(() => { const texts = [], W = 300;" + consts + (
+            "const tc = new Proxy({ fillText(s) { texts.push(s); } }, { get: (o, k) => k in o ? o[k] : () => {}, set: (o, k, v) => { o[k] = v; return true; } });"
+            "const c = { width: 300, height: 70, hidden: false, getContext: () => tc }, $ = () => c; let shown;"
+            "const memoryTrailRow = () => shown, drawPatternMove = () => {}; const o = {" + drawtrail + "};"
+            "shown = { moves: ['rock', 'rock', 'paper', 'scissors', 'rock', 'paper', 'scissors', 'rock', 'paper'], next: 'scissors', cls: 'p3', run: 8, result: null };"
+            "o.drawTrail({}); const a = texts.splice(0); shown = { ...shown, result: 'ok' }; o.drawTrail({}); return [a, texts]; })()")
+        before, after = run_js(code, None)
+        self.assertEqual(before, ["soupeř hrál (nejstarší vlevo)", "?", "teď"])
+        self.assertEqual(after, ["soupeř hrál (nejstarší vlevo)", "cyklus: nůžky, kámen, papír (perioda 3)"])
+
 
 if __name__ == "__main__":
     unittest.main()

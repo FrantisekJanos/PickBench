@@ -896,6 +896,12 @@ const TEXTS = {
   'pattern.kind.period': { cs: 'špatná perioda', en: 'wrong period' },
   'pattern.kind.transition': { cs: 'přechod', en: 'transition' },
   'pattern.counterGiven': { cs: 'protitah místo předpovědi', en: 'counter instead of prediction' },
+  'pattern.label.ok': { cs: '✓ soupeř zahrál {truth}', en: '✓ the opponent played {truth}' },
+  'pattern.label.bad': { cs: '✗ zvolil {pick}, soupeř zahrál {truth}', en: '✗ picked {pick}, the opponent played {truth}' },
+  'pattern.label.badKind': { cs: '✗ zvolil {pick}, soupeř zahrál {truth} ({kind})', en: '✗ picked {pick}, the opponent played {truth} ({kind})' },
+  'pattern.trailTitle': { cs: 'soupeř hrál (nejstarší vlevo)', en: 'the opponent played (oldest on the left)' },
+  'pattern.now': { cs: 'teď', en: 'now' },
+  'pattern.cycle': { cs: 'cyklus: {moves} (perioda {p})', en: 'cycle: {moves} (period {p})' },
   'legend.pattern.beats': { cs: 'Kámen tupí nůžky, nůžky stříhají papír, papír balí kámen.', en: 'Rock blunts scissors, scissors cut paper, paper wraps rock.' },
   'legend.pattern.strip': { cs: 'Pás dole: tahy soupeře, nejstarší vlevo. Po krátké rozehrávce opakuje dokola vzor o 1–4 tazích.', en: "Strip below: the opponent's moves, oldest on the left. After a short opening it repeats a pattern of 1–4 moves over and over." },
   'legend.pattern.goal': { cs: 'Auto má projet branou s tahem, který soupeř zahraje příště.', en: 'The car has to pass through the gate of the move the opponent plays next.' },
@@ -3301,6 +3307,38 @@ const diff = {
 const PATTERN_MOVE_NAME = { rock: 'pattern.move.rock', paper: 'pattern.move.paper', scissors: 'pattern.move.scissors' };
 const PATTERN_KIND_NAME = { counter_given: 'pattern.kind.counter_given', last: 'pattern.kind.last', frequent: 'pattern.kind.frequent', period: 'pattern.kind.period', transition: 'pattern.kind.transition' };
 
+// Piktogram tahu na plátno c (silnice, bublina soupeře i pás), bez textu: kámen = šedý oblázek, papír = bílý list s přehnutým rohem, nůžky = dvě čepele do X s kroužky rukojetí.
+function drawPatternMove(c, move, x, y, rad) {
+  const lw = c.lineWidth, cap = c.lineCap;
+  if (move === 'rock') {
+    c.fillStyle = '#8b949e'; c.strokeStyle = '#5b636b'; c.lineWidth = Math.max(1.5, rad * 0.16);
+    c.beginPath(); c.ellipse(x, y + rad * 0.1, rad * 1.1, rad * 0.8, -0.2, 0, 7); c.fill(); c.stroke();
+  } else if (move === 'paper') {
+    const l = x - rad * 0.7, r = x + rad * 0.7, top = y - rad * 0.95, bot = y + rad * 0.95, fold = rad * 0.55;
+    c.fillStyle = '#e6edf3'; c.strokeStyle = '#8b949e'; c.lineWidth = Math.max(1, rad * 0.12); c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(l, top); c.lineTo(r - fold, top); c.lineTo(r, top + fold); c.lineTo(r, bot); c.lineTo(l, bot); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#8b949e'; c.beginPath(); c.moveTo(r - fold, top); c.lineTo(r - fold, top + fold); c.lineTo(r, top + fold); c.closePath(); c.fill();
+    c.lineJoin = 'miter';
+  } else {
+    c.strokeStyle = '#c9d1d9'; c.lineWidth = Math.max(2, rad * 0.24); c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x - rad * 0.7, y - rad); c.lineTo(x + rad * 0.45, y + rad * 0.3); c.moveTo(x + rad * 0.7, y - rad); c.lineTo(x - rad * 0.45, y + rad * 0.3); c.stroke();
+    c.lineWidth = Math.max(1.5, rad * 0.18);
+    [-1, 1].forEach(s => { c.beginPath(); c.arc(x + s * rad * 0.5, y + rad * 0.72, rad * 0.3, 0, 7); c.stroke(); });
+  }
+  c.lineWidth = lw; c.lineCap = cap;
+}
+
+// Štítek projeté řady: výsledek slovem a jeho barva (zelená správně, červená chyba, šedá neplatná a nestihl); druh chyby v závorce.
+function patternLabel(r) {
+  const truth = t(PATTERN_MOVE_NAME[r.next]);
+  if (r.result === 'ok') return { text: t('pattern.label.ok', { truth }), color: RESULT.ok.color };
+  if (r.result === 'late') return { text: t('label.late'), color: RESULT.late.color };
+  if (!(Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 3)) return { text: t('label.invalid'), color: RESULT.late.color };
+  const pick = t(PATTERN_MOVE_NAME[PATTERN_MOVES[r.chosen]]), kind = patternErrorKind({ moves: r.moves, next: r.next, cls: r.cls }, PATTERN_MOVES[r.chosen]);
+  if (!PATTERN_KIND_NAME[kind]) return { text: t('pattern.label.bad', { pick, truth }), color: RESULT.bad.color };
+  return { text: t('pattern.label.badKind', { pick, truth, kind: t(PATTERN_KIND_NAME[kind]) }), color: RESULT.bad.color };
+}
+
 const pattern = {
   __proto__: rowBase,
   id: 'pattern',                                   // brány jsou vždy 3: silnice má 3 pruhy, volič je zamčený jako u pravidla
@@ -3329,9 +3367,10 @@ const pattern = {
     g.cases.push({ moves: task.moves, next: task.next, cls: task.cls });
     g.choices.push(PATTERN_MOVES[move] ?? null);
   },
-  // Brána: slovo s tahem; před průjezdem modrý obrys zvolené brány, po něm správná brána zezelená.
+  // Brána: piktogram tahu a pod ním slovo; před průjezdem modrý obrys zvolené brány, po něm správná brána zezelená a pod řadou štítek výsledku.
+  // Vpravo nad branou nůžek stojí soupeř: v bublině otazník, po průjezdu jeho tah.
   drawItems(g) {
-    const hw = LW * 0.42;
+    const hw = LW * 0.42, rad = Math.min(LW * 0.2, 10);
     for (const r of g.rows) {
       const y = CAR_Y - r.y * CELL;
       ctx.globalAlpha = r.result ? 0.35 : 1;
@@ -3340,16 +3379,65 @@ const pattern = {
         const x = (lane + 0.5) * LW;
         ctx.fillStyle = r.result && lane === r.truth ? '#1f4d2b' : '#33414f';
         ctx.beginPath(); ctx.roundRect(x - hw, y - 20, 2 * hw, 40, 6); ctx.fill();
+        drawPatternMove(ctx, m, x, y - 6, rad);
         ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3';
-        ctx.fillText(t(PATTERN_MOVE_NAME[m]), x, y, 2 * hw - 4);
+        ctx.fillText(t(PATTERN_MOVE_NAME[m]), x, y + 12, 2 * hw - 4);
       });
       ctx.globalAlpha = 1;
       if (r.result === null && Number.isInteger(r.chosen) && r.chosen >= 0 && r.chosen < 3) {
         ctx.strokeStyle = '#4cc2ff'; ctx.lineWidth = 3; ctx.strokeRect((r.chosen + 0.5) * LW - hw, y - 20, 2 * hw, 40);
       }
+      const fx = W - 18, hy = y - 33;                          // soupeř: hlava, tělo a ruka čarami, nad ním bublina
+      ctx.strokeStyle = '#c9d1d9'; ctx.fillStyle = '#c9d1d9'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(fx, hy, 4, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(fx, hy + 4); ctx.lineTo(fx, hy + 12); ctx.moveTo(fx, hy + 7); ctx.lineTo(fx - 6, hy + 3); ctx.stroke();
+      ctx.lineCap = 'butt';
+      ctx.fillStyle = '#20262d'; ctx.strokeStyle = '#8b9aa8'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(fx - 26, hy - 34, 32, 24, 6); ctx.fill(); ctx.stroke();
+      if (r.result === null) { ctx.font = '700 14px "Segoe UI", sans-serif'; ctx.fillStyle = '#e6edf3'; ctx.fillText('?', fx - 10, hy - 21); }
+      else drawPatternMove(ctx, r.next, fx - 10, hy - 22, 7);
       this.drawRing(r, y, Math.min(LW * 0.26, 15));
+      if (r.result !== null) { const lab = patternLabel(r); drawRowLabel(lab.text, lab.color, Math.min(y + 32, H - 10)); }
     }
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  },
+  // Pás historie pod silnicí: tahy soupeře nejbližší řady zarovnané doprava s jednou volnou buňkou vpravo, nejstarší vlevo. Před vyhodnocením
+  // se rozehrávka od cyklu neodlišuje (model to také nevidí) a ve volné buňce je otazník; po něm je cyklus podbarvený po opakováních,
+  // rozehrávka průsvitná a ve volné buňce skutečný tah.
+  drawTrail(g) {
+    const c = $('trail'), tc = c.getContext('2d');
+    if (c.width !== W) c.width = W;
+    tc.fillStyle = '#20262d'; tc.fillRect(0, 0, c.width, c.height);
+    const r = memoryTrailRow(g);
+    c.hidden = !r;                                        // benchmark bez hry nemá řady: prázdný pás se schová
+    if (!r) return;
+    const n = r.moves.length, cell = W / (PATTERN_RUN[1] + PATTERN_WARMUP[1] + 1), rad = Math.min(cell * 0.3, 9), x0 = W - (n + 1) * cell;
+    const p = +r.cls[1], done = r.result !== null, from = n - r.run;
+    tc.textAlign = 'center'; tc.textBaseline = 'middle';
+    tc.font = '600 11px "Segoe UI", sans-serif'; tc.fillStyle = '#e6edf3';
+    tc.fillText(t('pattern.trailTitle'), W / 2, 10, W - 8);
+    r.moves.forEach((m, i) => {
+      const x = x0 + (i + 0.5) * cell, warm = done && i < from;
+      if (done && !warm) {                                // cyklická část: střídavě dva odstíny po p tazích odzadu
+        tc.fillStyle = Math.floor((n - 1 - i) / p) % 2 ? 'rgba(88,166,255,.14)' : 'rgba(88,166,255,.3)';
+        tc.fillRect(x - cell / 2, 19, cell, 38);
+      }
+      tc.globalAlpha = warm ? 0.4 : 1;
+      drawPatternMove(tc, m, x, 31, rad);
+      tc.globalAlpha = 1;
+    });
+    const x = x0 + (n + 0.5) * cell;
+    tc.font = '600 10px "Segoe UI", sans-serif'; tc.fillStyle = '#e6edf3';
+    if (!done) {                                          // otazník: model právě volí tah této řady
+      tc.strokeStyle = '#8b9aa8'; tc.lineWidth = 1.5; tc.setLineDash([3, 3]);
+      tc.strokeRect(x - cell * 0.38, 19, cell * 0.76, 38); tc.setLineDash([]);
+      tc.font = '700 14px "Segoe UI", sans-serif'; tc.fillText('?', x, 38);
+      tc.font = '600 10px "Segoe UI", sans-serif'; tc.fillStyle = '#8b9aa8'; tc.fillText(t('pattern.now'), x, 64, cell);
+    } else {
+      drawPatternMove(tc, r.next, x, 38, rad);
+      tc.fillText(t('pattern.cycle', { moves: r.moves.slice(-p).map(m => t(PATTERN_MOVE_NAME[m])).join(', '), p }), W / 2, 64, W - 8);
+    }
+    tc.textAlign = 'start'; tc.textBaseline = 'alphabetic';
   },
   describeLast(task, res) {                                // tahy a brány jazykem stránky (model je dostal anglicky, říká třetí řádek), pak volba
     const move = m => t(PATTERN_MOVE_NAME[m]);

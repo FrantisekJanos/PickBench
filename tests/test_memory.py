@@ -478,8 +478,8 @@ class Page(unittest.TestCase):                                         # scéná
         self.assertEqual(page.count(REGISTRY), 1)
         self.assertEqual(page.count("['queue', 'legend', 'confPanel', 'trail'].forEach("), 1)        # pás se schovává jako ostatní panely scénáře
         self.assertEqual(page.count("SC.drawTrail?.(g);"), 1)
-        self.assertEqual(page.count("drawTrail(g) {"), 2)                                         # háček má paměťová stopa (historie) a skryté pravidlo (deník)
-        self.assertEqual(page.count("    c.hidden = !r;"), 2)                                     # benchmark bez hry nemá řady: prázdný pás se schová (v obou háčcích)
+        self.assertEqual(page.count("drawTrail(g) {"), 3)                                         # háček má paměťová stopa (historie), skryté pravidlo (deník), vzor soupeře (historie tahů)
+        self.assertEqual(page.count("    c.hidden = !r;"), 3)                                     # benchmark bez hry nemá řady: prázdný pás se schová (ve všech třech háčcích)
         # zahřívací úloha je pevná: nebere z rnd, jinak by se řady posunuly podle řidiče
         self.assertEqual(page.count("  warmTask() { return this.task(memoryWarm(LANES), null, null); },"), 1)
         body = page.split("\nconst memory = {", 1)[1].split("\n};\n", 1)[0]
