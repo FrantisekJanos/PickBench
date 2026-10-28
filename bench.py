@@ -4003,6 +4003,18 @@ def print_tictactoe(r):
     print(" " * 20 + i18n.t("bench.tictactoe.errors", **r["errors"]), flush=True)
 
 
+def bandit_note(r):
+    """Poznámka za řádkem modelu: přesnost mýtných bran podle třídy."""
+    return class_note(r["by_class"], {"explore": i18n.t("bench.bandit.explore"), "exploit": i18n.t("bench.bandit.exploit"),
+                                      "tie": i18n.t("bench.bandit.tie")})
+
+
+def print_bandit(r):
+    """Dva řádky pod řádkem modelu: druhy chyb, pak ztráta jednoho kroku se srovnáním (p. b., na desetinu)."""
+    print(" " * 20 + i18n.t("bench.bandit.errors", **r["errors"]), flush=True)
+    print(" " * 20 + i18n.t("bench.bandit.loss", **{name: f"{value:.1f}" for name, value in r["loss"].items()}), flush=True)
+
+
 def print_public(r, worst=5):
     """Řádek veřejné sady a pod ním mimo rozsah, nejhorší třídy a nejčastější záměny."""
     if not r["fit"]:

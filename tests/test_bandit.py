@@ -387,5 +387,31 @@ class RunBandit(unittest.TestCase):
         self.assertEqual((sum(e.values()) - e["invalid"], e["invalid"]), (10, 0))
 
 
+class Lines(unittest.TestCase):
+    def test_note_by_class(self):
+        r = {"by_class": {"explore": [3, 10], "exploit": [9, 11], "tie": [5, 12]}}
+        for lang, want in (("cs", "(průzkum 3/10, nejvyšší podíl 9/11, shoda podílů 5/12)"), ("en", "(explore 3/10, best share 9/11, tied share 5/12)")):
+            with i18n.process(lang):
+                self.assertEqual(bench.bandit_note(r), want)
+
+    def test_lines_in_both_languages(self):
+        r = {"errors": {"no_explore": 8, "tie_more": 4, "over_explore": 3, "most_wins": 2, "fewest_losses": 1, "lowest_rate": 0, "other": 5, "invalid": 6},
+             "loss": {"model": 11.54, "rule": 14.6, "greedy": 9.25, "random": 21.4}}
+        pad = " " * 20
+        self.assertEqual(printed("cs", bench.print_bandit, r),
+                         [pad + "chyby: bez průzkumu 8, shoda: víc průjezdů 4, zbytečný průzkum 3, nejvíc výher 2, nejméně proher 1, nejnižší podíl 0, jiné 5, neplatné 6",
+                          pad + "ztráta jednoho kroku 11.5 p. b. (pravidlo 14.6, hladová volba 9.2, náhoda 21.4)"])
+        self.assertEqual(printed("en", bench.print_bandit, r),
+                         [pad + "errors: no exploration 8, tie: more drives 4, needless exploration 3, most wins 2, fewest losses 1, lowest share 0, other 5, invalid 6",
+                          pad + "one-step loss 11.5 pp (rule 14.6, greedy pick 9.2, random 21.4)"])
+
+    def test_lines_with_empty_classes(self):
+        r = {"by_class": {"explore": [1, 1], "exploit": [0, 0], "tie": [0, 0]}, "errors": dict.fromkeys(bench.BANDIT_ERRORS, 0),
+             "loss": {"model": 0.0, "rule": 0.0, "greedy": 25.0, "random": 12.5}}
+        with i18n.process("en"):
+            self.assertEqual(bench.bandit_note(r), "(explore 1/1, best share 0/0, tied share 0/0)")
+        self.assertEqual(len(printed("en", bench.print_bandit, r)), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

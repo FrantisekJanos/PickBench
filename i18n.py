@@ -268,6 +268,17 @@ TEXTS = {
                                      "vidlička soupeře {wrong_side}, jen jedna hrozba {single_threat}, obsazené pole {occupied}, jiné {other}, neplatné {invalid}",
                                "en": "errors: block instead of win {block_not_win}, win missed {missed_win}, block missed {missed_block}, "
                                      "opponent's fork {wrong_side}, single threat only {single_threat}, occupied cell {occupied}, other {other}, invalid {invalid}"},
+    # Mýtné brány (--bandit): třídy v poznámce za řádkem modelu, pod ním řádek chyb (počty) a ztráta jednoho kroku
+    # ({model}, {rule}, {greedy}, {random} = hotová čísla na desetinu, procentní body).
+    "bench.bandit.explore": {"cs": "průzkum", "en": "explore"},
+    "bench.bandit.exploit": {"cs": "nejvyšší podíl", "en": "best share"},
+    "bench.bandit.tie": {"cs": "shoda podílů", "en": "tied share"},
+    "bench.bandit.errors": {"cs": "chyby: bez průzkumu {no_explore}, shoda: víc průjezdů {tie_more}, zbytečný průzkum {over_explore}, "
+                                  "nejvíc výher {most_wins}, nejméně proher {fewest_losses}, nejnižší podíl {lowest_rate}, jiné {other}, neplatné {invalid}",
+                            "en": "errors: no exploration {no_explore}, tie: more drives {tie_more}, needless exploration {over_explore}, "
+                                  "most wins {most_wins}, fewest losses {fewest_losses}, lowest share {lowest_rate}, other {other}, invalid {invalid}"},
+    "bench.bandit.loss": {"cs": "ztráta jednoho kroku {model} p. b. (pravidlo {rule}, hladová volba {greedy}, náhoda {random})",
+                          "en": "one-step loss {model} pp (rule {rule}, greedy pick {greedy}, random {random})"},
     # Veřejná sada. „Nevešlo se“ má stejnou stavbu jako run.didNotFit ve stránce; {reason} je důvod doslova od serveru.
     "bench.didNotFit": {"cs": "nevešlo se — server odmítl dotaz s nabídkou {labels} štítků (HTTP 400); sada se pro tento model neměří",
                         "en": "did not fit — the server refused the request; labels in the list: {labels} (HTTP 400); "
