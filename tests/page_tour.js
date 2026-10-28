@@ -6,9 +6,11 @@ async () => {
   await ready;
   const seen = new Set(), data = new Set();
   const add = (kind, s) => { for (const line of String(s ?? '').split('\n')) if (line.trim()) seen.add(kind + '\t' + line); };
+  const DIFF_RE = new RegExp('(?<![\\p{L}\\d_])(?:' + DIFF_WORDS.join('|') + ')(?![\\p{L}\\d_])', 'gu');
+  const scrub = s => SC.id === 'diff' ? String(s ?? '').replace(DIFF_RE, '§') : s;     // slova úloh Co se změnilo jsou data úlohy (jako texty sad), ne texty rozhraní
   const own = s => { if (typeof s === 'string' && s.trim().length > 1) data.add(s.trim()); };
   const proto = CanvasRenderingContext2D.prototype, fillText = proto.fillText;
-  proto.fillText = function (s, ...rest) { if (typeof s === 'string' && s.length > 1 && /\p{L}/u.test(s)) add('canvas', s); return fillText.call(this, s, ...rest); };
+  proto.fillText = function (s, ...rest) { if (typeof s === 'string' && s.length > 1 && /\p{L}/u.test(s)) add('canvas', scrub(s)); return fillText.call(this, s, ...rest); };
   const anchor = HTMLAnchorElement.prototype, click = anchor.click;
   anchor.click = function () { if (this.download) add('csv', this.download); else click.call(this); };
   const random = Math.random, decide0 = decide;
@@ -20,7 +22,7 @@ async () => {
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const p = n.parentElement;
       if (!p || p.closest('script, style, #tip') || (!last && p.closest('#last'))) continue;      // #tip: bublina drží po skrytí poslední text a naplní ji i skutečný ukazatel myši nad oknem; je to kopie data-tip, které se bere zvlášť jako „tip“
-      add('text', n.nodeValue);
+      add('text', p.closest('#last') ? scrub(n.nodeValue) : n.nodeValue);
     }
     for (const e of document.querySelectorAll('[data-tip]')) add('tip', e.dataset.tip);
     for (const a of ['title', 'placeholder', 'aria-label', 'label'])
@@ -48,7 +50,7 @@ async () => {
   const log = [];
 
   await sleep(1500); snap();                                // po načtení, s prvním stavem GPU
-  for (const scenario of ['numbers', 'signs', 'memory', 'barrier', 'lookahead', 'rule', 'queue', 'queueWeighted', 'bet', 'cruise', 'timetable', 'tictactoe', 'bandit', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
+  for (const scenario of ['numbers', 'signs', 'memory', 'barrier', 'lookahead', 'rule', 'queue', 'queueWeighted', 'bet', 'cruise', 'timetable', 'tictactoe', 'bandit', 'hint', 'diff', 'pattern', ...emails, ...publics, 'obstacles']) { await use({ scenario }); snap(); }
   await use({ scenario: 'neni-v-nabidce.json' }); snap();
 
   // benchmark bez hry: Pravidla a Náhodně, všechny scénáře, limit, trojský kůň
@@ -66,7 +68,14 @@ async () => {
   log.push((await run('bench', { scenario: 'timetable', inject: true })).why);
   log.push((await run('bench', { scenario: 'tictactoe', lanes: 5, inject: true })).why);     // volič na 5: stránka musí vzít 3 pruhy
   log.push((await run('bench', { scenario: 'bandit', lanes: 2, inject: true })).why);        // volič na 2: stránka musí vzít 4 brány
+  log.push((await run('bench', { scenario: 'hint', lanes: 4, inject: true })).why);            // trojský kůň se u nápovědy vypne
+  log.push((await run('bench', { scenario: 'diff', lanes: 8, inject: true })).why);
+  log.push((await run('bench', { scenario: 'pattern', lanes: 2, inject: true })).why);         // volič na 2: stránka musí vzít 3 brány
   for (const scenario of [...emails.slice(0, 2), ...publics]) log.push((await run('bench', { scenario, benchn: 10, deadline: 50 })).why);
+  // kalibrace: práh jistoty 0,9 (řádek pokrytí pod grafem) a hláška průchodu 2–8 u scénáře, kde nejde (tlačítko je tam vypnuté, proto přímo sweepAdd)
+  $('calT').value = 0.9; $('calT').dispatchEvent(new Event('input')); snap();
+  $('calT').value = 0.8; $('calT').dispatchEvent(new Event('input'));
+  if (emails.length) { await use({ scenario: emails[0] }); sweepAdd(); snap(); }
   Math.random = () => 0;                                    // řidič Náhodně volí vždy první možnost: stejné texty při každé prohlídce
   log.push((await run('bench', { driver: 'random', inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'signs', lanes: 4, inject: true })).why);
@@ -81,6 +90,9 @@ async () => {
   log.push((await run('bench', { driver: 'random', scenario: 'timetable', inject: true })).why);
   log.push((await run('bench', { driver: 'random', scenario: 'tictactoe', lanes: 5, inject: true })).why);      // obsazená pole a chyby
   log.push((await run('bench', { driver: 'random', scenario: 'bandit', lanes: 8, inject: true })).why);         // volič na 8: stránka vezme 5
+  log.push((await run('bench', { driver: 'random', scenario: 'hint', lanes: 2, inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'diff', lanes: 3, inject: true })).why);
+  log.push((await run('bench', { driver: 'random', scenario: 'pattern', lanes: 2, inject: true })).why);
   if (emails.length) log.push((await run('bench', { driver: 'random', scenario: emails[0], benchn: 10, inject: true })).why);
   for (const scenario of publics) log.push((await run('bench', { driver: 'random', scenario, benchn: 10 })).why);
 
@@ -109,6 +121,11 @@ async () => {
   log.push((await run('game', { driver: 'random', scenario: 'bandit', lanes: 4, runlen: 12, inject: true })).why);
   log.push((await run('game', { driver: 'random', scenario: 'queue', lanes: 8, runlen: 18 })).why);
   log.push((await run('game', { scenario: 'queueWeighted', lanes: 2, runlen: 18 })).why);
+  log.push((await run('game', { scenario: 'hint', lanes: 3, runlen: 16 })).why);                // dvě trojice
+  log.push((await run('game', { driver: 'random', scenario: 'hint', lanes: 8, runlen: 16 })).why);
+  log.push((await run('game', { scenario: 'diff', lanes: 4, runlen: 16, inject: true })).why);
+  log.push((await run('game', { driver: 'random', scenario: 'diff', lanes: 8, runlen: 16, inject: true })).why);
+  log.push((await run('game', { driver: 'random', scenario: 'pattern', runlen: 16, inject: true })).why);      // Náhodně volí vždy bránu 1: štítky s druhy chyb
   if (emails.length) {
     log.push((await run('game', { scenario: emails[0], runlen: 12 })).why);
     log.push((await run('game', { driver: 'random', scenario: emails[0], runlen: 16, inject: true })).why);
@@ -157,6 +174,9 @@ async () => {
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'timetable', mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'tictactoe', mirror: true, inject: true })).why);
     log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'bandit', lanes: 4, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'hint', lanes: 3, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'diff', lanes: 5, mirror: true, inject: true })).why);
+    log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: 'pattern', mirror: true, inject: true })).why);
     if (emails.length) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario: emails[0], benchn: 8, inject: true })).why);
     for (const scenario of publics) log.push((await run('bench', { driver: 'model', model: 'test:echo', scenario, benchn: 6 })).why);
   }
