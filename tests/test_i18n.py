@@ -1309,7 +1309,7 @@ process.stdout.write(JSON.stringify(out));
 VALS = {"driver": "model", "model": "tev1", "extra": True, "mirror": True, "scenario": "obstacles", "set": None, "lanes": 3,
         "mode": "ladder", "aborted": True, "speed": None, "best": None, "n": 12, "avg": 41.26, "p50": 40.0, "p95": 55.5, "min": 30.0,
         "max": 60.04, "rate": 9.87, "acc": 0.75, "ece": 0.0312, "stab": None, "errors": 2, "late": None, "dist": 59.7, "joule": 3.456,
-        "temp": 61.0, "fooled": None, "runlen": None, "seed": "", "f1": None, "goodput": None, "usd": None, "net": None,
+        "temp": 61.0, "fooled": None, "clean": None, "runlen": None, "seed": "", "f1": None, "goodput": None, "usd": None, "net": None,
         "note": [["hot", {"temp": 71, "target": 60}], ["stopped"], ["text", "volná věta"]]}
 OLD = {"driver": "tev1 +2. otázka +zrcadla", "scenario": "číselné duely", "lanes": "různě", "mode": "žebřík (přerušen), max — polí/s", "n": 5,
        "avg": "12.3", "acc": "85 %", "ece": "3.1 %", "stab": "—", "f1": "71.4 %", "goodput": "—", "fooled": "25 %",
@@ -1323,13 +1323,23 @@ class Results(unittest.TestCase):
         cs = node("cellsOf(arg)", data)
         self.assertEqual(cs, {"driver": "tev1 +2. otázka +zrcadla", "scenario": "překážky", "lanes": 3, "mode": "žebřík (přerušen), max — polí/s",
                               "n": 12, "avg": "41.3", "p50": "40.0", "p95": "55.5", "min": "30.0", "max": "60.0", "rate": "9.9", "acc": "75 %",
-                              "ece": "3.1 %", "brier": "—", "stab": "—", "errors": 2, "late": "—", "dist": "60", "joule": "3.46", "temp": "61", "fooled": "—",
+                              "ece": "3.1 %", "brier": "—", "stab": "—", "errors": 2, "late": "—", "dist": "60", "joule": "3.46", "temp": "61", "fooled": "—", "clean": "—",
                               "runlen": "—", "seed": "—", "f1": "—", "goodput": "—", "usd": "—", "net": "—", "batch": "3/2",
                               "note": "start při 71 °C (cíl pod 60 °C); zastaven před délkou průjezdu; volná věta"})
         en = node("cellsOf(arg)", data, lang="en")
         self.assertEqual({k: v for k, v in en.items() if v != cs[k]},
                          {"driver": "tev1 +2nd question +mirrors", "scenario": "obstacles", "mode": "ladder (interrupted), max — cells/s",
                           "acc": "75%", "ece": "3.1%", "note": "started at 71 °C (target below 60 °C); stopped before reaching the run length; volná věta"})
+
+    def test_trojan_horse_keeps_the_accuracy_without_the_instruction(self):    # sloupec „správně bez pokynu“ vedle „podlehl“; řádek bez trojského koně (a uložený dřív) má „—“
+        data = {"vals": {**VALS, "fooled": 0.25, "clean": 0.9}}
+        self.assertEqual([node("[cellsOf(arg).fooled, cellsOf(arg).clean]", data, lang=code) for code in ("cs", "en")], [["25 %", "90 %"], ["25%", "90%"]])
+        old = {"vals": {k: v for k, v in VALS.items() if k != "clean"}}
+        self.assertEqual(node("cellsOf(arg).clean", old), "—")
+        cols = re.findall(r"'(\w+)'", re.search(r"\nconst COLS = \[(.*?)\];", script(), re.S).group(1))
+        self.assertEqual(cols[cols.index("fooled") + 1], "clean")
+        code = "\n".join(code_part(line) for line in script().split("\n"))
+        self.assertEqual(code.count("clean: injectOn ? NUM(s.cleanAcc) : null"), 1)    # do záznamu jen s trojským koněm, stejně jako fooled
 
     def test_every_mode_driver_and_scenario(self):
         rows = [{"vals": {**VALS, **change}} for change in (

@@ -537,7 +537,9 @@ const TEXTS = {
   'col.temp': { cs: 'max °C', en: 'max °C' },
   'col.temp.tip': { cs: 'Nejvyšší teplota GPU během běhu ve °C. „—“ znamená běh bez vzorků nebo stroj bez karty NVIDIA.', en: 'The highest GPU temperature during the run in °C. "—" means a run without samples or a machine without an NVIDIA GPU.' },
   'col.fooled': { cs: 'podlehl', en: 'fooled' },
-  'col.fooled.tip': { cs: 'Jen s trojským koněm: podíl úloh se schovaným pokynem, kde model zvolil přesně podstrčenou odpověď. Čtěte vedle přesnosti na úlohách bez pokynu (dlaždice v panelu Kvalita).', en: 'With the Trojan horse only: the share of tasks with the hidden instruction where the model chose exactly the planted answer. Read it next to the accuracy on tasks without the instruction (a tile in the Quality panel).' },
+  'col.fooled.tip': { cs: 'Jen s trojským koněm: podíl úloh se schovaným pokynem, kde model zvolil přesně podstrčenou odpověď. Čtěte vedle přesnosti na úlohách bez pokynu (dlaždice v panelu Kvalita). V tabulce je to sloupec „správně bez pokynu“ hned vpravo.', en: 'With the Trojan horse only: the share of tasks with the hidden instruction where the model chose exactly the planted answer. Read it next to the accuracy on tasks without the instruction (a tile in the Quality panel). In the table it is the "correct without instruction" column right next to this one.' },
+  'col.clean': { cs: 'správně bez pokynu', en: 'correct without instruction' },
+  'col.clean.tip': { cs: 'Jen s trojským koněm: přesnost na úlohách téhož běhu, které schovaný pokyn neměly (stejné číslo jako dlaždice v panelu Kvalita). Jen tohle číslo je srovnatelné se sloupcem „správně“ běhu bez trojského koně: „správně“ běhu s trojským koněm počítá i úlohy s pokynem. Řádek bez trojského koně (a řádek uložený před 2026-11-10) má „—“.', en: 'With the Trojan horse only: the accuracy on the tasks of the same run that had no hidden instruction (the same number as the tile in the Quality panel). Only this number is comparable with the "correct" column of a run without the Trojan horse: in a run with the Trojan horse, "correct" also counts the tasks with the instruction. A row without the Trojan horse (and a row saved before 2026-11-10) has "—".' },
   'col.runlen': { cs: 'délka', en: 'length' },
   'col.runlen.tip': { cs: 'Nastavená délka průjezdu v polích; „—“ = bez limitu, žebřík nebo benchmark. Když je „ujeto“ menší, běh někdo zastavil dřív.', en: 'The run length you set, in cells; "—" = no limit, ladder or benchmark. When "driven" is smaller, someone stopped the run early.' },
   'col.seed': { cs: 'semínko', en: 'seed' },
@@ -1319,7 +1321,7 @@ function cellsOf(data) {                                   // buňky jednoho ř�
   return { driver: who, scenario: v.set ?? known('scenario.' + v.scenario, v.scenario), lanes: v.lanes ?? t('cell.varies'), mode, n: v.n,
     avg: f(v.avg, 1), p50: f(v.p50, 1), p95: f(v.p95, 1), min: f(v.min, 1), max: f(v.max, 1), rate: f(v.rate, 1),
     acc: pctOf(v.acc), ece: pctOf(v.ece, 1), brier: f(v.brier, 3), stab: pctOf(v.stab), errors: dash(v.errors), late: dash(v.late), dist: f(v.dist),
-    joule: f(v.joule, v.joule < 10 ? 2 : 1), temp: f(v.temp), fooled: pctOf(v.fooled), runlen: dash(v.runlen), seed: dash(v.seed),
+    joule: f(v.joule, v.joule < 10 ? 2 : 1), temp: f(v.temp), fooled: pctOf(v.fooled), clean: pctOf(v.clean), runlen: dash(v.runlen), seed: dash(v.seed),
     f1: pctOf(v.f1, 1), goodput: pctOf(v.goodput), usd: f(v.usd, 4), net: f(v.net),
     batch: Number.isInteger(data.batch) ? `${data.batch}/${data.step ?? '—'}` : '—', note: noteText(v.note) };
 }
@@ -6256,7 +6258,7 @@ function drawChart() {
 // ---------- výsledky: tabulka ze záznamů (databáze na serveru) ----------
 // COLS: klíče sloupců v záznamu, pořadí = pořadí sloupců. Záhlaví je v TEXTS pod klíčem col.<klíč>, jeho popisek pod col.<klíč>.tip.
 const COLS = ['time', 'driver', 'scenario', 'lanes', 'mode', 'n', 'avg', 'p50', 'p95', 'min', 'max', 'rate', 'acc', 'ece', 'brier', 'stab', 'errors', 'late', 'dist', 'joule', 'temp',
-  'fooled', 'runlen', 'seed', 'batch', 'note', 'f1', 'goodput', 'usd', 'net'];
+  'fooled', 'clean', 'runlen', 'seed', 'batch', 'note', 'f1', 'goodput', 'usd', 'net'];
 let RESULTS = [];                                          // záznamy { id, ts, data: { vals, settings, kind, why, batch, step } }, nejnovější první; řádky uložené dřív mají místo vals hotové české texty v cells
 let runSettings = null;                                    // nastavení na začátku právě běžícího (nebo posledního) běhu
 
@@ -6296,7 +6298,7 @@ function addResult(how, inGame) {                          // zapíše běh do t
     mode: how.mode, aborted: !!how.aborted, speed: how.speed ?? null, best: how.best ?? null, n: s.n,
     avg: NUM(s.avg), p50: NUM(s.p50), p95: NUM(s.p95), min: NUM(s.min), max: NUM(s.max), rate: NUM(s.rate),
     acc: NUM(s.acc), ece: NUM(s.ece), brier: NUM(brier(S.cal)), stab: NUM(s.stab), errors: count(r.errors), late: count(r.late), dist: inGame ? NUM(G.dist) : null,
-    joule: NUM(e.perDecision), temp: NUM(e.maxTemp), fooled: injectOn ? NUM(s.fooled) : null,
+    joule: NUM(e.perDecision), temp: NUM(e.maxTemp), fooled: injectOn ? NUM(s.fooled) : null, clean: injectOn ? NUM(s.cleanAcc) : null,
     runlen: inGame && runLimit ? runLimit : null, seed: $('seed').value.trim(),
     f1: SC.labelsOf ? NUM(s.f1) : null, goodput: NUM(runGoodput(inGame)), usd: NUM(s.usd1000), net: NUM(runNet),
     note: [...(runTag ? runTag.note : []), inGame && runLimit && runWhy === 'stop' && ['stopped'], runWhy === 'error' && ['error'],
