@@ -361,7 +361,7 @@ COMPOSED = {"scenario.signs": "cellsOf: known('scenario.' + v.scenario, …)", "
             "scenario.pattern": "cellsOf: known('scenario.' + v.scenario, …)"}
 # Hotové části skriptu (názvy z řádků „// ---------- název ----------“, „začátek“ = před první takový řádek, „html“ = statické HTML,
 # „sdíleno“ = blok sdílený s Pythonem): nesmí v nich zůstat český řetězec. Poslední úkol sem doplní všechny.
-DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí", "začátek", "scénář: překážky", "scénář: číselné duely",
+DONE = ["jazyk stránky", "html", "vysvětlivky pod tlačítkem „i“", "začátek", "scénář: překážky", "scénář: číselné duely",
         "scénář: veřejná sada (jen benchmark bez hry)", "jádro: statistiky", "výsledky: tabulka ze záznamů (databáze na serveru)",
         "úložiště: dotazy na server, poslední nastavení", "plánovač: fronta kroků", "plánovač: běh fronty",
         "hostované modely (Jev u TypeSafe AI, Clef u Cloudflare)", "hardware: stav GPU z /gpu, energie na rozhodnutí", "jádro: běh",
@@ -371,7 +371,7 @@ DONE = ["jazyk stránky", "html", "popisky po najetí myší nebo klávesnicí",
 sys.path.insert(0, str(Path(__file__).parent))
 from page_snapshot import FRAGMENTS, PLAIN, plain_text, static_texts      # PLAIN = české řetězce bez diakritiky (kontrola diakritikou je nenajde)
 # Texty, které statické HTML nést smí i po překladu (část „html“): vlastní jména, čísla, značky. Všechno ostatní jde přes data-i18n.
-HTML_OK = ("PickBench", "/v1/systemone", "0", "—", "CS", "EN")
+HTML_OK = ("PickBench", "/v1/systemone", "0", "—", "CS", "EN", "i")      # "i" = znak tlačítka vysvětlivky (CSS content u .tipi), v obou jazycích stejný
 # Úlomky českých textů stránky před změnou (tests/golden/page-fragments-cs.json), které zmizet směly: úlomek → důvod.
 GONE = {"Chyba: záložka byla skrytá déle než ": "od úkolu 4 přidává úvod „Chyba: “ funkce fail(); věta sama zůstala",
         "Žebřík: úroveň 1 z ": "první úroveň žebříku skládá stejný klíč run.ladder.level jako další úrovně ({level} = 1); větu česky hlídá "

@@ -32,7 +32,7 @@
   button.primary { background:var(--acc); color:#04121c; border-color:var(--acc); font-weight:600; }
   button:disabled { opacity:.45; cursor:default; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:10px; }
-  .m { background:#0f1318; border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
+  .m { position:relative; background:#0f1318; border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
   .m b { display:block; font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }
   .m small { color:var(--dim); }
   .m.big b { color:var(--acc); }
@@ -93,10 +93,17 @@
   #sqNote { display:block; color:var(--dim); margin-top:4px; }
   #sqNote:empty { display:none; }
   #tip { position:fixed; z-index:20; max-width:360px; background:#05080b; color:var(--text); border:1px solid var(--acc); border-radius:6px; padding:8px 10px;
-         font:400 12.5px/1.45 "Segoe UI", system-ui, sans-serif; letter-spacing:0; text-transform:none; white-space:normal; box-shadow:0 6px 18px rgba(0,0,0,.55); pointer-events:none; max-height:calc(100vh - 8px); overflow:hidden; box-sizing:border-box; }
-  label[data-tip], th[data-tip], h2[data-tip], small[data-tip], .m[data-tip] small { text-decoration:underline dotted #5d6b78; text-underline-offset:3px; }
-  .m[data-tip], th[data-tip], h2[data-tip], small[data-tip] { cursor:help; }
-  [data-tip]:focus-visible { outline:1px solid var(--acc); outline-offset:2px; }
+         font:400 12.5px/1.45 "Segoe UI", system-ui, sans-serif; letter-spacing:0; text-transform:none; white-space:pre-line; box-shadow:0 6px 18px rgba(0,0,0,.55); pointer-events:none; max-height:calc(100vh - 8px); overflow:hidden; box-sizing:border-box; }
+  .tipi { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; width:14px; height:14px; margin-left:5px; vertical-align:-2px; flex:none;
+          border:1px solid #5d6b78; border-radius:50%; color:#8b98a5; font:italic 700 10px/1 Georgia, "Times New Roman", serif; letter-spacing:0; text-transform:none;
+          cursor:pointer; user-select:none; }
+  .tipi::before { content:"i"; }
+  .tipi:hover, .tipi[aria-expanded="true"] { border-color:var(--acc); color:var(--acc); }
+  .tipi:focus-visible { outline:1px solid var(--acc); outline-offset:2px; }
+  .m > .tipi { position:absolute; top:6px; right:6px; margin:0; }
+  [hidden] + .tipi { display:none; }
+  .hbtns { float:right; display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0; }
+  .tipw { display:inline-flex; align-items:center; }
   #langSwitch { display:flex; gap:4px; align-self:center; }
   #langSwitch button { padding:2px 9px; font-size:12px; }
   #langSwitch button[aria-pressed="true"] { border-color:var(--acc); color:var(--acc); }
@@ -238,7 +245,7 @@
     </div>
 
     <div class="panel">
-      <h2><span data-i18n="ui.results"></span> <button id="csv" style="float:right;padding:2px 10px" data-i18n="ui.csv"></button><button id="clear" style="float:right;padding:2px 10px;margin-right:8px" data-i18n="ui.clear"></button></h2>
+      <h2><span data-i18n="ui.results"></span> <span class="hbtns"><button id="clear" style="padding:2px 10px" data-i18n="ui.clear"></button><button id="csv" style="padding:2px 10px" data-i18n="ui.csv"></button></span></h2>
       <label class="inline" style="margin-bottom:8px"><input id="lastBatch" type="checkbox"> <span data-i18n="ui.lastBatch"></span></label>
       <div class="tablewrap"><table id="results">
         <thead></thead>
@@ -267,6 +274,7 @@ const TEXTS = {
   'ui.last': { cs: 'Poslední rozhodnutí', en: 'Last decision' },
   'ui.sent': { cs: 'Co přesně dostal model', en: 'What exactly the model got' },
   'ui.sentOpen': { cs: 'Co přesně dostal model…', en: 'What exactly the model got…' },
+  'ui.info': { cs: 'Vysvětlivka', en: 'Explanation' },
   'ui.sentClose': { cs: 'Zavřít', en: 'Close' },
   'sent.last': { cs: 'Poslední dotaz, jak odešel modelu {model} (POST /decide, server ho beze změny předá na /v1/systemone nebo poskytovateli), a odpověď modelu.', en: 'The last request as it went to the model {model} (POST /decide, the server passes it unchanged to /v1/systemone or the provider), and the model\'s answer.' },
   'sent.preview': { cs: 'Zatím nic neodešlo. Ukázka: zahřívací dotaz scénáře, který hra pošle modelu {model} při startu. Úlohy během jízdy mají stejné zadání (instructions) a jiný stav (state).', en: 'Nothing has been sent yet. Sample: the scenario\'s warm-up request, which the game sends to the model {model} at the start. Tasks during the run have the same instructions and a different state.' },
@@ -423,7 +431,7 @@ const TEXTS = {
   'step.empty': { cs: 'krok skončil bez jediného rozhodnutí', en: 'the step ended without a single decision' },
   'step.result': { cs: 'N {n} · správně {acc} · průměr {avg} ms', en: 'N {n} · correct {acc} · mean {avg} ms' },
   'step.est': { cs: ' · odhad nejvýš {requests} dotazů, {usd} $', en: ' · estimate: at most {requests} {requests|request|requests}, ${usd}' },
-  // popisky po najetí u pevných prvků stránky: tip.<id prvku> (seznam id je TIPS)
+  // vysvětlivky (tlačítko „i“) u pevných prvků stránky: tip.<id prvku> (seznam id je TIPS)
   'tip.mAvg': { cs: 'Průměrná doba jednoho rozhodnutí v milisekundách, měřená v prohlížeči od odeslání dotazu po příchod odpovědi (včetně cesty přes server hry). Počítá se ze všech rozhodnutí běhu, zahřívací dotaz ne. Pár pomalých odpovědí průměr vytáhne nahoru — porovnejte ho s mediánem.', en: 'Mean time of one decision in milliseconds, measured in the browser from sending the request to the arrival of the answer (including the trip through the game server). It covers all decisions in the run, but not the warm-up request. A few slow answers pull the mean up — compare it with the median.' },
   'tip.mP50': { cs: 'Medián: polovina rozhodnutí byla rychlejší než tato hodnota. Ojedinělé zadrhnutí ho neovlivní, proto ukazuje typickou rychlost lépe než průměr. Ve hře bývá nižší než v benchmarku, protože po sobě jdoucí podobné stavy zrychluje cache promptu v Ollamě.', en: 'Median: half of the decisions were faster than this value. An occasional stall does not affect it, so it shows the typical speed better than the mean. In the game it tends to be lower than in the benchmark, because the prompt cache in Ollama speeds up consecutive similar states.' },
   'tip.mP95': { cs: '95. percentil: 95 % rozhodnutí bylo rychlejších než tato hodnota. Ukazuje pomalé odpovědi, které v reálném čase rozhodují o nárazu nebo o „nestihl“. Z několika desítek rozhodnutí je to jen hrubý odhad.', en: '95th percentile: 95% of the decisions were faster than this value. It shows the slow answers, which in Real time and Ladder modes decide whether the car crashes or a row counts as "missed". With only a few dozen decisions it is a rough estimate.' },
@@ -592,7 +600,7 @@ const TEXTS = {
   'last.trojanResisted': { cs: 'trojský kůň: úloha se schovaným pokynem — odolal', en: 'Trojan horse: task with the hidden instruction — resisted' },
   'last.trojanFooled': { cs: 'trojský kůň: úloha se schovaným pokynem — podlehl', en: 'Trojan horse: task with the hidden instruction — fooled' },
   'last.trojanOther': { cs: 'trojský kůň: úloha se schovaným pokynem — jiná chyba', en: 'Trojan horse: task with the hidden instruction — different error' },
-  // scénář překážky: popis pod silnicí, dlaždice Kvality (název .tile.<jméno>, popisek po najetí .tip.<jméno>)
+  // scénář překážky: popis pod silnicí, dlaždice Kvality (název .tile.<jméno>, vysvětlivka .tip.<jméno>)
   'scenario.obstacles.about': { cs: 'Překážky: v každé řadě je část pruhů zablokovaná. Model dostane vzdálenost k nejbližší překážce v každém pruhu a volí pruh s nejdelší volnou cestou; auto do něj přejede. „Správně“ = stejný pruh, jaký by zvolil ideální řidič. Náraz = auto bylo v zablokovaném pruhu ve chvíli, kdy k němu řada dojela. Špatných rozhodnutí bývá víc než nárazů: model se rozhoduje několikrát mezi dvěma řadami a většina chyb je jen horší volba, ne srážka.', en: 'Obstacles: in every row some of the lanes are blocked. The model gets the distance to the nearest obstacle in every lane and picks the lane with the longest free road; the car moves into it. "Correct" = the same lane the ideal driver would choose. Crash = the car was in a blocked lane at the moment the row reached it. There tend to be more wrong decisions than crashes: the model decides several times between two rows and most errors are just a worse choice, not a collision.' },
   'scenario.obstacles.tile.acc': { cs: 'správných rozhodnutí', en: 'correct decisions' },
   'scenario.obstacles.tip.acc': { cs: 'Podíl rozhodnutí, kde model zvolil stejný pruh jako ideální řidič (pruh s nejdelší volnou cestou; při shodě vlastní, jinak ten bližší). Počítá se každé rozhodnutí zvlášť a na jednu řadu jich připadá několik. Proto bývá špatných rozhodnutí víc než nárazů: většina chyb je jen horší volba, ne srážka.', en: 'The share of decisions where the model chose the same lane as the ideal driver (the lane with the longest free road; in a tie, the lane the car is already in, otherwise the closer one). Every decision counts separately and there are several of them per row. That is why there tend to be more wrong decisions than crashes: most errors are just a worse choice, not a collision.' },
@@ -1050,7 +1058,7 @@ const TEXTS = {
   'scenario.public.tile.inAcc': { cs: 'přesnost bez mimo rozsah', en: 'accuracy without out of scope' },
   'scenario.public.tip.inAcc': { cs: 'Přesnost jen na úlohách, které nějakému záměru patří — bez úloh „mimo rozsah“. Tohle číslo je srovnatelné se sadami, které třídu „mimo rozsah“ nemají.', en: 'Accuracy only on the tasks that belong to some intent — without the "out of scope" tasks. This number is comparable with datasets that have no "out of scope" class.' },
   // statistiky: popisek průměru u hostovaného modelu (jinak ui.tile.avg), dovětek za útratou, názvy dlaždic Kvality, které nepatří jednomu scénáři
-  // (tile.<jméno>.label; popisek po najetí je tile.<jméno> výš), texty v canvasu kalibrace (cal.*) a grafu latence (chart.*)
+  // (tile.<jméno>.label; vysvětlivka je tile.<jméno> výš), texty v canvasu kalibrace (cal.*) a grafu latence (chart.*)
   'stat.avgNet': { cs: 'průměr (ms, včetně sítě)', en: 'mean (ms, including the network)' },
   'stat.unpriced': { cs: ' (+{n} bez ceny)', en: ' (+{n} unpriced)' },
   'tile.stab.label': { cs: 'stabilita: tři varianty zadání shodně', en: 'stability: the same answer in all three prompt variants' },
@@ -1157,7 +1165,7 @@ const TEXTS = {
   'hosted.warningFallback': { cs: 'Uložený model není v nabídce, proto stránka předvolila tento hostovaný model; nikdo si ho nevybral, a než ho potvrdíte nebo vyberete jiný, žádný dotaz neodejde. Model {model} běží u poskytovatele {who}. K poskytovateli odejde všechno, co je ve zvolené sadě nebo scénáři — stav hry i celé texty e-mailů a vět, ať je sada přibalená, veřejná, nebo vaše vlastní — a každý dotaz stojí peníze: {price} $ za milion vstupních tokenů. Útratu hlídá strop na serveru. Potvrzení platí pro všechny modely tohoto poskytovatele a pamatuje se.', en: 'The saved model is not in the list, so the page preselected this hosted model; nobody selected it, and the page sends no request until you confirm it or select a different one. The model {model} runs at the provider {who}. The provider receives everything in the selected dataset or scenario — the game state and the full texts of the e-mails and sentences, whether the dataset is bundled, public or your own — and every request costs money: ${price} per million input tokens. The server\'s spend cap limits how much you can spend. The confirmation applies to all models of this provider and the page remembers it.' },
   'hosted.consentNeeded': { cs: 'hostovaný model není odsouhlasen — vyberte ho ve voliči Model a potvrďte varování pod tlačítky', en: 'the hosted model is not confirmed — select it in the Model list and confirm the warning below the buttons' },
   'hosted.hw': { cs: 'Model běží u poskytovatele: GPU tohoto počítače se při něm neměří a energie na rozhodnutí není. Místo ní je v panelu Rychlost rozhodování cena ($ za 1000 rozhodnutí).', en: 'The model runs at the provider: with this model, the page does not measure the GPU of this computer and there is no energy per decision. Instead, the Decision speed panel shows the price ($ per 1000 decisions).' },
-  // hardware: názvy dlaždic tile.<jméno>.label (popisek po najetí je tile.<jméno> výš; {wh} = energie celého běhu ve Wh), stroj bez GPU, varování o přiškrcené kartě
+  // hardware: názvy dlaždic tile.<jméno>.label (vysvětlivka je tile.<jméno> výš; {wh} = energie celého běhu ve Wh), stroj bez GPU, varování o přiškrcené kartě
   'tile.hwTemp.label': { cs: 'teplota GPU', en: 'GPU temperature' },
   'tile.hwPower.label': { cs: 'příkon GPU', en: 'GPU power draw' },
   'tile.hwClock.label': { cs: 'takt GPU', en: 'GPU clock' },
@@ -5883,29 +5891,57 @@ function lengthClasses(lengths) {
 }
 // ==== sdíleno s Pythonem: konec ====
 
-// ---------- popisky po najetí myší nebo klávesnicí ----------
+// ---------- vysvětlivky pod tlačítkem „i“ ----------
 // Jedna bublina pro celou stránku. Popisek má každý prvek s atributem data-tip; text jde do stránky jako text, nikdy jako HTML.
+// Bublina se neotevírá najetím myši ani fokusem: prvek s popiskem dostane malé tlačítko „i“ (span.tipi) a bublina se ukáže až po kliknutí na ně
+// (nebo Enter / mezerník); zavře ji druhé kliknutí, kliknutí jinam, odchod fokusu z tlačítka a Esc.
 // TIPS: id pevných prvků s popiskem; text je v TEXTS pod klíčem tip.<id>. Dlaždice a nadpisy scénářů si popisky nesou samy (viz quality, extraTip);
 // popisky dlaždic, které nepatří jednomu scénáři (jistota, zrcadla, trojský kůň, hardware), jsou v TEXTS pod klíčem tile.<jméno>.
 const TIPS = ['mAvg', 'mP50', 'mP95', 'mMin', 'mMax', 'mRate', 'mOll', 'mUsd', 'mNet', 'mSpend', 'mN', 'chartCap', 'calTitle', 'calT', 'sweep', 'scenario', 'lanes', 'driver', 'model', 'mode',
   'speed', 'runlen', 'seed', 'extra', 'mirror', 'inject', 'benchn', 'deadline', 'bench', 'start', 'stop', 'csv', 'clear', 'planTitle', 'sqKind', 'sqAdd', 'pauseS', 'pauseTemp',
   'pauseCap', 'sqReset', 'sqClear', 'sqRun', 'sqStop', 'lastBatch', 'hwIdle'];
-let tipFor = null;                                         // prvek, u kterého je bublina právě zobrazená
+let tipFor = null;                                         // prvek, jehož bublina je právě otevřená
 
-function setTip(elm, text) {                               // nastaví (nebo zruší) popisek prvku
-  if (!text) { delete elm.dataset.tip; return; }
+// Kam patří „i“: u štítku za jeho název (první span; ve sloupcovém štítku by samostatné „i“ dostalo vlastní řádek), u dlaždice do rohu (CSS),
+// u tlačítka vedle něj, oba ve společném obalu span.tipw (uvnitř tlačítka by klik spustil tlačítko a u vypnutého by nefungoval; samostatné
+// „i“ by v řádku ovládání dostalo mezeru flexu a odskočilo), jinde na konec prvku.
+// setTip ho umístí znovu při každém volání: kdo přepíše textContent prvku (název scénáře, data-i18n), „i“ smaže, a popisek pak nastavuje znovu.
+function placeInfo(elm, icon) {
+  if (elm.matches('button, select, input')) {
+    let wrap = elm.parentElement;
+    if (!wrap.classList.contains('tipw')) { wrap = el('span', 'tipw'); elm.replaceWith(wrap); wrap.append(elm); }
+    if (elm.nextElementSibling !== icon) elm.after(icon);
+    return;
+  }
+  const cap = elm.matches('label') && elm.querySelector(':scope > span');
+  const box = cap || elm;
+  if (icon.parentNode !== box || icon.nextSibling) box.append(icon);
+}
+function setTip(elm, text) {                               // nastaví (nebo zruší) popisek prvku a jeho tlačítko „i“
+  if (!text) { delete elm.dataset.tip; elm.tipIcon?.remove(); elm.tipIcon = null; if (tipFor === elm) hideTip(); return; }
   elm.dataset.tip = text;
-  if (!elm.matches('label, button, select, input, a') && !elm.hasAttribute('tabindex')) elm.tabIndex = 0;   // aby na něj šlo přejít klávesnicí
+  let icon = elm.tipIcon;
+  if (!icon) {
+    icon = elm.tipIcon = el('span', 'tipi'); icon.tipOwner = elm;
+    icon.setAttribute('role', 'button'); icon.tabIndex = 0; icon.setAttribute('aria-expanded', 'false');
+  }
+  icon.setAttribute('aria-label', t('ui.info'));
+  placeInfo(elm, icon);
 }
 function applyTips() {                                     // popisek dostane štítek nebo dlaždice kolem prvku s daným id, jinak prvek sám
   for (const id of TIPS) { const e = $(id); if (e) setTip(e.closest('label, .m') || e, t('tip.' + id)); }
 }
-// Nad prvkem; když se nahoře nevejde, pod ním. Dlouhý text, který se nevejde ani nad, ani pod prvek, dostane širší bublinu a stojí
+// Nad tlačítkem „i“; když se nahoře nevejde, pod ním. Dlouhý text, který se nevejde ani nad, ani pod, dostane širší bublinu a stojí
 // tam, kde je víc místa, posunutý dovnitř okna (může prvek překrýt); nikdy nepřeteče přes okraj okna.
+// Volá se i k obnově otevřené bubliny (nový text, rolování): „i“, které zmizelo ze stránky nebo odjelo z okna, bublinu zavře.
 function showTip(elm) {
-  const tip = $('tip'), gap = 8, vw = document.documentElement.clientWidth, vh = innerHeight;
-  tipFor = elm; tip.textContent = elm.dataset.tip; tip.hidden = false; tip.style.maxWidth = '';
-  const r = elm.getBoundingClientRect();
+  const tip = $('tip'), gap = 8, vw = document.documentElement.clientWidth, vh = innerHeight, icon = elm.tipIcon;
+  if (!elm.dataset.tip || !icon || !icon.isConnected || !icon.getClientRects().length) { if (tipFor === elm) hideTip(); return; }
+  const r = icon.getBoundingClientRect();
+  if (r.bottom < 0 || r.top > vh) { if (tipFor === elm) hideTip(); return; }
+  if (tipFor && tipFor !== elm) tipFor.tipIcon?.setAttribute('aria-expanded', 'false');
+  tipFor = elm; icon.setAttribute('aria-expanded', 'true');
+  tip.textContent = elm.dataset.tip; tip.hidden = false; tip.style.maxWidth = '';
   const fits = h => r.top - h - gap >= 4 || r.bottom + gap + h <= vh - 4;
   if (!fits(tip.getBoundingClientRect().height)) tip.style.maxWidth = Math.max(360, Math.min(720, vw - 8)) + 'px';
   const t = tip.getBoundingClientRect(), up = r.top - gap - 4, down = vh - 4 - r.bottom - gap;
@@ -5915,19 +5951,23 @@ function showTip(elm) {
   tip.style.left = Math.max(4, Math.min(r.left + r.width / 2 - t.width / 2, vw - t.width - 4)) + 'px';
   tip.dataset.side = above ? 'above' : 'below';
 }
-function hideTip() { tipFor = null; $('tip').hidden = true; }
-const tipTarget = e => e.target instanceof Element ? e.target.closest('[data-tip]') : null;
-document.addEventListener('mouseover', e => { const t = tipTarget(e); if (!t) hideTip(); else if (t !== tipFor) showTip(t); });
-document.documentElement.addEventListener('mouseleave', hideTip);
-document.addEventListener('focusin', e => { const t = tipTarget(e); if (t) showTip(t); });
-document.addEventListener('focusout', hideTip);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
-document.addEventListener('scroll', () => {                // při rolování bublina mizí; drží-li prvek fokus (Tab ho doroloval do okna), zůstane a přesune se k němu
-  if (tipFor && tipFor.contains(document.activeElement)) {
-    const r = tipFor.getBoundingClientRect();
-    if (r.bottom > 0 && r.top < innerHeight) showTip(tipFor); else hideTip();
-  } else hideTip();
+function hideTip() { tipFor?.tipIcon?.setAttribute('aria-expanded', 'false'); tipFor = null; $('tip').hidden = true; }
+const tipIconOf = e => e.target instanceof Element ? e.target.closest('.tipi') : null;
+// Zachytávací fáze: klik na „i“ nedojde ke štítku (nepřepne zaškrtávátko, nepřesune fokus do pole) ani k ničemu dalšímu; klik jinam bublinu zavře a jde dál.
+document.addEventListener('click', e => {
+  const icon = tipIconOf(e);
+  if (!icon) { if (tipFor) hideTip(); return; }
+  e.preventDefault(); e.stopPropagation();
+  if (tipFor === icon.tipOwner) hideTip(); else showTip(icon.tipOwner);
 }, true);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { hideTip(); return; }
+  const icon = tipIconOf(e);
+  if (icon && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); icon.click(); }
+});
+document.addEventListener('focusout', e => { if (tipFor && e.target === tipFor.tipIcon) hideTip(); });      // Tab dál z „i“ bublinu zavře
+document.addEventListener('scroll', () => { if (tipFor) showTip(tipFor); }, true);      // otevřená bublina jede s „i“; odjede-li z okna, zavře se
+addEventListener('resize', () => { if (tipFor) showTip(tipFor); });
 
 // Dlaždice [hodnota, popisek, nápověda]. Stávající dlaždice se přepisují na místě: kdyby se při každé obnově čísel
 // vytvářely znovu, zmizela by bublina i fokus z klávesnice.
@@ -5940,7 +5980,7 @@ function renderTiles(box, tiles) {
       if (d) d.replaceWith(fresh); else box.append(fresh);
       d = fresh;
     }
-    d.firstChild.textContent = value; d.lastChild.textContent = label;
+    d.children[0].textContent = value; d.children[1].textContent = label;      // b a small; za nimi může stát „i“
     if ((d.dataset.tip || '') !== (tipText || '')) { setTip(d, tipText); if (tipFor === d) tipText ? showTip(d) : hideTip(); }
   });
   if (tipFor && !tipFor.isConnected) hideTip();
@@ -6226,7 +6266,8 @@ const cleanResults = list => (Array.isArray(list) ? list : []).filter(r => r && 
 
 function renderHead() {
   const tr = el('tr');
-  tr.append(...COLS.map(key => { const th = el('th', '', t('col.' + key)); setTip(th, t('col.' + key + '.tip')); return th; }), el('th', 'rowdel'));      // poslední, prázdný sloupec nese tlačítka mazání; v CSV není
+  const del = el('th', 'rowdel'); setTip(del, t('results.rowTip') + '\n' + t('results.rowArmedTip'));      // jedno „i“ pro tlačítka mazání všech řádků, ne v každém řádku
+  tr.append(...COLS.map(key => { const th = el('th', '', t('col.' + key)); setTip(th, t('col.' + key + '.tip')); return th; }), del);      // poslední sloupec nese tlačítka mazání; v CSV není
   $('results').tHead.replaceChildren(tr);
 }
 function renderResults() {                                 // hodnoty jdou do stránky jako text; co záznam nemá, je „—“
@@ -6242,7 +6283,6 @@ function renderResults() {                                 // hodnoty jdou do st
     rowDelLook(btn, false); btn.onclick = () => deleteRow(rec, btn); del.append(btn); tr.append(del);
     return tr;
   }));
-  if (tipFor && !tipFor.isConnected) hideTip();            // bublina tlačítka zaniklého řádku
   drawSweep();
 }
 
@@ -6338,11 +6378,9 @@ function clearResults() {                                  // smazání s potvrz
 
 // Smazání jednoho výsledku: tlačítko v posledním sloupci řádku, potvrzení druhým klikem jako u Smazat výsledky.
 let rowArm = null;                                         // odjištěné tlačítko řádku { btn, at, timer }; nejvýš jedno
-function rowDelLook(btn, armed) {                          // text, popisek a vzhled tlačítka v řádku
+function rowDelLook(btn, armed) {                          // text, jmenovka pro čtečku a vzhled tlačítka v řádku; vysvětlivka je v záhlaví sloupce
   btn.textContent = armed ? t('results.rowArmed') : '×'; btn.classList.toggle('armed', armed);
   btn.setAttribute('aria-label', t(armed ? 'results.rowArmedLabel' : 'results.rowLabel'));
-  setTip(btn, t(armed ? 'results.rowArmedTip' : 'results.rowTip'));
-  if (tipFor === btn) showTip(btn);                        // bublina otevřená nad tlačítkem ukáže nový text
 }
 function disarmRow() {
   if (!rowArm) return;
