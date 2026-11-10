@@ -574,11 +574,17 @@ def _post_cc(spec, payload, runner, env, clock, budget):
     parts = [usage.get(k) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")]
     tokens = sum(p for p in parts if type(p) is int and p > 0) or None      # vstup = nový + zapsaný do cache + přečtený z cache
     budget.paid(tokens or 0, 0.0)                    # předplatné: dolary se neúčtují, strop počtu dotazů platí
-    api_ms = doc.get("duration_api_ms")
+    number = lambda v: float(v) if type(v) in (int, float) and v == v and v >= 0 else None      # bez bool, NaN a záporných
+    count = lambda v: v if type(v) is int and v >= 0 else None
+    details = usage.get("output_tokens_details") if isinstance(usage.get("output_tokens_details"), dict) else {}
     answer = {"model": spec["name"], "answers": cc_answers(questions, structured),
-              "usage": {"input_tokens": tokens, "output_tokens": usage.get("output_tokens")}}
+              "usage": {"input_tokens": tokens, "output_tokens": count(usage.get("output_tokens"))}}
     return answer, ms, {"provider": "cc", "attempts": 1, "retries": 0, "waited_ms": 0.0, "tokens": tokens,
-                        "model_ms": float(api_ms) if type(api_ms) in (int, float) else None, "usd": 0.0}
+                        "model_ms": number(doc.get("duration_api_ms")), "usd": 0.0,
+                        # API cena (total_cost_usd): kolik by dotaz stál přes API podle ceníku, který zná claude, včetně výstupu a zápisu
+                        # do cache. Předplatné ji neúčtuje; slouží srovnání s placenými poskytovateli. turns = kola dotazu (strukturovaná odpověď 2).
+                        "api_usd": number(doc.get("total_cost_usd")), "output_tokens": count(usage.get("output_tokens")),
+                        "thinking_tokens": count(details.get("thinking_tokens")), "turns": count(doc.get("num_turns"))}
 
 
 def post(model, payload, transport=None, env=None, sleep=None, clock=None, budget=None):

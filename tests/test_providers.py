@@ -443,9 +443,10 @@ class TestProvider(unittest.TestCase):
 
 
 CC_ENV = {"PICKBENCH_CLAUDE_CODE": "1", "PICKBENCH_CLAUDE_BIN": "claude-zkusebni"}     # cesta k příkazu: testy nezávisí na tom, co je v PATH
-CC_DONE = {"type": "result", "is_error": False, "result": "", "duration_api_ms": 1355, "session_id": "s-1",
-           "structured_output": {"move": {"choice": "left", "confidence": 0.8}},
-           "usage": {"input_tokens": 2, "cache_creation_input_tokens": 1250, "cache_read_input_tokens": 100, "output_tokens": 75}}
+CC_DONE = {"type": "result", "is_error": False, "result": "", "duration_api_ms": 1355, "session_id": "s-1", "total_cost_usd": 0.0003,
+           "num_turns": 2, "structured_output": {"move": {"choice": "left", "confidence": 0.8}},
+           "usage": {"input_tokens": 2, "cache_creation_input_tokens": 1250, "cache_read_input_tokens": 100, "output_tokens": 75,
+                     "output_tokens_details": {"thinking_tokens": 40}}}
 
 
 class Runner:
@@ -520,6 +521,7 @@ class ClaudeCode(unittest.TestCase):
         self.assertAlmostEqual(ms, 100)
         self.assertEqual((meta["provider"], meta["attempts"], meta["retries"], meta["tokens"], meta["model_ms"], meta["usd"]),
                          ("cc", 1, 0, 1352, 1355.0, 0.0))
+        self.assertEqual((meta["api_usd"], meta["output_tokens"], meta["thinking_tokens"], meta["turns"]), (0.0003, 75, 40, 2))     # API cena jen pro srovnání
         state = budget.state()
         self.assertEqual((state["requests"], state["answered"], state["tokens"], state["usd"], state["unpriced"]), (1, 1, 1352, 0.0, 0))
 
@@ -532,6 +534,14 @@ class ClaudeCode(unittest.TestCase):
         schema = json.loads(runner.calls[0]["args"][runner.calls[0]["args"].index("--json-schema") + 1])
         self.assertEqual(schema["properties"]["speed"]["properties"]["choice"]["enum"], ["Level 1", "Level 2", "Level 3"])
         self.assertEqual(schema["properties"]["go"]["required"], ["noul"])
+
+    def test_figures_that_are_not_numbers_are_none(self):
+        done = {**CC_DONE, "total_cost_usd": True, "duration_api_ms": float("nan"), "num_turns": "2",
+                "usage": {"input_tokens": 0, "output_tokens": -1, "output_tokens_details": None}}
+        out, _, meta = cc_post(Runner(done))
+        self.assertEqual((meta["api_usd"], meta["model_ms"], meta["turns"], meta["output_tokens"], meta["thinking_tokens"], meta["tokens"]),
+                         (None, None, None, None, None, None))
+        self.assertEqual(out["usage"], {"input_tokens": None, "output_tokens": None})
 
     def test_missing_answer_of_a_question_is_left_out(self):
         out, _, _ = cc_post(Runner({**CC_DONE, "structured_output": {"other": {"choice": "left"}}}))
