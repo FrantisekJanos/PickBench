@@ -581,6 +581,16 @@ TEXTS = {
     # do ní jde až vyčištěný (providers.scrub) a zkrácený. Částka má znak dolaru česky za číslem, anglicky před ním, jako ve stránce;
     # „$ / 1000 decisions“ je jednotka pojmenovaná jako sloupec stránky (col.usd) a nápověda bench.py, proto stojí za číslem i anglicky.
     "prov.testWho": {"cs": "zkušební poskytovatel (nic neodchází)", "en": "test provider (nothing leaves this computer)"},
+    # Claude Code (cc:…): dotaz spouští místní příkaz claude přihlášený předplatným Claude. {name} = jméno proměnné prostředí,
+    # {key} = jméno otázky, {error} = hláška příkazu claude nebo systému doslova (vyčištěná a zkrácená).
+    "prov.ccWho": {"cs": "Anthropic přes Claude Code, v předplatném Claude", "en": "Anthropic via Claude Code, in the Claude subscription"},
+    "prov.ccMissing": {"cs": "příkaz claude (Claude Code) není v PATH; nainstalujte ho, nebo nastavte jeho cestu v proměnné {name}",
+                       "en": "the claude command (Claude Code) is not on PATH; install it or set its path in the variable {name}"},
+    "prov.ccQuestion": {"cs": "otázku {key} nejde položit přes Claude Code: typ musí být choice, score nebo noul a choice a score potřebují "
+                              "criteria s různými neprázdnými texty",
+                        "en": "PickBench cannot ask the question {key} through Claude Code: the type must be choice, score or noul, and choice "
+                              "and score need criteria with distinct non-empty texts"},
+    "prov.ccFailed": {"cs": "příkaz claude skončil chybou: {error}", "en": "the claude command failed: {error}"},
     "prov.label": {"cs": "Hostovaný model", "en": "Hosted model"},
     # Strop útraty (providers.Budget): {requests} = odeslané pokusy, {max} = strop, {usd} = známá útrata, {held} = odhad držený ve stropu.
     "prov.cap.requests": {"cs": "strop útraty — odesláno {requests} hostovaných dotazů, limit je {max} (PICKBENCH_MAX_HOSTED); další dotaz se neposlal",

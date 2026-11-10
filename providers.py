@@ -15,14 +15,22 @@ do {"result": …}. Co se liší jinak, řeší se tady a nikde jinde.
 
 Zkušební poskytovatel (test:echo, test:drahy) existuje jen s proměnnou prostředí PICKBENCH_TEST_PROVIDER=1:
 nic nikam neposílá a odpovídá sám. Slouží testům a ověření hry v prohlížeči bez klíčů.
+
+Claude Code (cc:haiku-5.5) existuje jen s proměnnou prostředí PICKBENCH_CLAUDE_CODE=1. Není to rozhodovací model:
+post() spustí místní příkaz `claude -p` (přihlášení předplatným Claude, ne API klíčem) bez nástrojů, MCP, nastavení
+a historie, otázky převede na schéma JSON (cc_schema) a strukturovanou odpověď zpět do tvaru /v1/systemone (cc_answers).
+Klíč PickBench nemá a nečte; ANTHROPIC_API_KEY a ANTHROPIC_AUTH_TOKEN se příkazu nepředávají, aby šel přes předplatné.
 """
 import functools
 import http.client
 import json
 import os
 import re
+import shutil
 import socket
 import ssl
+import subprocess
+import tempfile
 import threading
 import time
 
@@ -47,6 +55,8 @@ PROVIDERS = {
            "keys": ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"),
            "prices": "https://developers.cloudflare.com/workers-ai/platform/pricing/"},
     "test": {"label": "Test", "who_key": "prov.testWho", "host": "", "keys": (), "prices": ""},      # who_key: věta, ne vlastní jméno — text až při použití (who)
+    "cc": {"label": "Claude Code", "who_key": "prov.ccWho", "host": "api.anthropic.com", "keys": (),    # host jen pro odhad sítě; dotaz posílá příkaz claude
+           "prices": "https://claude.com/pricing"},
 }
 # usd_per_m = cena za milion vstupních tokenů v dolarech (výstup žádný z poskytovatelů neúčtuje)
 MODELS = {
@@ -55,7 +65,19 @@ MODELS = {
     "cf:clef": {"provider": "cf", "name": "clef", "usd_per_m": 0.24},
     "test:echo": {"provider": "test", "name": "echo", "usd_per_m": 0.1},
     "test:drahy": {"provider": "test", "name": "drahy", "usd_per_m": 1000.0},            # ať jde strop útraty ověřit pár dotazy
+    "cc:haiku-5.5": {"provider": "cc", "name": "claude-haiku-5-5", "usd_per_m": 0.0},     # v předplatném Claude: dolary se neúčtují, ubírá z limitu předplatného
 }
+
+CC_ENV = "PICKBENCH_CLAUDE_CODE"                     # "1" = nabízet modely přes příkaz claude (předplatné Claude)
+CC_BIN_ENV = "PICKBENCH_CLAUDE_BIN"                  # cesta k příkazu claude; bez ní se hledá v PATH
+CC_EFFORT = "low"                                    # úsilí modelu (--effort): rozhodnutí na jeden tah, ne úvaha; přemýšlení přes CLI vypnout nejde
+CC_DROP_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")      # s nimi by claude účtoval API místo předplatného
+CC_SYSTEM = ('You are a decision model. The user message is a JSON object: "state" describes the situation and "questions" holds '
+             'the questions about it, each under its own name. A question of type "choice" asks you to pick exactly one key of its '
+             '"criteria"; give the key and your confidence from 0 to 1 that it is right. A question of type "score" asks you to pick '
+             'exactly one item of its "criteria" list; give the item and your confidence from 0 to 1 that it is right. A question of '
+             'type "noul" asks for the probability from 0 to 1 that the answer is yes. Decide at once and reply only through the '
+             'required JSON structure.')
 
 KEY_RE = re.compile(r"[\x21-\x7e]+")                            # klíč: tisknutelné ASCII bez mezer (jinak by ho http.client vypsal ve své chybě)
 ACCOUNT_RE = re.compile(r"[A-Za-z0-9]+")                        # ID účtu jde do adresy
@@ -72,6 +94,8 @@ def provider_of(model, env=None):
     pid = model.split(":", 1)[0]
     if pid == "test":
         return "test" if _env(env).get(TEST_ENV) == "1" else None
+    if pid == "cc":
+        return "cc" if _env(env).get(CC_ENV) == "1" else None
     return pid if pid in PROVIDERS else None
 
 
@@ -432,6 +456,131 @@ def spent_line(model, before, after):
     return i18n.t("prov.spent", **values)
 
 
+def _cc_options(question):
+    """Možnosti otázky choice nebo score: klíče slovníku criteria, nebo položky seznamu; None, když to nejsou různé neprázdné texty."""
+    crit = question.get("criteria")
+    options = list(crit) if isinstance(crit, (dict, list)) else []
+    ok = options and all(isinstance(o, str) and o for o in options) and len(set(options)) == len(options)
+    return options if ok else None
+
+
+def cc_schema(questions):
+    """Schéma JSON strukturované odpovědi příkazu claude: pod jménem každé otázky choice / score volba z nabídky (enum)
+    a jistota, u noul pravděpodobnost ano. Otázka, kterou převést nejde → Refused a nic se nespustí."""
+    props, unit = {}, {"type": "number", "minimum": 0, "maximum": 1}
+    for key, q in questions.items():
+        kind = q.get("type") if isinstance(q, dict) else None
+        options = _cc_options(q) if kind in ("choice", "score") else None
+        if options:
+            props[key] = {"type": "object", "properties": {"choice": {"type": "string", "enum": options}, "confidence": unit},
+                          "required": ["choice", "confidence"], "additionalProperties": False}
+        elif kind == "noul":
+            props[key] = {"type": "object", "properties": {"noul": unit}, "required": ["noul"], "additionalProperties": False}
+        else:
+            raise Refused("cc", None, i18n.t("prov.ccQuestion", key=str(key)[:80]))
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def cc_answers(questions, structured):
+    """Strukturovaná odpověď příkazu claude → answers ve tvaru /v1/systemone. choice: volba a jistota; score: index zvolené
+    položky od nuly (Ollama vrací v poli score index od nuly, bench.py přičte 1); noul: pravděpodobnost. Chybějící odpověď
+    otázky v answers chybí — volající ji počítá jako neplatnou, stejně jako poškozenou odpověď jiného poskytovatele."""
+    answers = {}
+    for key, q in questions.items():
+        a = structured.get(key)
+        if not isinstance(a, dict):
+            continue
+        if q["type"] == "noul":
+            answers[key] = {"noul": a.get("noul")}
+        elif q["type"] == "score":
+            options = _cc_options(q)
+            answers[key] = {"score": options.index(a["choice"]) if a.get("choice") in options else None, "confidence": a.get("confidence")}
+        else:
+            answers[key] = {"choice": a.get("choice"), "confidence": a.get("confidence")}
+    return answers
+
+
+def cc_command(spec, schema, env=None):
+    """Příkaz claude pro jeden dotaz: bez nástrojů, MCP, souborů nastavení, příkazů s lomítkem a uložené historie, vlastní systémový pokyn
+    místo pokynů Claude Code a vynucená strukturovaná odpověď. Dotaz sám jde na standardní vstup."""
+    exe = _key(env, CC_BIN_ENV) or shutil.which("claude")
+    if not exe:
+        raise Refused("cc", None, i18n.t("prov.ccMissing", name=CC_BIN_ENV))
+    return [exe, "-p", "--model", spec["name"], "--effort", CC_EFFORT, "--system-prompt", CC_SYSTEM, "--tools", "",
+            "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence", "--setting-sources", "",
+            "--output-format", "json", "--json-schema", json.dumps(schema, separators=(",", ":"))]
+
+
+def cc_dir():
+    """Prázdná pracovní složka příkazu claude: z projektové složky by si přibral její CLAUDE.md a dotaz by byl delší."""
+    path = os.path.join(tempfile.gettempdir(), "pickbench-claude")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def subprocess_runner(args, data, timeout, cwd, env):
+    """Spustí příkaz a vrátí (návratový kód, stdout, stderr). Vypršení limitu → TimeoutError; subprocess proces ukončí."""
+    try:
+        done = subprocess.run(args, input=data, capture_output=True, timeout=timeout, cwd=cwd, env=env,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))     # server spuštěný bez konzole nemá otvírat okno
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    else:
+        timed_out = False
+    if timed_out:                                    # mimo except: původní výjimka nese celý příkaz a ten se s chybou nenese
+        raise TimeoutError
+    return done.returncode, done.stdout, done.stderr
+
+
+def _post_cc(spec, payload, runner, env, clock, budget):
+    """Dotaz přes příkaz claude (předplatné Claude). Vrací totéž co post(); ms = celé spuštění příkazu včetně jeho startu,
+    meta["model_ms"] = čas dotazů na API podle příkazu (duration_api_ms). Neopakuje se: opakování při přetížení dělá claude sám."""
+    questions = payload.get("questions")
+    if not isinstance(questions, dict) or not questions:
+        raise Refused("cc", None, i18n.t("prov.payload"))
+    schema = cc_schema(questions)
+    body = json.dumps({"state": payload.get("state"), "questions": questions}, ensure_ascii=False).encode()
+    if len(body) > MAX_BODY:
+        raise Refused("cc", None, i18n.t("prov.tooBig", size=len(body), max=MAX_BODY))
+    args = cc_command(spec, schema, env)
+    child = {k: v for k, v in os.environ.items() if k not in CC_DROP_ENV}
+    budget.reserve("cc")
+    t0, fault, timed_out = clock(), None, False
+    try:
+        code, out, err = (runner or subprocess_runner)(args, body, TIMEOUT, cc_dir(), child)
+    except TimeoutError:
+        timed_out = True
+    except OSError as e:
+        fault = f"{type(e).__name__}: {e}"
+    ms = (clock() - t0) * 1000
+    if timed_out or fault is not None:
+        budget.settle(0.0)
+        raise ProviderError("cc", None, i18n.t("prov.timeout", s=TIMEOUT) if timed_out else i18n.t("prov.ccFailed", error=scrub(fault, env)[:300]))
+    text = out.decode("utf-8", errors="replace")
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        doc = None
+    if code != 0 or not isinstance(doc, dict) or doc.get("is_error"):
+        budget.settle(0.0)
+        why = doc.get("result") if isinstance(doc, dict) and isinstance(doc.get("result"), str) else ""
+        why = (why or err.decode("utf-8", errors="replace") or text).strip() or f"exit {code}"
+        raise ProviderError("cc", None, i18n.t("prov.ccFailed", error=scrub(why, env)[:300]))
+    structured = doc.get("structured_output")
+    if not isinstance(structured, dict):
+        budget.settle(0.0)
+        raise ProviderError("cc", None, i18n.t("prov.notObject", body=scrub(json.dumps(structured, ensure_ascii=False), env)[:200]))
+    usage = doc.get("usage") if isinstance(doc.get("usage"), dict) else {}
+    parts = [usage.get(k) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")]
+    tokens = sum(p for p in parts if type(p) is int and p > 0) or None      # vstup = nový + zapsaný do cache + přečtený z cache
+    budget.paid(tokens or 0, 0.0)                    # předplatné: dolary se neúčtují, strop počtu dotazů platí
+    api_ms = doc.get("duration_api_ms")
+    answer = {"model": spec["name"], "answers": cc_answers(questions, structured),
+              "usage": {"input_tokens": tokens, "output_tokens": usage.get("output_tokens")}}
+    return answer, ms, {"provider": "cc", "attempts": 1, "retries": 0, "waited_ms": 0.0, "tokens": tokens,
+                        "model_ms": float(api_ms) if type(api_ms) in (int, float) else None, "usd": 0.0}
+
+
 def post(model, payload, transport=None, env=None, sleep=None, clock=None, budget=None):
     """Pošle dotaz hostovanému modelu. Vrací (odpověď, ms posledního pokusu, meta).
 
@@ -443,6 +592,8 @@ def post(model, payload, transport=None, env=None, sleep=None, clock=None, budge
     pid, spec, keys = resolve(model, env)
     if not isinstance(payload, dict):
         raise Refused(pid, None, i18n.t("prov.payload"))
+    if pid == "cc":                                  # transport je tu spouštěč příkazu (subprocess_runner); testy ho podstrkují
+        return _post_cc(spec, payload, transport, env, clock, budget)
     path, headers = _request(pid, spec, keys)
     body = json.dumps({"model": spec["name"], "state": payload.get("state"), "questions": payload.get("questions")}).encode()
     if len(body) > MAX_BODY:

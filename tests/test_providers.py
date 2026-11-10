@@ -3,6 +3,7 @@ import http.client
 import json
 import os
 import re
+import shutil
 import socket
 import ssl
 import sys
@@ -439,6 +440,148 @@ class TestProvider(unittest.TestCase):
         script = Script(reply())
         providers.post("jev:jev-1.13.0", PAYLOAD, transport=script, env={**ENV, **TEST_ENV})
         self.assertEqual(script.calls[0]["host"], "api.typesafe.ai")
+
+
+CC_ENV = {"PICKBENCH_CLAUDE_CODE": "1", "PICKBENCH_CLAUDE_BIN": "claude-zkusebni"}     # cesta k příkazu: testy nezávisí na tom, co je v PATH
+CC_DONE = {"type": "result", "is_error": False, "result": "", "duration_api_ms": 1355, "session_id": "s-1",
+           "structured_output": {"move": {"choice": "left", "confidence": 0.8}},
+           "usage": {"input_tokens": 2, "cache_creation_input_tokens": 1250, "cache_read_input_tokens": 100, "output_tokens": 75}}
+
+
+class Runner:
+    """Podstrčený spouštěč příkazu claude: vrací připravený výsledek (výjimku vyhodí) a pamatuje si, co dostal."""
+
+    def __init__(self, result=CC_DONE, code=0, err=b""):
+        self.result, self.code, self.err, self.calls = result, code, err, []
+
+    def __call__(self, args, data, timeout, cwd, env):
+        self.calls.append({"args": args, "data": json.loads(data.decode()), "timeout": timeout, "cwd": cwd, "env": env})
+        if isinstance(self.result, BaseException):
+            raise self.result
+        out = self.result if isinstance(self.result, bytes) else json.dumps(self.result).encode()
+        return self.code, out, self.err
+
+
+def cc_post(runner, payload=PAYLOAD, env=CC_ENV, budget=None):
+    return providers.post("cc:haiku-5.5", payload, transport=runner, env=env, clock=Clock(), budget=budget or providers.Budget(env={}))
+
+
+def cc_failure(runner, payload=PAYLOAD, env=CC_ENV):
+    try:
+        cc_post(runner, payload, env)
+    except providers.ProviderError as e:
+        return e
+    raise AssertionError("dotaz měl skončit chybou")
+
+
+class ClaudeCode(unittest.TestCase):
+    def test_offered_only_with_the_variable(self):
+        self.assertIsNone(providers.provider_of("cc:haiku-5.5", {}))
+        for value in ("0", "", "true", " 1"):
+            with self.subTest(value=value):
+                self.assertIsNone(providers.provider_of("cc:haiku-5.5", {"PICKBENCH_CLAUDE_CODE": value}))
+        self.assertEqual([m["name"] for m in providers.available({})], [])
+        self.assertEqual(providers.available(CC_ENV), [{"name": "cc:haiku-5.5", "provider": "cc", "label": "Claude Code",
+                                                        "who": "Anthropic přes Claude Code, v předplatném Claude", "usd_per_m": 0.0}])
+        with self.assertRaises(providers.Refused):
+            cc_post(Runner(), env={})
+
+    def test_command_runs_without_tools_settings_or_history_and_forces_the_answer_shape(self):
+        runner = Runner()
+        cc_post(runner)
+        call = runner.calls[0]
+        args = call["args"]
+        self.assertEqual(args[:4], ["claude-zkusebni", "-p", "--model", "claude-haiku-5-5"])
+        pairs = dict(zip(args[1:], args[2:]))
+        self.assertEqual((pairs["--tools"], pairs["--setting-sources"], pairs["--output-format"], pairs["--system-prompt"]),
+                         ("", "", "json", providers.CC_SYSTEM))
+        for flag in ("--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence"):
+            self.assertIn(flag, args)
+        schema = json.loads(pairs["--json-schema"])
+        self.assertEqual(schema["required"], ["move"])
+        self.assertEqual(schema["properties"]["move"]["properties"]["choice"]["enum"], ["left", "stay"])
+        self.assertEqual(call["data"], {"state": PAYLOAD["state"], "questions": PAYLOAD["questions"]})     # na vstup jdou jen stav a otázky
+        self.assertEqual((call["timeout"], call["cwd"]), (providers.TIMEOUT, providers.cc_dir()))
+
+    def test_api_keys_do_not_reach_the_command(self):                     # s klíčem by claude účtoval API místo předplatného
+        runner = Runner()
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-zkusebni", "ANTHROPIC_AUTH_TOKEN": "tok", "PATH": "x"}):
+            cc_post(runner)
+        env = runner.calls[0]["env"]
+        self.assertNotIn("ANTHROPIC_API_KEY", env)
+        self.assertNotIn("ANTHROPIC_AUTH_TOKEN", env)
+        self.assertEqual(env["PATH"], "x")
+
+    def test_answer_has_the_systemone_shape_and_costs_no_dollars(self):
+        budget = providers.Budget(env={})
+        out, ms, meta = cc_post(Runner(), budget=budget)
+        self.assertEqual(out["answers"], {"move": {"choice": "left", "confidence": 0.8}})
+        self.assertEqual(out["usage"], {"input_tokens": 1352, "output_tokens": 75})      # vstup = nový + zapsaný do cache + přečtený z cache
+        self.assertAlmostEqual(ms, 100)
+        self.assertEqual((meta["provider"], meta["attempts"], meta["retries"], meta["tokens"], meta["model_ms"], meta["usd"]),
+                         ("cc", 1, 0, 1352, 1355.0, 0.0))
+        state = budget.state()
+        self.assertEqual((state["requests"], state["answered"], state["tokens"], state["usd"], state["unpriced"]), (1, 1, 1352, 0.0, 0))
+
+    def test_score_is_the_index_from_zero_and_noul_the_probability(self):
+        payload = {"state": {}, "questions": {"speed": {"type": "score", "instructions": "?", "criteria": ["Level 1", "Level 2", "Level 3"]},
+                                              "go": {"type": "noul", "instructions": "?"}}}
+        runner = Runner({**CC_DONE, "structured_output": {"speed": {"choice": "Level 3", "confidence": 0.6}, "go": {"noul": 0.25}}})
+        out, _, _ = cc_post(runner, payload)
+        self.assertEqual(out["answers"], {"speed": {"score": 2, "confidence": 0.6}, "go": {"noul": 0.25}})
+        schema = json.loads(runner.calls[0]["args"][runner.calls[0]["args"].index("--json-schema") + 1])
+        self.assertEqual(schema["properties"]["speed"]["properties"]["choice"]["enum"], ["Level 1", "Level 2", "Level 3"])
+        self.assertEqual(schema["properties"]["go"]["required"], ["noul"])
+
+    def test_missing_answer_of_a_question_is_left_out(self):
+        out, _, _ = cc_post(Runner({**CC_DONE, "structured_output": {"other": {"choice": "left"}}}))
+        self.assertEqual(out["answers"], {})
+
+    def test_question_that_cannot_be_asked_is_refused_without_running(self):
+        for question in ({"type": "rank", "instructions": "?"}, {"type": "choice", "instructions": "?"},
+                         {"type": "choice", "criteria": {"": "x", "a": "y"}}, {"type": "score", "criteria": ["a", "a"]}, "choice"):
+            with self.subTest(question=question):
+                runner = Runner()
+                with self.assertRaises(providers.Refused):
+                    cc_post(runner, {"state": {}, "questions": {"q": question}})
+                self.assertEqual(runner.calls, [])
+        for payload in ({"state": {}}, {"state": {}, "questions": {}}, {"state": {}, "questions": ["move"]}):
+            with self.subTest(payload=payload), self.assertRaises(providers.Refused):
+                cc_post(Runner(), payload)
+
+    def test_missing_command_is_refused_and_names_the_variable(self):
+        with mock.patch.object(shutil, "which", return_value=None):
+            e = cc_failure(Runner(), env={"PICKBENCH_CLAUDE_CODE": "1"})
+        self.assertIsInstance(e, providers.Refused)
+        self.assertIn("PICKBENCH_CLAUDE_BIN", str(e))
+
+    def test_failures_are_sentences(self):
+        limit = {**CC_DONE, "is_error": True, "result": "Claude AI usage limit reached", "structured_output": None}
+        for runner, want in ((Runner(limit, code=1), "Claude Code: příkaz claude skončil chybou: Claude AI usage limit reached"),
+                             (Runner(b"", code=2, err=b"bad flag"), "Claude Code: příkaz claude skončil chybou: bad flag"),
+                             (Runner(b"", code=3), "Claude Code: příkaz claude skončil chybou: exit 3"),
+                             (Runner(TimeoutError()), f"Claude Code: poskytovatel neodpověděl do {providers.TIMEOUT} s"),
+                             (Runner(FileNotFoundError("není")), "Claude Code: příkaz claude skončil chybou: FileNotFoundError: není"),
+                             (Runner({**CC_DONE, "structured_output": "left"}), 'Claude Code: odpověď není objekt JSON: "left"')):
+            with self.subTest(want=want):
+                e = cc_failure(runner)
+                self.assertEqual((str(e), e.__context__, e.__cause__), (want, None, None))
+
+    def test_request_cap_stops_before_running(self):
+        budget = providers.Budget(max_requests=1, env={})
+        with self.assertRaises(providers.ProviderError):
+            cc_post(Runner(TimeoutError()), budget=budget)
+        runner = Runner()
+        with self.assertRaises(providers.BudgetExceeded):
+            cc_post(runner, budget=budget)
+        self.assertEqual(runner.calls, [])
+
+    @both_languages
+    def test_no_sentence_carries_a_key_of_another_provider(self):          # cc klíč nemá, ale věty jdou přes scrub stejně jako u ostatních
+        env = {**ENV, **CC_ENV}
+        e = cc_failure(Runner({**CC_DONE, "is_error": True, "result": f"echo {JEV_KEY} {CF_TOKEN}"}, code=1), env=env)
+        for secret in (JEV_KEY, CF_TOKEN):
+            self.assertNotIn(secret, str(e))
 
 
 class Cost(unittest.TestCase):
@@ -917,8 +1060,24 @@ SENTENCES = {
     "prov.connectFailed": (lambda: caught(lambda: providers.connect_ms("jev:jev-1.13.0", ENV, connect=no_route)),
                            "Jev: spojení se serverem api.typesafe.ai se nepodařilo (OSError)",
                            "Jev: the connection to the server api.typesafe.ai failed (OSError)"),
+    "prov.ccMissing": (lambda: caught_no_claude(),
+                       "Claude Code: příkaz claude (Claude Code) není v PATH; nainstalujte ho, nebo nastavte jeho cestu v proměnné PICKBENCH_CLAUDE_BIN",
+                       "Claude Code: the claude command (Claude Code) is not on PATH; install it or set its path in the variable PICKBENCH_CLAUDE_BIN"),
+    "prov.ccQuestion": (lambda: cc_failure(Runner(), {"state": {}, "questions": {"rank": {"type": "rank"}}}),
+                        "Claude Code: otázku rank nejde položit přes Claude Code: typ musí být choice, score nebo noul a choice a score "
+                        "potřebují criteria s různými neprázdnými texty",
+                        "Claude Code: PickBench cannot ask the question rank through Claude Code: the type must be choice, score or noul, "
+                        "and choice and score need criteria with distinct non-empty texts"),
+    "prov.ccFailed": (lambda: cc_failure(Runner(b"", code=2, err=b"bad flag")),
+                      "Claude Code: příkaz claude skončil chybou: bad flag", "Claude Code: the claude command failed: bad flag"),
 }
-OTHER_TEXTS = {"prov.testWho", "prov.net", "prov.netFailed", "prov.spent", "prov.spentUnpriced"}      # věty, které nejsou chybou: testy who a řádků níž
+OTHER_TEXTS = {"prov.testWho", "prov.ccWho", "prov.net", "prov.netFailed", "prov.spent", "prov.spentUnpriced"}      # věty, které nejsou chybou: testy who a řádků níž
+
+
+def caught_no_claude():
+    """Chyba dotazu přes Claude Code, když příkaz claude v PATH není (shutil.which podstrčené)."""
+    with mock.patch.object(shutil, "which", return_value=None):
+        return cc_failure(Runner(), env={"PICKBENCH_CLAUDE_CODE": "1"})
 
 
 class English(unittest.TestCase):

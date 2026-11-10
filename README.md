@@ -205,10 +205,24 @@ python hwbench.py latency --n 200 cf:clef
 - The latency of a hosted model includes the network. Results show the price per 1000 decisions instead of energy, plus an estimate of the connection time.
 - `hwbench.py` skips `cold`, `concurrency` and `server` for hosted models and runs `soak` only with `--hosted-soak`.
 
+### Claude Haiku through Claude Code
+
+With `PICKBENCH_CLAUDE_CODE=1`, PickBench also offers `cc:haiku-5.5`: Claude Haiku 5.5 through the local `claude` command (Claude Code), signed in with a Claude subscription. Haiku writes text and has no `/v1/systemone` endpoint, so `providers.py` adapts each request: it runs `claude -p` without tools, MCP servers, settings files or saved history, with its own short system prompt, from an empty temporary folder, and with a JSON schema that limits every answer to the offered options (`choice` and `score`) or to a probability from 0 to 1 (`noul`). The structured answer comes back in the `/v1/systemone` shape.
+
+| Variable | Meaning |
+|---|---|
+| `PICKBENCH_CLAUDE_CODE` | `1` = offer `cc:haiku-5.5` |
+| `PICKBENCH_CLAUDE_BIN` | path to the `claude` command; without it PickBench looks it up on `PATH` |
+
+- PickBench removes `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` from the environment of the command, so Claude Code uses the subscription. Requests show $0, but they count against the usage limits of the subscription, and the request cap `PICKBENCH_MAX_HOSTED` applies.
+- PickBench sends the task texts to Anthropic, as it does to the other providers.
+- The latency includes starting the `claude` command, about one second on top of the model. `bench.py` and the page show it as the decision time; the page also gets the API time of the command as the model time.
+- Haiku 5.5 spends tens to a few hundred thinking tokens before it answers, and Claude Code offers no switch to turn that off. PickBench sets the lowest effort, `--effort low`.
+
 ## License
 
 MIT — see `LICENSE`. The license covers the code and the Czech e-mail datasets written for this project; the public datasets above keep their own licenses. The bundled sample `datasets/cfpb-complaints-300.json` is not covered by MIT: its `source` and `license` fields say where the texts come from.
 
-Ollama, Jev, TypeSafe, Clef, Cloudflare and the model names are trademarks of their owners. PickBench is an independent project and is not affiliated with, sponsored by or endorsed by any of them.
+Ollama, Jev, TypeSafe, Clef, Cloudflare, Claude, Claude Code, Anthropic and the model names are trademarks of their owners. PickBench is an independent project and is not affiliated with, sponsored by or endorsed by any of them.
 
 To report a security problem, see `SECURITY.md`.
